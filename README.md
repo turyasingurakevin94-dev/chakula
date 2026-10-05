@@ -11,6 +11,11 @@ npx expo start --web
 npm run typecheck
 ```
 
+## Preview without a dev server
+`npm run preview:build` writes `dist-preview/chakula-preview.html`, a single self-contained web version of the app.
+It is published as a preview page you can open on a phone or in a browser:
+https://claude.ai/artifact/T5Ta9VdwXMqPdMGz7imdoT
+
 ## Layout
 - `src/app/`: screens (home, `restaurant/[id]`, checkout, tracking)
 - `src/components/ui.tsx`: shared buttons, icons, food image placeholder, quantity stepper
