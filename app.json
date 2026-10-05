@@ -28,6 +28,9 @@
       "expo-router",
       "expo-font"
     ],
-    "scheme": "chakula"
+    "scheme": "chakula",
+    "runtimeVersion": {
+      "policy": "sdkVersion"
+    }
   }
 }
