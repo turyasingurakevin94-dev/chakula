@@ -1,0 +1,48 @@
+# Publishes the app as an EAS Update so it can be opened on a real phone in Expo Go.
+# Needs a repository secret named EXPO_TOKEN (an Expo access token).
+name: Publish to Expo Go
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: eas-update-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Check for EXPO_TOKEN
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "::error::Add an Expo access token as the EXPO_TOKEN repository secret (Settings > Secrets and variables > Actions)."
+            exit 1
+          fi
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - run: npm ci
+
+      - run: npx tsc --noEmit
+
+      # Creates the Expo project on first run, or links to it afterwards.
+      - name: Link Expo project
+        run: eas init --non-interactive --force
+
+      - name: Publish update
+        run: eas update --branch ${{ github.ref_name }} --message "${{ github.sha }}" --platform all --non-interactive

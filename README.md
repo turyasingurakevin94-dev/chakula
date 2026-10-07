@@ -11,6 +11,12 @@ npx expo start --web
 npm run typecheck
 ```
 
+## Open it on your phone (Expo Go)
+Every push to `main` publishes the app as an EAS Update (`.github/workflows/expo-go.yml`).
+Setup, once: add an Expo access token as the `EXPO_TOKEN` repository secret
+(Settings > Secrets and variables > Actions). Then open the project on expo.dev, go to Updates,
+and scan the "Preview" QR code with Expo Go.
+
 ## Layout
 - `src/app/`: screens (home, `restaurant/[id]`, checkout, tracking)
 - `src/components/ui.tsx`: shared buttons, icons, food image placeholder, quantity stepper
