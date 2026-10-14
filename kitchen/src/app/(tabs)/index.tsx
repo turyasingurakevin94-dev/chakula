@@ -1,10 +1,10 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Lines } from '../../components/order';
-import { Body, Button, Card, Display, Icon, Label, Segments } from '../../components/ui';
-import { clock, cookingQueue, cookNow, minutesUntil, ordinal, SERVED_EARLIER, useKitchen, type Order } from '../../lib/kitchen';
+import { Body, Button, Card, Display, Icon, Label, Segments, Toggle } from '../../components/ui';
+import { clock, cookingQueue, cookNow, shortName, minutesUntil, ordinal, SERVED_EARLIER, useKitchen, type Order } from '../../lib/kitchen';
 import { colors, fonts } from '../../lib/theme';
 
 type Tab = 'cooking' | 'ready' | 'done';
@@ -22,27 +22,17 @@ export default function Orders() {
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.cream }} edges={['top']}>
       <ScrollView contentContainerStyle={{ paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
         <View style={s.header}>
-          <View style={{ flex: 1, gap: 2 }}>
+          <View style={{ gap: 2 }}>
             <Pressable accessibilityRole="link" accessibilityLabel="Printer and POS settings" onPress={() => router.push('/setup')} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <View style={[s.dot, { backgroundColor: auto ? '#2E9E5B' : colors.orange }]} />
-              <Label style={{ color: colors.muted }}>{auto ? 'Printing itself' : 'You accept each order'}</Label>
+              <Label>{auto ? 'Printing itself' : 'You accept each order'}</Label>
             </Pressable>
             <Display>Orders</Display>
           </View>
-          <Pressable accessibilityRole="button" accessibilityLabel="Open the counter display" onPress={() => router.push('/display')} style={s.round}>
-            <Icon name="monitor" size={20} />
+          <Pressable accessibilityRole="switch" accessibilityLabel="Kitchen open for orders" accessibilityState={{ checked: k.settings.open }} onPress={() => k.setSetting('open', !k.settings.open)} style={s.openPill}>
+            <Text style={{ fontFamily: fonts.bold, fontSize: 14, color: colors.forest }}>{k.settings.open ? 'Open' : 'Closed'}</Text>
+            <Toggle small label="Kitchen open for orders" value={k.settings.open} />
           </Pressable>
-          <View style={s.openPill}>
-            <Text style={{ fontFamily: fonts.bold, fontSize: 14, color: k.settings.open ? colors.forest : colors.muted }}>{k.settings.open ? 'Open' : 'Closed'}</Text>
-            <Switch
-              accessibilityLabel="Kitchen open for orders"
-              value={k.settings.open}
-              onValueChange={(v) => k.setSetting('open', v)}
-              trackColor={{ false: colors.border, true: colors.forest }}
-              thumbColor={colors.card}
-              ios_backgroundColor={colors.border}
-            />
-          </View>
         </View>
 
         {!k.settings.open ? (
@@ -57,12 +47,11 @@ export default function Orders() {
         {totals.length > 0 ? (
           <View style={{ paddingHorizontal: 20, paddingTop: 14 }}>
             <View style={s.cookNow} accessibilityLabel={`Cook now: ${totals.map((t) => `${t.qty} ${t.name}`).join(', ')}`}>
-              <Text style={[s.cookNowLabel]}>Cook now</Text>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 16, rowGap: 6 }}>
+              <Text style={s.cookNowLabel}>Cook now</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 14, rowGap: 4 }}>
                 {totals.map((t) => (
-                  <Text key={t.name} style={{ fontFamily: fonts.semibold, fontSize: 14, color: colors.ink }}>
-                    <Text style={{ fontFamily: fonts.display, fontSize: 20, color: colors.forest }}>{t.qty}</Text> {t.name}
-                    {t.extras.length ? <Text style={{ color: colors.orangeText }}> · {t.extras.join(', ')}</Text> : null}
+                  <Text key={t.name} style={{ fontFamily: fonts.semibold, fontSize: 14, color: colors.cream }}>
+                    <Text style={{ fontFamily: fonts.display, fontSize: 20 }}>{t.qty}</Text> {shortName(t.name)}
                   </Text>
                 ))}
               </View>
@@ -86,10 +75,11 @@ export default function Orders() {
           {tab === 'cooking' ? (
             queue.length ? (
               <>
-                <Label style={{ color: colors.muted }}>Cook in this order · first in, first out</Label>
-                {queue.map((o, i) => (
+                <Label>Cook in this order · first in, first out</Label>
+                {queue.slice(0, 2).map((o, i) => (
                   <CookingCard key={o.id} order={o} rank={i + 1} now={k.now} onReady={() => k.markReady(o.id)} />
                 ))}
+                {queue[2] ? <NextRow order={queue[2]} after={queue.slice(3)} /> : null}
               </>
             ) : (
               <Empty icon="coffee" text="Nothing to cook right now. New orders print and appear here by themselves." />
@@ -97,7 +87,7 @@ export default function Orders() {
           ) : tab === 'ready' ? (
             ready.length ? (
               <>
-                <Label style={{ color: colors.muted }}>Waiting for riders · they scan the bag seal</Label>
+                <Label>Waiting for riders · they scan the bag seal</Label>
                 {ready.map((o) => (
                   <ReadyCard key={o.id} order={o} now={k.now} />
                 ))}
@@ -124,7 +114,7 @@ function CookingCard({ order: o, rank, now, onReady }: { order: Order; rank: num
   const late = left < 0;
   const first = rank === 1;
   return (
-    <Card highlight={first} style={{ gap: 10 }}>
+    <Card highlight={first} style={{ gap: 10, paddingTop: first ? 11 : 12, paddingBottom: first ? 13 : 14 }}>
       <Pressable accessibilityRole="link" accessibilityLabel={`Order ${o.id} for ${o.student}, ${ordinal(rank)} in line`} onPress={() => router.push(`/order/${o.id}`)} style={s.orderHead}>
         <View style={[s.rank, first ? s.rankFirst : s.rankOther]}>
           <Text style={{ fontFamily: fonts.bold, fontSize: 13, color: first ? '#2B1408' : colors.forest }}>{ordinal(rank)}</Text>
@@ -139,16 +129,40 @@ function CookingCard({ order: o, rank, now, onReady }: { order: Order; rank: num
           </Text>
         </View>
         <View style={{ alignItems: 'flex-end' }}>
-          <Label style={{ color: colors.muted, fontSize: 10 }}>{late ? 'Late' : 'Due'}</Label>
+          <Text style={s.due}>{late ? 'Late' : 'Due'}</Text>
           <Text style={{ fontFamily: fonts.bold, fontSize: 15, color: late || left <= 4 ? colors.orangeText : colors.forest }}>{clock(o.dueAt)}</Text>
         </View>
       </Pressable>
       <Lines order={o} />
       {o.note ? <Text style={s.note}>“{o.note}”</Text> : null}
-      <Button label={`Order ${o.id} is ready`} onPress={onReady}>
+      <Button height={48} label={`Order ${o.id} is ready`} onPress={onReady}>
         Ready
       </Button>
     </Card>
+  );
+}
+
+// From the 3rd order on, one compact row; the rest wait their turn.
+function NextRow({ order: o, after }: { order: Order; after: Order[] }) {
+  return (
+    <Pressable accessibilityRole="link" accessibilityLabel={`Order ${o.id} for ${o.student}, 3rd in line`} onPress={() => router.push(`/order/${o.id}`)}>
+      <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12 }}>
+        <View style={[s.rank, s.rankOther]}>
+          <Text style={{ fontFamily: fonts.bold, fontSize: 13, color: colors.forest }}>3rd</Text>
+        </View>
+        <Text style={s.orderId}>{o.id}</Text>
+        <View style={{ flex: 1, minWidth: 0, gap: 1 }}>
+          <Text numberOfLines={1} style={s.student}>
+            {o.student}
+          </Text>
+          <Text numberOfLines={1} style={s.meta}>
+            In at {clock(o.inAt)}
+            {after.length ? ` · then ${after.map((x, i) => `${ordinal(i + 4)}: ${x.id}`).join(', ')}` : ''}
+          </Text>
+        </View>
+        <Text style={{ fontFamily: fonts.bold, fontSize: 15, color: colors.forest }}>{clock(o.dueAt)}</Text>
+      </Card>
+    </Pressable>
   );
 }
 
@@ -196,17 +210,18 @@ function Empty({ icon, text }: { icon: 'coffee' | 'package'; text: string }) {
 }
 
 const s = StyleSheet.create({
-  header: { paddingHorizontal: 20, paddingTop: 18, flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
+  header: { paddingHorizontal: 20, paddingTop: 22, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   round: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' },
-  openPill: { height: 44, borderRadius: 22, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, flexDirection: 'row', alignItems: 'center', gap: 6, paddingLeft: 14, paddingRight: 6 },
-  cookNow: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, borderRadius: 18, paddingHorizontal: 14, paddingVertical: 12, gap: 8 },
-  cookNowLabel: { fontFamily: fonts.bold, fontSize: 11, letterSpacing: 1.1, textTransform: 'uppercase', color: colors.orangeText },
+  openPill: { height: 44, borderRadius: 22, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, flexDirection: 'row', alignItems: 'center', gap: 10, paddingLeft: 14, paddingRight: 8 },
+  due: { fontFamily: fonts.bold, fontSize: 11, letterSpacing: 0.66, textTransform: 'uppercase', color: colors.muted },
+  cookNow: { backgroundColor: colors.forest, borderRadius: 18, paddingHorizontal: 14, paddingVertical: 12, gap: 8 },
+  cookNowLabel: { fontFamily: fonts.bold, fontSize: 11, letterSpacing: 1.1, textTransform: 'uppercase', color: '#A9C4B2' },
   orderHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  rank: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
+  rank: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   rankFirst: { backgroundColor: colors.orange },
   rankOther: { borderWidth: 1.5, borderColor: colors.forest },
-  orderId: { fontFamily: fonts.display, fontSize: 26, color: colors.forest },
+  orderId: { fontFamily: fonts.display, fontSize: 26, lineHeight: 30, color: colors.forest },
   student: { fontFamily: fonts.bold, fontSize: 15, color: colors.forest },
   meta: { fontFamily: fonts.regular, fontSize: 12, color: colors.muted },
   note: { fontFamily: fonts.displayItalic, fontSize: 15, lineHeight: 21, color: colors.ink },

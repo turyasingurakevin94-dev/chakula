@@ -29,7 +29,7 @@ export default function TabsLayout() {
 
 function Glyph({ name, color }: { name: TabIcon; color: string }) {
   return (
-    <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
+    <Svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
       {name === 'orders' ? (
         <>
           <Path d="M6 3h12v18l-3-2-3 2-3-2-3 2z" />
@@ -58,12 +58,12 @@ function Glyph({ name, color }: { name: TabIcon; color: string }) {
 function TabBar({ state, navigation }: TabBarProps) {
   const insets = useSafeAreaInsets();
   return (
-    <View style={[s.bar, { paddingBottom: Math.max(insets.bottom, 14) }]}>
+    <View style={[s.bar, { height: 70 + Math.max(insets.bottom, 14), paddingBottom: Math.max(insets.bottom, 14) }]}>
       {state.routes.map((route, i) => {
         const tab = tabs[route.name];
         if (!tab) return null;
         const on = i === state.index;
-        const color = on ? colors.forest : colors.sub;
+        const color = on ? colors.forest : colors.muted;
         return (
           <Pressable
             key={route.key}
@@ -77,8 +77,7 @@ function TabBar({ state, navigation }: TabBarProps) {
             style={s.tab}
           >
             <Glyph name={tab.icon} color={color} />
-            <Text style={[s.label, { color, fontFamily: on ? fonts.bold : fonts.medium }]}>{tab.label}</Text>
-            <View style={[s.dot, on && { backgroundColor: colors.orange }]} />
+            <Text style={[s.label, { color, fontFamily: on ? fonts.bold : fonts.regular }]}>{tab.label}</Text>
           </Pressable>
         );
       })}
@@ -88,7 +87,6 @@ function TabBar({ state, navigation }: TabBarProps) {
 
 const s = StyleSheet.create({
   bar: { flexDirection: 'row', backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.line },
-  tab: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4, paddingTop: 12 },
-  label: { fontSize: 11, letterSpacing: 0.66, textTransform: 'uppercase' },
-  dot: { width: 4, height: 4, borderRadius: 2, backgroundColor: 'transparent' },
+  tab: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4 },
+  label: { fontSize: 12 },
 });
