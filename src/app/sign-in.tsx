@@ -26,16 +26,18 @@ export default function SignIn() {
       <ScrollView contentContainerStyle={{ flexGrow: 1, paddingBottom: Math.max(insets.bottom, 16) + 16 }} keyboardShouldPersistTaps="handled" bounces={false}>
         <View style={[s.hero, { paddingTop: insets.top }]}>
           <FoodImage tint={colors.food} size={190} style={[StyleSheet.absoluteFill, { bottom: 70 }]} />
-          <Svg style={StyleSheet.absoluteFill} width="100%" height="100%" preserveAspectRatio="none" viewBox="0 0 10 10">
-            <Defs>
-              <LinearGradient id="signin-hero" x1="0" y1="0" x2="0" y2="1">
-                <Stop offset={0} stopColor={colors.forest} stopOpacity={0.2} />
-                <Stop offset={0.4} stopColor={colors.forest} stopOpacity={0.15} />
-                <Stop offset={0.82} stopColor={colors.forest} stopOpacity={1} />
-              </LinearGradient>
-            </Defs>
-            <Rect x="0" y="0" width="10" height="10" fill="url(#signin-hero)" />
-          </Svg>
+          <View style={StyleSheet.absoluteFill} pointerEvents="none">
+            <Svg width="100%" height="100%" preserveAspectRatio="none" viewBox="0 0 10 10">
+              <Defs>
+                <LinearGradient id="signin-hero" x1="0" y1="0" x2="0" y2="1">
+                  <Stop offset={0} stopColor={colors.forest} stopOpacity={0.2} />
+                  <Stop offset={0.4} stopColor={colors.forest} stopOpacity={0.15} />
+                  <Stop offset={0.82} stopColor={colors.forest} stopOpacity={1} />
+                </LinearGradient>
+              </Defs>
+              <Rect x="0" y="0" width="10" height="10" fill="url(#signin-hero)" />
+            </Svg>
+          </View>
           <Text style={s.wordmark}>Chakula</Text>
           <View style={{ flex: 1 }} />
           <View style={{ gap: 10, alignItems: 'center' }}>

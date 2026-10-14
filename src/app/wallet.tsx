@@ -52,16 +52,18 @@ export default function Wallet() {
       <ScrollView contentContainerStyle={{ paddingBottom: mode === 'activity' ? 32 : 120 }} showsVerticalScrollIndicator={false}>
         <View style={{ paddingHorizontal: 20, paddingTop: 16 }}>
           <View style={s.card}>
-            <Svg style={StyleSheet.absoluteFill} width="100%" height="100%" preserveAspectRatio="none" viewBox="0 0 10 10">
-              <Defs>
-                <LinearGradient id="wallet-card" x1="0" y1="0" x2="1" y2="1">
-                  <Stop offset={0} stopColor={colors.forestMid} />
-                  <Stop offset={0.45} stopColor={colors.forest} />
-                  <Stop offset={1} stopColor={colors.forestDeep} />
-                </LinearGradient>
-              </Defs>
-              <Rect x="0" y="0" width="10" height="10" fill="url(#wallet-card)" />
-            </Svg>
+            <View style={StyleSheet.absoluteFill} pointerEvents="none">
+              <Svg width="100%" height="100%" preserveAspectRatio="none" viewBox="0 0 10 10">
+                <Defs>
+                  <LinearGradient id="wallet-card" x1="0" y1="0" x2="1" y2="1">
+                    <Stop offset={0} stopColor={colors.forestMid} />
+                    <Stop offset={0.45} stopColor={colors.forest} />
+                    <Stop offset={1} stopColor={colors.forestDeep} />
+                  </LinearGradient>
+                </Defs>
+                <Rect x="0" y="0" width="10" height="10" fill="url(#wallet-card)" />
+              </Svg>
+            </View>
             <Svg width={350} height={200} viewBox="0 0 350 200" style={{ position: 'absolute', right: -60, top: -30, opacity: 0.16 }} fill="none" stroke={colors.cream} strokeWidth={1}>
               {[40, 70, 100, 130].map((r) => (
                 <Circle key={r} cx={260} cy={70} r={r} />

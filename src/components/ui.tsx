@@ -92,15 +92,17 @@ export function FoodImage({ tint, size = 44, style, children }: { tint: string; 
 // Darkens the bottom of a food picture so cream text on it stays readable.
 export function Scrim({ from = 0.35, color = colors.forestDeep, opacity = 0.88, id = 'scrim' }: { from?: number; color?: string; opacity?: number; id?: string }) {
   return (
-    <Svg style={StyleSheet.absoluteFill} width="100%" height="100%" preserveAspectRatio="none" viewBox="0 0 10 10" pointerEvents="none">
-      <Defs>
-        <LinearGradient id={id} x1="0" y1="0" x2="0" y2="1">
-          <Stop offset={from} stopColor={color} stopOpacity={0} />
-          <Stop offset={1} stopColor={color} stopOpacity={opacity} />
-        </LinearGradient>
-      </Defs>
-      <Rect x="0" y="0" width="10" height="10" fill={`url(#${id})`} />
-    </Svg>
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      <Svg width="100%" height="100%" preserveAspectRatio="none" viewBox="0 0 10 10">
+        <Defs>
+          <LinearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+            <Stop offset={from} stopColor={color} stopOpacity={0} />
+            <Stop offset={1} stopColor={color} stopOpacity={opacity} />
+          </LinearGradient>
+        </Defs>
+        <Rect x="0" y="0" width="10" height="10" fill={`url(#${id})`} />
+      </Svg>
+    </View>
   );
 }
 

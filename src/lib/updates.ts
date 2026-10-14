@@ -3,12 +3,22 @@ import { useEffect } from 'react';
 import { AppState } from 'react-native';
 
 // By default a new update only shows on the launch after it downloads. Check on open and when the
-// app comes back to the front, and restart straight into the new version when there is one.
+// app comes back to the front. A restart wipes what the student is doing, so restart straight away
+// only if the update arrives within a few seconds of opening; otherwise wait until the app has been
+// in the background and comes back.
+const RELOAD_WINDOW_MS = 4000;
+
 export function useApplyUpdates() {
   useEffect(() => {
     if (__DEV__ || !Updates.isEnabled) return;
+    const openedAt = Date.now();
     let busy = false;
-    const check = async () => {
+    let ready = false;
+    const check = async (resumed: boolean) => {
+      if (ready) {
+        if (resumed) await Updates.reloadAsync().catch(() => {});
+        return;
+      }
       if (busy) return;
       busy = true;
       try {
@@ -16,7 +26,10 @@ export function useApplyUpdates() {
         // A roll back to the built-in code (after a bad update) is applied the same way.
         if (result.isAvailable || result.isRollBackToEmbedded) {
           const fetched = await Updates.fetchUpdateAsync();
-          if (fetched.isNew || fetched.isRollBackToEmbedded) await Updates.reloadAsync();
+          if (fetched.isNew || fetched.isRollBackToEmbedded) {
+            ready = true;
+            if (Date.now() - openedAt < RELOAD_WINDOW_MS) await Updates.reloadAsync();
+          }
         }
       } catch {
         // Offline or the update server is unreachable: keep running the current version.
@@ -24,8 +37,12 @@ export function useApplyUpdates() {
         busy = false;
       }
     };
-    check();
-    const sub = AppState.addEventListener('change', (state) => state === 'active' && check());
+    check(false);
+    let last = AppState.currentState;
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active' && last === 'background') check(true);
+      last = state;
+    });
     return () => sub.remove();
   }, []);
 }
