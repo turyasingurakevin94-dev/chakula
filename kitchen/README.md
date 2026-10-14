@@ -27,6 +27,6 @@ npx expo start
 ## Build and update
 
 - **Build Kitchen app** (`.github/workflows/kitchen-apk.yml`) builds an installable APK. Run it by hand from the Actions tab.
-- **Publish kitchen update** (`.github/workflows/kitchen-update.yml`) runs on every merge to main that touches `kitchen/`.
+- **Publish kitchen update** (`.github/workflows/kitchen-update.yml`) runs on every merge to main that changes `kitchen/src` or `kitchen/assets`. Changes to packages or `app.json` need a new APK instead.
 
 Both workflows need the `EXPO_TOKEN` secret. The first run creates the `chakula-kitchen` project on Expo.

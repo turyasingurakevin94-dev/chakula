@@ -6,9 +6,11 @@ name: Publish kitchen update
 on:
   push:
     branches: [main]
+    # JavaScript and images only. Package, lockfile or app.json changes can need native code the
+    # installed APK lacks, so those go out with a new "Build Kitchen app" run instead.
     paths:
-      - kitchen/**
-      - .github/workflows/kitchen-update.yml
+      - kitchen/src/**
+      - kitchen/assets/**
   workflow_dispatch:
 
 concurrency:

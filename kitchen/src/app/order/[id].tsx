@@ -113,7 +113,7 @@ export default function OrderScreen() {
             <Text style={s.rowTitle}>{printed ? `${printed} printed` : 'Nothing printed'}</Text>
             <Text style={s.meta}>
               {clock(o.inAt)}
-              {o.posSale && k.settings.addToPOS ? ` · sale ${o.posSale} is in your POS` : ''}
+              {o.posSale ? ` · sale ${o.posSale} is in your POS` : ''}
             </Text>
           </View>
           <Pressable accessibilityRole="button" accessibilityLabel={`Reprint order ${o.id}`} onPress={() => router.push(`/receipt/${o.id}`)} hitSlop={8}>
