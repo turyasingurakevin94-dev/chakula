@@ -29,6 +29,6 @@ npx expo start
 ## Build and update
 
 - **Build Rider app** (`.github/workflows/rider-apk.yml`) builds an installable APK. Run it by hand from the Actions tab.
-- **Publish rider update** (`.github/workflows/rider-update.yml`) runs on every merge to main that changes `rider/src` or `rider/assets`. Changes to packages or `app.json` need a new APK instead.
+- **Publish rider update** (`.github/workflows/rider-update.yml`) runs on every merge to main that changes `rider/src`. Changes to packages, `app.json` or the icons in `rider/assets` need a new APK instead.
 
 Both workflows need the `EXPO_TOKEN` secret. The first run creates the `chakula-rider` project on Expo.

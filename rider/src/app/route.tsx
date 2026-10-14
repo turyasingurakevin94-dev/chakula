@@ -1,5 +1,5 @@
-import { Redirect, router } from 'expo-router';
-import { useEffect } from 'react';
+import { Redirect, router, useFocusEffect } from 'expo-router';
+import { useCallback, useEffect } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Path, Rect, Text as SvgText } from 'react-native-svg';
@@ -18,8 +18,15 @@ const turnPaths = {
 
 // Riding mode: big text, voice turns, the stop and minutes left. The handover opens on arrival.
 export default function RouteScreen() {
-  const { run, stop, stopIndex, stage, arrive, voice, setVoice, notify } = useRider();
+  const { run, stop, stopIndex, stage, arrive, backToRoute, voice, setVoice, notify } = useRider();
   const insets = useSafeAreaInsets();
+
+  // Back from the handover by gesture or the Android back button still means riding again.
+  useFocusEffect(
+    useCallback(() => {
+      if (stage === 'handover') backToRoute();
+    }, [stage, backToRoute]),
+  );
 
   const arrived = () => {
     arrive();

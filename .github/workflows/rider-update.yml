@@ -6,11 +6,11 @@ name: Publish rider update
 on:
   push:
     branches: [main]
-    # JavaScript and images only. Package, lockfile or app.json changes can need native code the
-    # installed APK lacks, so those go out with a new "Build Rider app" run instead.
+    # App code only. Package, lockfile or app.json changes can need native code the installed APK
+    # lacks, and rider/assets holds the app icons, which live in the APK, so those go out with a new
+    # "Build Rider app" run instead.
     paths:
       - rider/src/**
-      - rider/assets/**
   workflow_dispatch:
 
 concurrency:
