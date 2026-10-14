@@ -8,8 +8,10 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AccountProvider, useAccount } from '../lib/account';
 import { CartProvider } from '../lib/cart';
 import { colors } from '../lib/theme';
+import { useApplyUpdates } from '../lib/updates';
 
 export default function RootLayout() {
+  useApplyUpdates();
   const [loaded] = useFonts({ Fraunces_600SemiBold, DMSans_400Regular, DMSans_500Medium, DMSans_600SemiBold, DMSans_700Bold });
 
   if (!loaded) return <View style={{ flex: 1, backgroundColor: colors.cream }} />;

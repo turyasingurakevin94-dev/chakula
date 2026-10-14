@@ -5,6 +5,7 @@ import { Display, Icon, IconButton, Label, styles as ui, type IconName } from '.
 import { useAccount } from '../lib/account';
 import { student } from '../lib/data';
 import { colors, fonts, formatPhone } from '../lib/theme';
+import { versionLabel } from '../lib/updates';
 
 type Row = { icon: IconName; title: string; detail?: string; accent?: boolean };
 
@@ -64,6 +65,8 @@ export default function Profile() {
           <Icon name="log-out" size={18} color={colors.orangeText} />
           <Text style={{ fontFamily: fonts.semibold, fontSize: 15, color: colors.orangeText }}>Sign out</Text>
         </Pressable>
+
+        <Text style={[s.meta, { paddingHorizontal: 20, paddingTop: 18 }]}>{versionLabel()}</Text>
       </ScrollView>
     </SafeAreaView>
   );
