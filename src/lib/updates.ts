@@ -28,7 +28,7 @@ export function useApplyUpdates() {
           const fetched = await Updates.fetchUpdateAsync();
           if (fetched.isNew || fetched.isRollBackToEmbedded) {
             ready = true;
-            if (Date.now() - openedAt < RELOAD_WINDOW_MS) await Updates.reloadAsync();
+            if (resumed || Date.now() - openedAt < RELOAD_WINDOW_MS) await Updates.reloadAsync();
           }
         }
       } catch {
