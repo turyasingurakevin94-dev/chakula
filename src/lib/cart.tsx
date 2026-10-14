@@ -15,6 +15,7 @@ type CartState = {
   add: (restaurantId: string, item: MenuItem) => void;
   remove: (itemId: string) => void;
   clear: () => void;
+  refill: (restaurantId: string, lines: CartLine[]) => void;
 };
 
 const CartContext = createContext<CartState | null>(null);
@@ -59,6 +60,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
       clear: () => {
         setLines([]);
         setRestaurantId(null);
+      },
+      refill: (rid, next) => {
+        setRestaurantId(rid);
+        setLines(next.map((l) => ({ ...l })));
       },
     };
   }, [lines, restaurantId]);

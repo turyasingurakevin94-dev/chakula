@@ -1,10 +1,11 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Display, FoodImage, Icon, styles as ui, type IconName } from '../components/ui';
-import { foodCategories, restaurants, student } from '../lib/data';
-import { colors, fonts, formatUGX } from '../lib/theme';
+import { Display, FoodImage, Icon, styles as ui } from '../../components/ui';
+import { useAccount } from '../../lib/account';
+import { foodCategories, restaurants, student } from '../../lib/data';
+import { colors, fonts, formatUGX } from '../../lib/theme';
 
 function greeting() {
   const h = new Date().getHours();
@@ -14,45 +15,42 @@ function greeting() {
 }
 
 export default function Home() {
+  const account = useAccount();
   const [category, setCategory] = useState('All');
   const fastest = [...restaurants].sort((a, b) => a.minutes - b.minutes);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.cream }} edges={['top']}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
         <View style={s.header}>
-          <Pressable accessibilityRole="button" accessibilityLabel={`Deliver to ${student.hostel}. Change address`} style={s.address}>
+          <Pressable accessibilityRole="button" accessibilityLabel={`Deliver to ${account.address}. Change address`} onPress={() => router.push('/profile')} style={s.address}>
             <View style={s.pin}>
               <Icon name="map-pin" size={18} color={colors.orangeText} />
             </View>
             <View>
               <Text style={s.overline}>Deliver to</Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                <Text style={s.addressText}>Hostel · {student.hostel}</Text>
+                <Text style={s.addressText} numberOfLines={1}>{account.address}</Text>
                 <Icon name="chevron-down" size={16} />
               </View>
             </View>
           </Pressable>
-          <Pressable accessibilityRole="button" accessibilityLabel="Profile" style={s.avatar}>
-            <Text style={{ color: colors.cream, fontFamily: fonts.semibold, fontSize: 15 }}>{student.initials}</Text>
+          <Pressable accessibilityRole="button" accessibilityLabel="Profile" onPress={() => router.push('/profile')} style={s.avatar}>
+            <Text style={{ color: colors.cream, fontFamily: fonts.semibold, fontSize: 15 }}>{account.initials}</Text>
           </Pressable>
         </View>
 
         <View style={{ paddingHorizontal: 20, paddingTop: 24 }}>
           <Text style={{ fontFamily: fonts.regular, fontSize: 14, color: colors.muted }}>
-            {greeting()}, {student.firstName}
+            {greeting()}, {account.firstName}
           </Text>
           <Display style={{ marginTop: 4 }}>What are you craving tonight?</Display>
         </View>
 
-        <View style={s.search}>
+        <Pressable accessibilityRole="search" onPress={() => router.navigate('/search')} style={s.search}>
           <Icon name="search" size={20} color={colors.muted} />
-          <TextInput
-            placeholder="Search rolex, pilau, juice…"
-            placeholderTextColor={colors.muted}
-            style={{ flex: 1, fontFamily: fonts.regular, fontSize: 15, color: colors.ink, height: '100%' }}
-          />
-        </View>
+          <Text style={{ flex: 1, fontFamily: fonts.regular, fontSize: 15, color: colors.muted }}>Search rolex, pilau, juice…</Text>
+        </Pressable>
 
         <View style={s.promo}>
           <View style={{ flex: 1, gap: 6 }}>
@@ -115,29 +113,6 @@ export default function Home() {
         </ScrollView>
       </ScrollView>
 
-      <TabBar />
-    </SafeAreaView>
-  );
-}
-
-function TabBar() {
-  const tabs: { label: string; icon: IconName }[] = [
-    { label: 'Home', icon: 'home' },
-    { label: 'Search', icon: 'search' },
-    { label: 'Orders', icon: 'file-text' },
-    { label: 'Wallet', icon: 'credit-card' },
-  ];
-  return (
-    <SafeAreaView edges={['bottom']} style={s.tabBar}>
-      {tabs.map((t, i) => {
-        const on = i === 0;
-        return (
-          <Pressable key={t.label} accessibilityRole="tab" accessibilityState={{ selected: on }} style={s.tab}>
-            <Icon name={t.icon} size={22} color={on ? colors.forest : colors.muted} />
-            <Text style={{ fontSize: 12, fontFamily: on ? fonts.bold : fonts.regular, color: on ? colors.forest : colors.muted }}>{t.label}</Text>
-          </Pressable>
-        );
-      })}
     </SafeAreaView>
   );
 }
@@ -201,15 +176,4 @@ const s = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: 8,
   },
-  tabBar: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    flexDirection: 'row',
-    backgroundColor: colors.card,
-    borderTopWidth: 1,
-    borderTopColor: colors.line,
-  },
-  tab: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4, height: 64 },
 });
