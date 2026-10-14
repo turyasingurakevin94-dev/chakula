@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { findSpecial, type Extra, type MenuItem } from './data';
+import { findPlanKind, planMeals, planPrice, type PlanKindId, type PlanPeriod } from './plans';
 
 // Prototype account state, kept in memory. Sign-in, wallet and orders move to the backend later.
 
@@ -28,6 +29,8 @@ export function lineOptions(line: OrderLine) {
 
 export type Rating = { stars: number; tags: string[]; tip: number };
 
+export type PayMethod = 'mtn' | 'airtel' | 'wallet' | 'card' | 'cash';
+
 export type Order = {
   id: string;
   restaurantId: string;
@@ -36,18 +39,58 @@ export type Order = {
   placedAt: number;
   delivered: boolean;
   rating?: Rating;
+  // How it was paid, so "Order again" can pay the same way.
+  method?: PayMethod;
+  // Set when the student picked a delivery time instead of as soon as possible.
+  scheduledFor?: number;
 };
 
 export type Preorder = { id: string; specialId: string; slot: string };
 
 export type WalletEntry = { id: string; title: string; when: string; amount: number };
 
+// Top up more, get more: the bonus credited on top of a top up of at least this amount.
+export const topUpBonuses: { amount: number; bonus: number }[] = [
+  { amount: 20000, bonus: 500 },
+  { amount: 50000, bonus: 2000 },
+  { amount: 100000, bonus: 5000 },
+];
+
+export function bonusFor(amount: number) {
+  return topUpBonuses.reduce((b, t) => (amount >= t.amount ? t.bonus : b), 0);
+}
+
+export type MealPlan = {
+  kindId: PlanKindId;
+  period: PlanPeriod;
+  price: number;
+  meals: number;
+  used: number;
+  // Meals skipped and saved for later.
+  carried: number;
+  paused: boolean;
+  startedAt: number;
+  // The dish picked for a day's main meal, by day key ("2026-10-14").
+  choices: Record<string, string>;
+  // Days whose main meal was skipped.
+  skipped: string[];
+};
+
 // Demo pacing: one "minute" of delivery passes every 4 seconds, so a whole delivery fits in a test run.
 export const DEMO_MINUTE_MS = 4000;
 export const DELIVERY_MINUTES = 8;
 
+// A scheduled order sets off so it lands at its time; until then it waits.
+function deliveryStart(order: Order) {
+  return order.scheduledFor ? order.scheduledFor - DELIVERY_MINUTES * DEMO_MINUTE_MS : order.placedAt;
+}
+
+export function isWaiting(order: Order, now: number) {
+  return now < deliveryStart(order);
+}
+
 export function minutesLeft(order: Order, now: number) {
-  return Math.max(0, DELIVERY_MINUTES - Math.floor((now - order.placedAt) / DEMO_MINUTE_MS));
+  return Math.min(DELIVERY_MINUTES, Math.max(0, DELIVERY_MINUTES - Math.floor((now - deliveryStart(order)) / DEMO_MINUTE_MS)));
 }
 
 const day = 24 * 60 * 60 * 1000;
@@ -55,11 +98,20 @@ const day = 24 * 60 * 60 * 1000;
 function sampleOrders(): Order[] {
   const item = (id: string, name: string, price: number, tint: string): MenuItem => ({ id, name, price, tint, description: '', category: 'Popular' });
   const rated = (stars: number): Rating => ({ stars, tags: [], tip: 0 });
-  const now = Date.now();
+  // daysAgo at a clock time, so "Your usual" has a breakfast, a lunch and a supper habit to find.
+  const at = (daysAgo: number, hour: number, minute = 0) => {
+    const d = new Date(Date.now() - daysAgo * day);
+    d.setHours(hour, minute, 0, 0);
+    return d.getTime();
+  };
+  const rolexAndTea = () => [{ item: item('rolex-classic', 'Classic rolex', 3000, '#FFE4D6'), quantity: 2 }, { item: item('tea', 'African tea', 1500, '#E3EBDD'), quantity: 1 }];
+  const pilauAndJuice = () => [{ item: item('pilau', 'Chicken pilau', 9000, '#F4E7C5'), quantity: 1 }, { item: item('passion', 'Passion juice', 3000, '#FFE4D6'), quantity: 1 }];
   return [
-    { id: '2041', restaurantId: 'rolex-corner', placedAt: now - day, delivered: true, rating: rated(5), total: 7500, lines: [{ item: item('rolex-classic', 'Classic rolex', 3000, '#FFE4D6'), quantity: 2 }, { item: item('tea', 'African tea', 1500, '#E3EBDD'), quantity: 1 }] },
-    { id: '2033', restaurantId: 'green-bowl', placedAt: now - 2 * day, delivered: true, rating: rated(4), total: 19000, lines: [{ item: item('bowl', 'Chicken power bowl', 14000, '#E3EBDD'), quantity: 1 }, { item: item('mango', 'Mango smoothie', 5000, '#F4E7C5'), quantity: 1 }] },
-    { id: '2019', restaurantId: 'nakawa-kitchen', placedAt: now - 5 * day, delivered: true, rating: rated(5), total: 12000, lines: [{ item: item('pilau', 'Chicken pilau', 9000, '#F4E7C5'), quantity: 1 }, { item: item('passion', 'Passion juice', 3000, '#FFE4D6'), quantity: 1 }] },
+    { id: '2041', restaurantId: 'rolex-corner', placedAt: at(1, 8, 10), delivered: true, total: 7500, method: 'mtn', lines: rolexAndTea() },
+    { id: '2037', restaurantId: 'nakawa-kitchen', placedAt: at(2, 19, 30), delivered: true, rating: rated(5), total: 12000, method: 'mtn', lines: pilauAndJuice() },
+    { id: '2033', restaurantId: 'green-bowl', placedAt: at(2, 13, 15), delivered: true, rating: rated(4), total: 19000, method: 'mtn', lines: [{ item: item('bowl', 'Chicken power bowl', 14000, '#E3EBDD'), quantity: 1 }, { item: item('mango', 'Mango smoothie', 5000, '#F4E7C5'), quantity: 1 }] },
+    { id: '2026', restaurantId: 'rolex-corner', placedAt: at(3, 7, 50), delivered: true, rating: rated(5), total: 7500, method: 'mtn', lines: rolexAndTea() },
+    { id: '2019', restaurantId: 'nakawa-kitchen', placedAt: at(5, 20, 5), delivered: true, rating: rated(5), total: 12000, method: 'mtn', lines: pilauAndJuice() },
   ];
 }
 
@@ -77,7 +129,9 @@ type AccountState = {
   address: string;
   balance: number;
   wallet: WalletEntry[];
-  hasToppedUp: boolean;
+  // Top up bonuses credited so far.
+  bonusEarned: number;
+  plan: MealPlan | null;
   orders: Order[];
   activeOrder: Order | null;
   preorders: Preorder[];
@@ -86,8 +140,18 @@ type AccountState = {
   verify: () => void;
   saveProfile: (name: string, place: Place, room: string, note: string) => void;
   signOut: () => void;
-  topUp: (amount: number) => void;
-  placeOrder: (order: Omit<Order, 'id' | 'placedAt' | 'delivered'>, paidFromWallet: boolean) => void;
+  // Credits the amount plus any bonus, and returns the bonus.
+  topUp: (amount: number) => number;
+  withdraw: (amount: number) => void;
+  startPlan: (kindId: PlanKindId, period: PlanPeriod) => void;
+  togglePlanPause: () => void;
+  chooseMeal: (day: string, dishId: string) => void;
+  skipMeal: (day: string) => void;
+  unskipMeal: (day: string) => void;
+  // Returns the new order's id. Wallet orders are charged straight away.
+  placeOrder: (order: Omit<Order, 'id' | 'placedAt' | 'delivered'>) => string;
+  // Takes back an order placed by mistake and refunds a wallet charge.
+  cancelOrder: (id: string) => void;
   markDelivered: (id: string) => void;
   rateOrder: (id: string, rating: Rating) => void;
   preorder: (specialId: string, slot: string) => void;
@@ -105,7 +169,8 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   const [note, setNote] = useState('');
   const [balance, setBalance] = useState(4500);
   const [wallet, setWallet] = useState<WalletEntry[]>([{ id: 'w1', title: 'Welcome credit', when: 'When you joined', amount: 4500 }]);
-  const [hasToppedUp, setHasToppedUp] = useState(false);
+  const [bonusEarned, setBonusEarned] = useState(0);
+  const [plan, setPlan] = useState<MealPlan | null>(null);
   const [orders, setOrders] = useState<Order[]>(sampleOrders);
   const [preorders, setPreorders] = useState<Preorder[]>([]);
 
@@ -126,7 +191,8 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       address: place ? [place.name, room].filter(Boolean).join(', ') : '',
       balance,
       wallet,
-      hasToppedUp,
+      bonusEarned,
+      plan,
       orders,
       activeOrder,
       preorders,
@@ -147,21 +213,48 @@ export function AccountProvider({ children }: { children: ReactNode }) {
         setVerified(false);
       },
       topUp: (amount) => {
-        const bonus = hasToppedUp ? 0 : 2000;
+        // Prototype: credits straight away. Real top ups wait for the MTN prompt to clear.
+        const bonus = bonusFor(amount);
         setBalance((b) => b + amount + bonus);
+        setBonusEarned((n) => n + bonus);
         setWallet((w) => [
-          ...(bonus ? [{ id: `b${Date.now()}`, title: 'First top up bonus', when: 'Just now', amount: bonus }] : []),
+          ...(bonus ? [{ id: `b${Date.now()}`, title: 'Top up bonus', when: 'Just now', amount: bonus }] : []),
           { id: `t${Date.now()}`, title: 'Top up from MTN', when: 'Just now', amount },
           ...w,
         ]);
-        setHasToppedUp(true);
+        return bonus;
       },
-      placeOrder: (o, paidFromWallet) => {
-        const id = String(2048 + orders.length - 3);
+      withdraw: (amount) => {
+        const take = Math.min(amount, balance);
+        if (take <= 0) return;
+        setBalance((b) => b - take);
+        setWallet((w) => [{ id: `wd${Date.now()}`, title: 'Withdrawn to MTN', when: 'Just now', amount: -take }, ...w]);
+      },
+      startPlan: (kindId, period) => {
+        const kind = findPlanKind(kindId);
+        if (!kind) return;
+        setPlan({ kindId, period, price: planPrice(kind, period), meals: planMeals(kind, period), used: 0, carried: 0, paused: false, startedAt: Date.now(), choices: {}, skipped: [] });
+      },
+      togglePlanPause: () => setPlan((p) => (p ? { ...p, paused: !p.paused } : p)),
+      chooseMeal: (day, dishId) => setPlan((p) => (p ? { ...p, choices: { ...p.choices, [day]: dishId }, skipped: p.skipped.filter((d) => d !== day), carried: p.skipped.includes(day) ? p.carried - 1 : p.carried } : p)),
+      skipMeal: (day) => setPlan((p) => (p && !p.skipped.includes(day) ? { ...p, skipped: [...p.skipped, day], carried: p.carried + 1 } : p)),
+      unskipMeal: (day) => setPlan((p) => (p && p.skipped.includes(day) ? { ...p, skipped: p.skipped.filter((d) => d !== day), carried: p.carried - 1 } : p)),
+      placeOrder: (o) => {
+        const id = String(Math.max(2047, ...orders.map((p) => Number(p.id))) + 1);
         setOrders((prev) => [{ ...o, id, placedAt: Date.now(), delivered: false }, ...prev.map((p) => ({ ...p, delivered: true }))]);
-        if (paidFromWallet) {
+        if (o.method === 'wallet') {
           setBalance((b) => b - o.total);
           setWallet((w) => [{ id: `o${id}`, title: `Order #${id}`, when: 'Just now', amount: -o.total }, ...w]);
+        }
+        return id;
+      },
+      cancelOrder: (id) => {
+        const order = orders.find((p) => p.id === id);
+        if (!order) return;
+        setOrders((prev) => prev.filter((p) => p.id !== id));
+        if (order.method === 'wallet') {
+          setBalance((b) => b + order.total);
+          setWallet((w) => w.filter((e) => e.id !== `o${id}`));
         }
       },
       markDelivered: (id) => setOrders((prev) => prev.map((p) => (p.id === id ? { ...p, delivered: true } : p))),
@@ -176,7 +269,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       preorder: (sid, slot) => setPreorders((prev) => [{ id: `p${Date.now()}`, specialId: sid, slot }, ...prev]),
       cancelPreorder: (id) => setPreorders((prev) => prev.filter((p) => p.id !== id)),
     };
-  }, [phone, verified, name, place, room, note, balance, wallet, hasToppedUp, orders, preorders]);
+  }, [phone, verified, name, place, room, note, balance, wallet, bonusEarned, plan, orders, preorders]);
 
   return <AccountContext.Provider value={value}>{children}</AccountContext.Provider>;
 }
@@ -197,8 +290,18 @@ export function useNow() {
   return now;
 }
 
+// "7:42", or "7:42 pm" with the period.
+export function formatClock(time: number, period = false) {
+  const d = new Date(time);
+  const h = d.getHours();
+  const clock = `${h % 12 || 12}:${String(d.getMinutes()).padStart(2, '0')}`;
+  return period ? `${clock} ${h < 12 ? 'am' : 'pm'}` : clock;
+}
+
 export function formatWhen(time: number, now = Date.now()) {
-  const days = Math.floor((now - time) / day);
+  // Calendar days, so last night's supper reads "Yesterday".
+  const midnight = (t: number) => new Date(t).setHours(0, 0, 0, 0);
+  const days = Math.round((midnight(now) - midnight(time)) / day);
   if (days < 1) return 'Today';
   if (days === 1) return 'Yesterday';
   return new Date(time).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });

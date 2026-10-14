@@ -1,5 +1,5 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
-import { unitPrice, type OrderLine } from './account';
+import { unitPrice, type Order, type OrderLine, type PayMethod } from './account';
 import { findRestaurant, student, type MenuItem } from './data';
 
 // The same dish with different extras, pepper or note is a separate line.
@@ -10,6 +10,20 @@ type Options = Pick<OrderLine, 'extras' | 'pepper' | 'note'>;
 function lineKey(itemId: string, o: Options = {}) {
   const extras = (o.extras ?? []).map((e) => e.id).sort().join('+');
   return [itemId, extras, o.pepper ?? '', (o.note ?? '').trim().toLowerCase()].join('|');
+}
+
+// What a basket of these lines costs, with delivery. Orders paid from the wallet always deliver free.
+export function priceBasket(restaurantId: string | null, lines: OrderLine[], method?: PayMethod) {
+  const subtotal = lines.reduce((n, l) => n + l.quantity * unitPrice(l), 0);
+  const deliveryFee = restaurantId ? findRestaurant(restaurantId)?.deliveryFee ?? 0 : 0;
+  const freeDelivery = student.freeDeliveriesLeft > 0 || deliveryFee === 0 || method === 'wallet';
+  return { subtotal, deliveryFee, freeDelivery, total: subtotal + (freeDelivery ? 0 : deliveryFee) };
+}
+
+// A past order's dishes at today's menu prices, not what was paid last time.
+export function todaysLines(order: Order): OrderLine[] {
+  const menu = findRestaurant(order.restaurantId)?.menu ?? [];
+  return order.lines.map((l) => ({ ...l, item: menu.find((m) => m.id === l.item.id) ?? l.item }));
 }
 
 type CartState = {
@@ -35,17 +49,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<CartState>(() => {
     const count = lines.reduce((n, l) => n + l.quantity, 0);
-    const subtotal = lines.reduce((n, l) => n + l.quantity * unitPrice(l), 0);
-    const deliveryFee = restaurantId ? findRestaurant(restaurantId)?.deliveryFee ?? 0 : 0;
-    const freeDelivery = student.freeDeliveriesLeft > 0 || deliveryFee === 0;
     return {
       restaurantId,
       lines,
       count,
-      subtotal,
-      deliveryFee,
-      freeDelivery,
-      total: subtotal + (freeDelivery ? 0 : deliveryFee),
+      ...priceBasket(restaurantId, lines),
       quantityOf: (itemId) => lines.filter((l) => l.item.id === itemId).reduce((n, l) => n + l.quantity, 0),
       add: (rid, item, options = {}, quantity = 1) => {
         const line: CartLine = { ...options, item, quantity, key: lineKey(item.id, options) };

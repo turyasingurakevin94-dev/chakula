@@ -1,9 +1,9 @@
 import { router } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Display, FoodImage, Icon, Label, styles as ui } from '../../components/ui';
-import { DELIVERY_MINUTES, formatWhen, minutesLeft, useAccount, useNow, type Order } from '../../lib/account';
-import { useCart } from '../../lib/cart';
+import { Display, FoodImage, Icon, Label, Stars, styles as ui } from '../../components/ui';
+import { DELIVERY_MINUTES, formatClock, formatWhen, isWaiting, minutesLeft, useAccount, useNow, type Order } from '../../lib/account';
+import { todaysLines, useCart } from '../../lib/cart';
 import { findRestaurant, findSpecial } from '../../lib/data';
 import { colors, fonts, formatUGX } from '../../lib/theme';
 
@@ -15,11 +15,8 @@ export default function Orders() {
   const past = account.orders.filter((o) => o.delivered);
 
   const again = (order: Order) => {
-    const restaurant = findRestaurant(order.restaurantId);
-    if (!restaurant) return;
-    // Use today's menu prices, not what was paid last time.
-    const lines = order.lines.map((l) => ({ ...l, item: restaurant.menu.find((m) => m.id === l.item.id) ?? l.item }));
-    cart.refill(restaurant.id, lines);
+    if (!findRestaurant(order.restaurantId)) return;
+    cart.refill(order.restaurantId, todaysLines(order));
     router.push('/checkout');
   };
 
@@ -30,7 +27,7 @@ export default function Orders() {
           <Display>Orders</Display>
         </View>
 
-        {active ? <ActiveOrder order={active} minutes={minutesLeft(active, now)} /> : null}
+        {active ? <ActiveOrder order={active} minutes={minutesLeft(active, now)} waiting={isWaiting(active, now)} /> : null}
 
         {account.preorders.length > 0 ? (
           <View style={s.section}>
@@ -39,10 +36,10 @@ export default function Orders() {
               const sp = findSpecial(p.specialId);
               if (!sp) return null;
               return (
-                <View key={p.id} style={[ui.card, s.past]}>
+                <View key={p.id} style={[ui.card, s.card, { flexDirection: 'row', alignItems: 'center', gap: 12 }]}>
                   <FoodImage tint={sp.tint} size={26} style={s.thumb} />
                   <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-                    <Text style={{ fontFamily: fonts.bold, fontSize: 12, letterSpacing: 0.5, textTransform: 'uppercase', color: colors.orangeText }}>
+                    <Text style={{ fontFamily: fonts.bold, fontSize: 12, letterSpacing: 0.7, textTransform: 'uppercase', color: colors.orangeText }}>
                       {sp.day} · {p.slot}
                     </Text>
                     <Text style={s.strong}>{sp.name}</Text>
@@ -59,34 +56,42 @@ export default function Orders() {
           </View>
         ) : null}
 
-        <View style={[s.section, { gap: 10 }]}>
+        <View style={[s.section, { paddingTop: 22 }]}>
           {past.length > 0 ? <Label>{active ? 'Earlier' : 'Past orders'}</Label> : null}
           {past.map((o) => {
             const r = findRestaurant(o.restaurantId);
             return (
-              <View key={o.id} style={[ui.card, s.past]}>
-                <FoodImage tint={r?.tint ?? colors.peach} size={26} style={s.thumb} />
-                <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Text style={s.strong} numberOfLines={1}>{r?.name ?? 'Order'}</Text>
-                    {o.rating ? <Text style={{ fontFamily: fonts.semibold, fontSize: 13, color: colors.forest }}>★ {o.rating.stars}</Text> : null}
+              <View key={o.id} style={[ui.card, s.card]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                  <FoodImage tint={o.lines[0]?.item.tint ?? r?.tint ?? colors.peach} size={26} style={s.thumb} />
+                  <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+                    <Text style={s.strong} numberOfLines={1}>
+                      {r?.name ?? 'Order'}
+                    </Text>
+                    <Text style={s.meta} numberOfLines={1}>
+                      {o.lines.map((l) => (l.quantity > 1 ? `${l.quantity} × ${l.item.name}` : l.item.name)).join(', ')}
+                    </Text>
+                    <Text style={s.meta} numberOfLines={1}>
+                      {formatWhen(o.placedAt, now)} · <Text style={{ fontFamily: fonts.semibold, color: colors.ink }}>{o.total.toLocaleString('en-US')}</Text>
+                    </Text>
+                    {o.rating ? (
+                      <View style={{ marginTop: 2 }}>
+                        <Stars value={o.rating.stars} />
+                      </View>
+                    ) : null}
                   </View>
-                  <Text style={s.meta} numberOfLines={1}>
-                    {o.lines.map((l) => (l.quantity > 1 ? `${l.quantity} × ${l.item.name}` : l.item.name)).join(', ')}
-                  </Text>
-                  <Text style={s.meta}>
-                    {formatWhen(o.placedAt, now)} · <Text style={{ fontFamily: fonts.semibold, color: colors.ink }}>{formatUGX(o.total)}</Text>
-                  </Text>
-                  {o.rating ? null : (
-                    <Pressable accessibilityRole="button" hitSlop={8} onPress={() => router.push({ pathname: '/rate', params: { id: o.id } })} style={{ alignSelf: 'flex-start', marginTop: 2 }}>
-                      <Text style={{ fontFamily: fonts.bold, fontSize: 13, color: colors.orangeText }}>★ Rate this order</Text>
-                    </Pressable>
-                  )}
+                  <Pressable accessibilityRole="button" accessibilityLabel={`Order ${r?.name ?? ''} again`} onPress={() => again(o)} style={({ pressed }) => [s.again, pressed && { backgroundColor: colors.sage }]}>
+                    <Icon name="refresh-cw" size={15} />
+                    <Text style={{ fontFamily: fonts.bold, fontSize: 14, color: colors.forest }}>Again</Text>
+                  </Pressable>
                 </View>
-                <Pressable accessibilityRole="button" accessibilityLabel={`Order ${r?.name ?? ''} again`} onPress={() => again(o)} style={({ pressed }) => [s.again, pressed && { backgroundColor: colors.sage }]}>
-                  <Icon name="repeat" size={15} />
-                  <Text style={{ fontFamily: fonts.bold, fontSize: 14, color: colors.forest }}>Again</Text>
-                </Pressable>
+                {o.rating ? null : (
+                  <View style={s.rateRow}>
+                    <Text style={{ fontFamily: fonts.semibold, fontSize: 14, color: colors.forest }}>How was it?</Text>
+                    {/* One tap rates it. A tip can be added from the full rating screen after a delivery. */}
+                    <Stars value={0} size={26} gap={4} onPick={(stars) => account.rateOrder(o.id, { stars, tags: [], tip: 0 })} />
+                  </View>
+                )}
               </View>
             );
           })}
@@ -103,40 +108,29 @@ export default function Orders() {
   );
 }
 
-function ActiveOrder({ order, minutes }: { order: Order; minutes: number }) {
+function ActiveOrder({ order, minutes, waiting }: { order: Order; minutes: number; waiting: boolean }) {
   const r = findRestaurant(order.restaurantId);
   const arrived = minutes === 0;
-  // Same four steps as the tracking screen: confirmed, cooked, on the way, at your door.
-  const step = arrived ? 3 : minutes > DELIVERY_MINUTES - 2 ? 1 : 2;
+  const scheduled = waiting && order.scheduledFor ? formatClock(order.scheduledFor, true) : null;
+  // Same steps as tracking: confirmed, cooked, on the way, at your door.
+  const step = scheduled ? 0 : arrived ? 3 : minutes > DELIVERY_MINUTES - 2 ? 1 : 2;
+  const status = scheduled ? 'coming later' : arrived ? 'arrived' : step === 1 ? 'cooking' : 'on the way';
   return (
-    <View style={s.section}>
-      <Label>{arrived ? 'Arrived' : 'On the way'}</Label>
+    <View style={{ paddingHorizontal: 20, paddingTop: 16 }}>
       <Pressable accessibilityRole="button" accessibilityLabel="Track your order" onPress={() => router.push('/tracking')} style={({ pressed }) => [s.active, { opacity: pressed ? 0.94 : 1 }]}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <View style={{ gap: 2 }}>
-            <Text style={{ fontFamily: fonts.regular, fontSize: 13, color: '#CFE0D3' }}>
-              {r?.name} · #{order.id}
-            </Text>
-            <Display size={28} style={{ color: colors.cream }}>
-              {arrived ? 'At your door' : `${minutes} min away`}
-            </Display>
-          </View>
-          <View style={s.bike}>
-            <Icon name={arrived ? 'check' : 'navigation'} size={24} color={colors.forest} />
-          </View>
-        </View>
-        <View style={{ flexDirection: 'row', gap: 6 }}>
-          {[0, 1, 2, 3].map((i) => (
-            <View key={i} style={[s.bar, { backgroundColor: i < step ? colors.cream : i === step ? colors.orange : '#3C6B55' }]} />
-          ))}
-        </View>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-          <Text style={{ fontFamily: fonts.regular, fontSize: 14, color: colors.cream }}>{arrived ? 'Brian is outside' : 'Brian is riding over'}</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-            <Text style={{ fontFamily: fonts.bold, fontSize: 14, color: colors.cream }}>Track</Text>
-            <Icon name="chevron-right" size={16} color={colors.cream} />
+        <FoodImage tint={order.lines[0]?.item.tint ?? colors.sand} size={26} style={{ width: 64, height: 64, borderRadius: 16 }} />
+        <View style={{ flex: 1, gap: 6 }}>
+          <Text style={{ fontFamily: fonts.regular, fontSize: 13, color: colors.mint }} numberOfLines={1}>
+            {r?.name} · {status}
+          </Text>
+          <Text style={{ fontFamily: fonts.displayLight, fontSize: 24, lineHeight: 27, color: colors.cream }}>{scheduled ? `Arrives ${scheduled}` : arrived ? 'At your door' : `${minutes} min away`}</Text>
+          <View style={{ flexDirection: 'row', gap: 4 }}>
+            {[0, 1, 2, 3].map((i) => (
+              <View key={i} style={[s.bar, { backgroundColor: i < step ? colors.cream : i === step ? colors.orange : colors.forestLine }]} />
+            ))}
           </View>
         </View>
+        <Icon name="chevron-right" size={20} color={colors.cream} />
       </Pressable>
     </View>
   );
@@ -144,12 +138,12 @@ function ActiveOrder({ order, minutes }: { order: Order; minutes: number }) {
 
 const s = StyleSheet.create({
   section: { paddingHorizontal: 20, paddingTop: 20, gap: 10 },
-  active: { backgroundColor: colors.forest, borderRadius: 22, padding: 18, gap: 14 },
-  bike: { width: 52, height: 52, borderRadius: 26, backgroundColor: colors.orange, alignItems: 'center', justifyContent: 'center' },
-  bar: { flex: 1, height: 6, borderRadius: 3 },
-  past: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 18 },
-  thumb: { width: 56, height: 56, borderRadius: 14 },
+  active: { backgroundColor: colors.forest, borderRadius: 22, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 14 },
+  bar: { flex: 1, height: 5, borderRadius: 3 },
+  card: { padding: 12, gap: 10 },
+  thumb: { width: 60, height: 60, borderRadius: 14 },
   again: { height: 38, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, borderColor: colors.forest, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  rateRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.lineSoft },
   strong: { fontFamily: fonts.bold, fontSize: 15, color: colors.forest },
   meta: { fontFamily: fonts.regular, fontSize: 13, color: colors.muted },
 });

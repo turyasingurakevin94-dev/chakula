@@ -2,10 +2,10 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Display, FoodImage, Icon, IconButton, PrimaryButton, Stepper, styles as ui } from '../../components/ui';
+import { BasketBar, Display, FoodImage, Icon, IconButton, Scrim, Stepper } from '../../components/ui';
 import { useCart } from '../../lib/cart';
 import { findRestaurant, type MenuItem } from '../../lib/data';
-import { colors, fonts, formatUGX } from '../../lib/theme';
+import { colors, fonts, formatUGX, smallCaps } from '../../lib/theme';
 
 export default function RestaurantScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -13,6 +13,7 @@ export default function RestaurantScreen() {
   const cart = useCart();
   const insets = useSafeAreaInsets();
   const [tab, setTab] = useState(restaurant?.categories[0] ?? 'Popular');
+  const [saved, setSaved] = useState(false);
 
   if (!restaurant) {
     return (
@@ -31,25 +32,26 @@ export default function RestaurantScreen() {
   const hasOptions = (item: MenuItem) => !!item.extras?.length || !!item.pepper;
   const openDish = (item: MenuItem) => router.push({ pathname: '/dish', params: { restaurant: restaurant.id, item: item.id } });
   const addOne = (item: MenuItem) => (hasOptions(item) ? openDish(item) : cart.add(restaurant.id, item));
+  const delivery = restaurant.deliveryFee === 0 ? 'Free delivery' : `${formatUGX(restaurant.deliveryFee)} delivery`;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.cream }}>
       <ScrollView contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
-        <FoodImage tint={restaurant.tint} size={72} style={{ height: 230 + insets.top }} />
-        <View style={[s.topButtons, { top: insets.top + 12 }]}>
-          <IconButton icon="chevron-left" label="Back" onPress={() => router.back()} />
-          <IconButton icon="heart" label="Save restaurant" />
-        </View>
-
-        <View style={[ui.card, s.info]}>
-          <Display size={26}>{restaurant.name}</Display>
-          <Text style={{ fontFamily: fonts.regular, fontSize: 14, color: colors.muted }}>
-            {restaurant.cuisine} · {restaurant.distance} from your hostel
-          </Text>
-          <View style={s.stats}>
-            <Stat value={`★ ${restaurant.rating}`} label={`${restaurant.ratingCount} ratings`} />
-            <Stat value={`${restaurant.minutes} min`} label="to your door" />
-            <Stat value={formatUGX(restaurant.deliveryFee)} label="delivery" />
+        <View style={{ height: 290 + insets.top, backgroundColor: colors.forest }}>
+          <FoodImage tint={restaurant.tint} size={96} style={[StyleSheet.absoluteFill, { paddingTop: insets.top, paddingBottom: 110 }]} />
+          <Scrim id="menu-hero" />
+          <View style={s.heroText}>
+            <Text style={[smallCaps, { color: colors.peachText }]}>
+              {restaurant.cuisine} · {restaurant.distance} away
+            </Text>
+            <Text style={s.heroTitle}>{restaurant.name}</Text>
+            <Text style={{ fontFamily: fonts.regular, fontSize: 14, color: colors.heroMeta }}>
+              ★ {restaurant.rating} · {restaurant.minutes} min · {delivery}
+            </Text>
+          </View>
+          <View style={[s.topButtons, { top: insets.top + 16 }]}>
+            <IconButton icon="chevron-left" label="Back" variant="glass" size={40} onPress={() => router.back()} />
+            <IconButton icon="heart" label={saved ? 'Saved' : 'Save restaurant'} variant={saved ? 'dark' : 'glass'} size={40} onPress={() => setSaved((x) => !x)} />
           </View>
         </View>
 
@@ -65,13 +67,13 @@ export default function RestaurantScreen() {
             const on = c === tab;
             return (
               <Pressable key={c} accessibilityRole="tab" accessibilityState={{ selected: on }} onPress={() => setTab(c)} style={[s.tab, on && s.tabOn]}>
-                <Text style={{ fontSize: 15, fontFamily: on ? fonts.bold : fonts.regular, color: on ? colors.forest : colors.muted }}>{c}</Text>
+                <Text style={{ fontSize: 15, fontFamily: on ? fonts.bold : fonts.medium, color: on ? colors.forest : colors.muted }}>{c}</Text>
               </Pressable>
             );
           })}
         </View>
 
-        <View style={{ paddingHorizontal: 20, paddingTop: 4 }}>
+        <View style={{ paddingHorizontal: 20 }}>
           {items.map((item, i) => (
             <Pressable
               key={item.id}
@@ -84,13 +86,10 @@ export default function RestaurantScreen() {
               <View style={{ flex: 1, gap: 4 }}>
                 <Text style={{ fontFamily: fonts.bold, fontSize: 16, color: colors.forest }}>{item.name}</Text>
                 <Text style={{ fontFamily: fonts.regular, fontSize: 13, lineHeight: 18, color: colors.muted }}>{item.description}</Text>
-                <Text style={{ fontFamily: fonts.semibold, fontSize: 15, color: colors.ink, marginTop: 4 }}>
-                  {formatUGX(item.price)}
-                  {item.extras?.length ? <Text style={{ fontFamily: fonts.regular, fontSize: 13, color: colors.muted }}>  · extras available</Text> : null}
-                </Text>
+                <Text style={{ fontFamily: fonts.bold, fontSize: 15, color: colors.ink, marginTop: 2 }}>{formatUGX(item.price)}</Text>
               </View>
               <View>
-                <FoodImage tint={item.tint} size={36} style={{ width: 92, height: 92, borderRadius: 16, opacity: closed ? 0.6 : 1 }} />
+                <FoodImage tint={item.tint} size={40} style={{ width: 104, height: 104, borderRadius: 18, opacity: closed ? 0.6 : 1 }} />
                 {closed ? null : (
                   <Stepper
                     name={item.name}
@@ -107,39 +106,21 @@ export default function RestaurantScreen() {
 
       {showBasket && (
         <View style={[s.basket, { bottom: Math.max(insets.bottom, 16) + 8 }]}>
-          <PrimaryButton floating label={`View basket, ${cart.count} items`} onPress={() => router.push('/checkout')}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <View style={s.count}>
-                <Text style={{ fontFamily: fonts.bold, fontSize: 14, color: colors.forest }}>{cart.count}</Text>
-              </View>
-              <Text style={{ fontFamily: fonts.medium, fontSize: 15, color: colors.cream }}>View basket</Text>
-            </View>
-            <Text style={ui.primaryText}>{formatUGX(cart.subtotal)}</Text>
-          </PrimaryButton>
+          <BasketBar count={cart.count} total={formatUGX(cart.subtotal)} onPress={() => router.push('/checkout')} />
         </View>
       )}
     </View>
   );
 }
 
-function Stat({ value, label }: { value: string; label: string }) {
-  return (
-    <View style={{ flex: 1, gap: 2 }}>
-      <Text style={{ fontFamily: fonts.bold, fontSize: 16, color: colors.forest }}>{value}</Text>
-      <Text style={{ fontFamily: fonts.regular, fontSize: 12, color: colors.muted }}>{label}</Text>
-    </View>
-  );
-}
-
 const s = StyleSheet.create({
   topButtons: { position: 'absolute', left: 16, right: 16, flexDirection: 'row', justifyContent: 'space-between' },
-  info: { marginHorizontal: 16, marginTop: -40, borderRadius: 22, padding: 18, paddingBottom: 16, gap: 10 },
-  stats: { flexDirection: 'row', gap: 8, borderTopWidth: 1, borderTopColor: colors.lineSoft, paddingTop: 12 },
-  tabs: { flexDirection: 'row', gap: 22, paddingHorizontal: 20, paddingTop: 18, borderBottomWidth: 1, borderBottomColor: colors.line },
-  tab: { paddingBottom: 12, minHeight: 44, justifyContent: 'flex-end' },
-  tabOn: { borderBottomWidth: 2, borderBottomColor: colors.orange },
-  item: { flexDirection: 'row', gap: 14, paddingVertical: 16 },
+  heroText: { position: 'absolute', left: 20, right: 20, bottom: 20, gap: 6 },
+  heroTitle: { fontFamily: fonts.displayLight, fontSize: 32, lineHeight: 34, color: colors.cream },
+  tabs: { flexDirection: 'row', gap: 22, paddingHorizontal: 20, paddingTop: 6, borderBottomWidth: 1, borderBottomColor: colors.divider },
+  tab: { paddingVertical: 10, paddingHorizontal: 2, borderBottomWidth: 3, borderBottomColor: 'transparent' },
+  tabOn: { borderBottomColor: colors.orange },
+  item: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 16 },
   closed: { marginHorizontal: 16, marginTop: 14, flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, borderRadius: 16, backgroundColor: colors.peach },
   basket: { position: 'absolute', left: 16, right: 16 },
-  count: { width: 28, height: 28, borderRadius: 14, backgroundColor: colors.orange, alignItems: 'center', justifyContent: 'center' },
 });

@@ -13,12 +13,32 @@ export const colors = {
   peach: '#FFE4D6',
   sage: '#E3EBDD',
   sand: '#F4E7C5',
-  map: '#F1E6D6',
+  map: '#E9E1D3',
   track: '#E9DECF',
+  // Premium redesign tokens, from the canvas boards.
+  sub: '#8C8579',
+  border: '#E2D4C1',
+  divider: '#EADFCF',
+  food: '#EAE0D2',
+  tile: '#F1E8DC',
+  well: '#F6EFE5',
+  highlight: '#FFF4EC',
+  green: '#2F6B4A',
+  forestMid: '#24573F',
+  forestDeep: '#0F2A1F',
+  forestLine: '#3C6B55',
+  mint: '#CFE0D3',
+  peachText: '#FFB48F',
+  heroMeta: '#E7DCCB',
+  chevron: '#B5AA9A',
 } as const;
 
 export const fonts = {
   display: 'Fraunces_600SemiBold',
+  // For the one italic word in a headline, e.g. "Breakfast, *sorted.*"
+  displayItalic: 'Fraunces_500Medium_Italic',
+  // Titles laid over food pictures.
+  displayLight: 'Fraunces_400Regular',
   regular: 'DMSans_400Regular',
   medium: 'DMSans_500Medium',
   semibold: 'DMSans_600SemiBold',
@@ -29,11 +49,14 @@ export const radius = { sm: 12, md: 16, lg: 20, xl: 22 } as const;
 
 export const shadow = {
   shadowColor: colors.forest,
-  shadowOpacity: 0.25,
-  shadowRadius: 12,
-  shadowOffset: { width: 0, height: 10 },
-  elevation: 8,
+  shadowOpacity: 0.18,
+  shadowRadius: 16,
+  shadowOffset: { width: 0, height: 6 },
+  elevation: 6,
 } as const;
+
+// 11px small caps with wide tracking, used for section labels.
+export const smallCaps = { fontFamily: fonts.bold, fontSize: 11, letterSpacing: 1.76, textTransform: 'uppercase', color: colors.sub } as const;
 
 export function formatUGX(amount: number) {
   return `UGX ${amount.toLocaleString('en-US')}`;

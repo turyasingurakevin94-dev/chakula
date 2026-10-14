@@ -2,9 +2,9 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Display, FoodImage, Icon, Label, styles as ui } from '../../components/ui';
-import { restaurants } from '../../lib/data';
-import { colors, fonts, formatUGX } from '../../lib/theme';
+import { BackHeader, Display, FoodImage, Icon, Label, styles as ui } from '../components/ui';
+import { restaurants } from '../lib/data';
+import { colors, fonts, formatUGX } from '../lib/theme';
 
 export default function Search() {
   const [query, setQuery] = useState('');
@@ -15,18 +15,16 @@ export default function Search() {
   const places = q ? restaurants.filter((r) => `${r.name} ${r.tags}`.toLowerCase().includes(q)) : restaurants;
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.cream }} edges={['top']}>
-      <View style={{ paddingHorizontal: 20, paddingTop: 24 }}>
-        <Display>Search</Display>
-      </View>
-      <View style={[ui.card, s.search]}>
-        <Icon name="search" size={20} color={colors.muted} />
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.cream }}>
+      <BackHeader title="Search" />
+      <View style={s.search}>
+        <Icon name="search" size={18} color={colors.sub} />
         <TextInput
           value={query}
           onChangeText={setQuery}
           autoFocus
-          placeholder="Search rolex, pilau, juice…"
-          placeholderTextColor={colors.muted}
+          placeholder="Search dishes or kitchens"
+          placeholderTextColor={colors.sub}
           returnKeyType="search"
           style={{ flex: 1, height: '100%', fontFamily: fonts.regular, fontSize: 15, color: colors.ink }}
         />
@@ -48,7 +46,7 @@ export default function Search() {
                 {restaurant.name} · {formatUGX(item.price)}
               </Text>
             </View>
-            <Icon name="chevron-right" size={18} color="#B5AA9A" />
+            <Icon name="chevron-right" size={18} color={colors.chevron} />
           </Pressable>
         ))}
 
@@ -62,7 +60,7 @@ export default function Search() {
                 {r.tags} · {r.minutes} min
               </Text>
             </View>
-            <Icon name="chevron-right" size={18} color="#B5AA9A" />
+            <Icon name="chevron-right" size={18} color={colors.chevron} />
           </Pressable>
         ))}
 
@@ -78,7 +76,7 @@ export default function Search() {
 }
 
 const s = StyleSheet.create({
-  search: { marginHorizontal: 20, marginTop: 18, height: 52, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 16 },
+  search: { marginHorizontal: 20, marginTop: 16, height: 48, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 14, backgroundColor: colors.lineSoft },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 18 },
   thumb: { width: 48, height: 48, borderRadius: 12 },
   strong: { fontFamily: fonts.bold, fontSize: 15, color: colors.forest },
