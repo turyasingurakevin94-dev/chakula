@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Display, FoodImage, Icon, Label, styles as ui } from '../../components/ui';
 import { DELIVERY_MINUTES, formatWhen, minutesLeft, useAccount, useNow, type Order } from '../../lib/account';
 import { useCart } from '../../lib/cart';
-import { findRestaurant } from '../../lib/data';
+import { findRestaurant, findSpecial } from '../../lib/data';
 import { colors, fonts, formatUGX } from '../../lib/theme';
 
 export default function Orders() {
@@ -18,7 +18,7 @@ export default function Orders() {
     const restaurant = findRestaurant(order.restaurantId);
     if (!restaurant) return;
     // Use today's menu prices, not what was paid last time.
-    const lines = order.lines.map((l) => ({ quantity: l.quantity, item: restaurant.menu.find((m) => m.id === l.item.id) ?? l.item }));
+    const lines = order.lines.map((l) => ({ ...l, item: restaurant.menu.find((m) => m.id === l.item.id) ?? l.item }));
     cart.refill(restaurant.id, lines);
     router.push('/checkout');
   };
@@ -32,6 +32,33 @@ export default function Orders() {
 
         {active ? <ActiveOrder order={active} minutes={minutesLeft(active, now)} /> : null}
 
+        {account.preorders.length > 0 ? (
+          <View style={s.section}>
+            <Label>Pre-orders</Label>
+            {account.preorders.map((p) => {
+              const sp = findSpecial(p.specialId);
+              if (!sp) return null;
+              return (
+                <View key={p.id} style={[ui.card, s.past]}>
+                  <FoodImage tint={sp.tint} size={26} style={s.thumb} />
+                  <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+                    <Text style={{ fontFamily: fonts.bold, fontSize: 12, letterSpacing: 0.5, textTransform: 'uppercase', color: colors.orangeText }}>
+                      {sp.day} · {p.slot}
+                    </Text>
+                    <Text style={s.strong}>{sp.name}</Text>
+                    <Text style={s.meta}>
+                      {sp.vendor} · {formatUGX(sp.price)}
+                    </Text>
+                  </View>
+                  <Pressable accessibilityRole="button" accessibilityLabel={`Cancel ${sp.name} pre-order`} hitSlop={8} onPress={() => account.cancelPreorder(p.id)}>
+                    <Text style={{ fontFamily: fonts.semibold, fontSize: 14, color: colors.orangeText, textDecorationLine: 'underline' }}>Cancel</Text>
+                  </Pressable>
+                </View>
+              );
+            })}
+          </View>
+        ) : null}
+
         <View style={[s.section, { gap: 10 }]}>
           {past.length > 0 ? <Label>{active ? 'Earlier' : 'Past orders'}</Label> : null}
           {past.map((o) => {
@@ -40,13 +67,21 @@ export default function Orders() {
               <View key={o.id} style={[ui.card, s.past]}>
                 <FoodImage tint={r?.tint ?? colors.peach} size={26} style={s.thumb} />
                 <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-                  <Text style={s.strong}>{r?.name ?? 'Order'}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={s.strong} numberOfLines={1}>{r?.name ?? 'Order'}</Text>
+                    {o.rating ? <Text style={{ fontFamily: fonts.semibold, fontSize: 13, color: colors.forest }}>★ {o.rating.stars}</Text> : null}
+                  </View>
                   <Text style={s.meta} numberOfLines={1}>
                     {o.lines.map((l) => (l.quantity > 1 ? `${l.quantity} × ${l.item.name}` : l.item.name)).join(', ')}
                   </Text>
                   <Text style={s.meta}>
                     {formatWhen(o.placedAt, now)} · <Text style={{ fontFamily: fonts.semibold, color: colors.ink }}>{formatUGX(o.total)}</Text>
                   </Text>
+                  {o.rating ? null : (
+                    <Pressable accessibilityRole="button" hitSlop={8} onPress={() => router.push({ pathname: '/rate', params: { id: o.id } })} style={{ alignSelf: 'flex-start', marginTop: 2 }}>
+                      <Text style={{ fontFamily: fonts.bold, fontSize: 13, color: colors.orangeText }}>★ Rate this order</Text>
+                    </Pressable>
+                  )}
                 </View>
                 <Pressable accessibilityRole="button" accessibilityLabel={`Order ${r?.name ?? ''} again`} onPress={() => again(o)} style={({ pressed }) => [s.again, pressed && { backgroundColor: colors.sage }]}>
                   <Icon name="repeat" size={15} />

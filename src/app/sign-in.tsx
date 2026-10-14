@@ -42,7 +42,7 @@ export default function SignIn() {
 
         <View style={{ paddingHorizontal: 20, paddingTop: 28, gap: 6 }}>
           <Display size={26}>Sign in with your phone</Display>
-          <Text style={s.body}>We'll text you a code. No password to remember.</Text>
+          <Text style={s.body}>We’ll text you a code. No password to remember.</Text>
         </View>
 
         <View style={{ paddingHorizontal: 20, paddingTop: 20, gap: 8 }}>

@@ -4,7 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Display, FoodImage, Icon, styles as ui } from '../../components/ui';
 import { useAccount } from '../../lib/account';
-import { foodCategories, restaurants, student } from '../../lib/data';
+import { foodCategories, restaurants, specials, student } from '../../lib/data';
 import { colors, fonts, formatUGX } from '../../lib/theme';
 
 function greeting() {
@@ -17,7 +17,8 @@ function greeting() {
 export default function Home() {
   const account = useAccount();
   const [category, setCategory] = useState('All');
-  const fastest = [...restaurants].sort((a, b) => a.minutes - b.minutes);
+  const fastest = restaurants.filter((r) => !r.opensAt).sort((a, b) => a.minutes - b.minutes);
+  const special = specials[0]!;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.cream }} edges={['top']}>
@@ -83,7 +84,9 @@ export default function Home() {
 
         <View style={s.sectionHead}>
           <Display size={21}>Fastest to your hostel</Display>
-          <Text style={{ fontFamily: fonts.semibold, fontSize: 14, color: colors.forest }}>See all</Text>
+          <Pressable accessibilityRole="link" hitSlop={10} onPress={() => router.push('/kitchens')}>
+            <Text style={{ fontFamily: fonts.semibold, fontSize: 14, color: colors.forest }}>See all</Text>
+          </Pressable>
         </View>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 14, paddingHorizontal: 20 }}>
@@ -111,6 +114,27 @@ export default function Home() {
             </Pressable>
           ))}
         </ScrollView>
+
+        <View style={s.sectionHead}>
+          <Display size={21}>This week’s specials</Display>
+          <Pressable accessibilityRole="link" hitSlop={10} onPress={() => router.push('/specials')}>
+            <Text style={{ fontFamily: fonts.semibold, fontSize: 14, color: colors.forest }}>See all</Text>
+          </Pressable>
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${special.name}, ${special.day}. Pre-order`}
+          onPress={() => router.push('/specials')}
+          style={({ pressed }) => [ui.card, s.special, { opacity: pressed ? 0.92 : 1 }]}
+        >
+          <FoodImage tint={special.tint} size={28} style={{ width: 72, height: 72, borderRadius: 14 }} />
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={{ fontFamily: fonts.bold, fontSize: 12, letterSpacing: 0.5, textTransform: 'uppercase', color: colors.orangeText }}>This {special.day}</Text>
+            <Text style={{ fontFamily: fonts.bold, fontSize: 16, color: colors.forest }}>{special.name}</Text>
+            <Text style={{ fontFamily: fonts.regular, fontSize: 13, color: colors.muted }}>{special.vendor} · order ahead</Text>
+          </View>
+          <Icon name="chevron-right" size={18} color="#B5AA9A" />
+        </Pressable>
       </ScrollView>
 
     </SafeAreaView>
@@ -164,6 +188,7 @@ const s = StyleSheet.create({
   chip: { height: 40, paddingHorizontal: 16, borderRadius: 20, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.card, justifyContent: 'center' },
   sectionHead: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 12, flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
   restaurantCard: { width: 262, overflow: 'hidden' },
+  special: { marginHorizontal: 20, flexDirection: 'row', alignItems: 'center', gap: 14, padding: 12, borderRadius: 20 },
   timeTag: {
     position: 'absolute',
     left: 12,

@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import type { MenuItem } from './data';
+import { findSpecial, type Extra, type MenuItem } from './data';
 
 // Prototype account state, kept in memory. Sign-in, wallet and orders move to the backend later.
 
@@ -11,7 +11,22 @@ export const places: Place[] = [
   { id: 'campus', name: 'Main campus', detail: 'Library, lecture blocks, sports ground' },
 ];
 
-export type OrderLine = { item: MenuItem; quantity: number };
+export type Pepper = 'None' | 'Mild' | 'Hot';
+
+export type OrderLine = { item: MenuItem; quantity: number; extras?: Extra[]; pepper?: Pepper; note?: string };
+
+// What one of this line costs, with its extras.
+export function unitPrice(line: OrderLine) {
+  return line.item.price + (line.extras ?? []).reduce((n, e) => n + e.price, 0);
+}
+
+// "Extra egg, avocado · Mild · no onions"
+export function lineOptions(line: OrderLine) {
+  const extras = (line.extras ?? []).map((e, i) => (i === 0 ? e.name : e.name.toLowerCase())).join(', ');
+  return [extras, line.pepper && line.pepper !== 'None' ? `${line.pepper} pepper` : '', line.note ?? ''].filter(Boolean).join(' · ');
+}
+
+export type Rating = { stars: number; tags: string[]; tip: number };
 
 export type Order = {
   id: string;
@@ -20,7 +35,10 @@ export type Order = {
   total: number;
   placedAt: number;
   delivered: boolean;
+  rating?: Rating;
 };
+
+export type Preorder = { id: string; specialId: string; slot: string };
 
 export type WalletEntry = { id: string; title: string; when: string; amount: number };
 
@@ -36,11 +54,12 @@ const day = 24 * 60 * 60 * 1000;
 
 function sampleOrders(): Order[] {
   const item = (id: string, name: string, price: number, tint: string): MenuItem => ({ id, name, price, tint, description: '', category: 'Popular' });
+  const rated = (stars: number): Rating => ({ stars, tags: [], tip: 0 });
   const now = Date.now();
   return [
-    { id: '2041', restaurantId: 'rolex-corner', placedAt: now - day, delivered: true, total: 7500, lines: [{ item: item('rolex-classic', 'Classic rolex', 3000, '#FFE4D6'), quantity: 2 }, { item: item('tea', 'African tea', 1500, '#E3EBDD'), quantity: 1 }] },
-    { id: '2033', restaurantId: 'green-bowl', placedAt: now - 2 * day, delivered: true, total: 19000, lines: [{ item: item('bowl', 'Chicken power bowl', 14000, '#E3EBDD'), quantity: 1 }, { item: item('mango', 'Mango smoothie', 5000, '#F4E7C5'), quantity: 1 }] },
-    { id: '2019', restaurantId: 'nakawa-kitchen', placedAt: now - 5 * day, delivered: true, total: 12000, lines: [{ item: item('pilau', 'Chicken pilau', 9000, '#F4E7C5'), quantity: 1 }, { item: item('passion', 'Passion juice', 3000, '#FFE4D6'), quantity: 1 }] },
+    { id: '2041', restaurantId: 'rolex-corner', placedAt: now - day, delivered: true, rating: rated(5), total: 7500, lines: [{ item: item('rolex-classic', 'Classic rolex', 3000, '#FFE4D6'), quantity: 2 }, { item: item('tea', 'African tea', 1500, '#E3EBDD'), quantity: 1 }] },
+    { id: '2033', restaurantId: 'green-bowl', placedAt: now - 2 * day, delivered: true, rating: rated(4), total: 19000, lines: [{ item: item('bowl', 'Chicken power bowl', 14000, '#E3EBDD'), quantity: 1 }, { item: item('mango', 'Mango smoothie', 5000, '#F4E7C5'), quantity: 1 }] },
+    { id: '2019', restaurantId: 'nakawa-kitchen', placedAt: now - 5 * day, delivered: true, rating: rated(5), total: 12000, lines: [{ item: item('pilau', 'Chicken pilau', 9000, '#F4E7C5'), quantity: 1 }, { item: item('passion', 'Passion juice', 3000, '#FFE4D6'), quantity: 1 }] },
   ];
 }
 
@@ -61,6 +80,8 @@ type AccountState = {
   hasToppedUp: boolean;
   orders: Order[];
   activeOrder: Order | null;
+  preorders: Preorder[];
+  portionsLeft: (specialId: string) => number;
   startSignIn: (phone: string) => void;
   verify: () => void;
   saveProfile: (name: string, place: Place, room: string, note: string) => void;
@@ -68,6 +89,9 @@ type AccountState = {
   topUp: (amount: number) => void;
   placeOrder: (order: Omit<Order, 'id' | 'placedAt' | 'delivered'>, paidFromWallet: boolean) => void;
   markDelivered: (id: string) => void;
+  rateOrder: (id: string, rating: Rating) => void;
+  preorder: (specialId: string, slot: string) => void;
+  cancelPreorder: (id: string) => void;
 };
 
 const AccountContext = createContext<AccountState | null>(null);
@@ -83,6 +107,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   const [wallet, setWallet] = useState<WalletEntry[]>([{ id: 'w1', title: 'Welcome credit', when: 'When you joined', amount: 4500 }]);
   const [hasToppedUp, setHasToppedUp] = useState(false);
   const [orders, setOrders] = useState<Order[]>(sampleOrders);
+  const [preorders, setPreorders] = useState<Preorder[]>([]);
 
   const value = useMemo<AccountState>(() => {
     const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -104,6 +129,8 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       hasToppedUp,
       orders,
       activeOrder,
+      preorders,
+      portionsLeft: (sid) => Math.max(0, (findSpecial(sid)?.portions ?? 0) - preorders.filter((p) => p.specialId === sid).length),
       startSignIn: (p) => {
         setPhone(p);
         setVerified(false);
@@ -138,8 +165,18 @@ export function AccountProvider({ children }: { children: ReactNode }) {
         }
       },
       markDelivered: (id) => setOrders((prev) => prev.map((p) => (p.id === id ? { ...p, delivered: true } : p))),
+      rateOrder: (id, rating) => {
+        setOrders((prev) => prev.map((p) => (p.id === id ? { ...p, rating } : p)));
+        // Prototype: tips come out of the wallet. Later the student picks how to pay it.
+        if (rating.tip > 0) {
+          setBalance((b) => b - rating.tip);
+          setWallet((w) => [{ id: `tip${id}`, title: `Tip for Brian, #${id}`, when: 'Just now', amount: -rating.tip }, ...w]);
+        }
+      },
+      preorder: (sid, slot) => setPreorders((prev) => [{ id: `p${Date.now()}`, specialId: sid, slot }, ...prev]),
+      cancelPreorder: (id) => setPreorders((prev) => prev.filter((p) => p.id !== id)),
     };
-  }, [phone, verified, name, place, room, note, balance, wallet, hasToppedUp, orders]);
+  }, [phone, verified, name, place, room, note, balance, wallet, hasToppedUp, orders, preorders]);
 
   return <AccountContext.Provider value={value}>{children}</AccountContext.Provider>;
 }
