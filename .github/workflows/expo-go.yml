@@ -1,6 +1,7 @@
-# Publishes the app as an EAS Update so it can be opened on a real phone in Expo Go.
+# Publishes the latest code as an EAS Update. The installed Android app (see android-apk.yml)
+# downloads it the next time it opens.
 # Needs a repository secret named EXPO_TOKEN (an Expo access token).
-name: Publish to Expo Go
+name: Publish app update
 
 on:
   push:
