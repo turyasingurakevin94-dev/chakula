@@ -89,7 +89,7 @@ export default function Verify() {
           <Icon name="lock" size={18} color={colors.cream} />
         </View>
         <Text style={{ flex: 1, fontFamily: fonts.regular, fontSize: 14, lineHeight: 20, color: colors.forest }}>
-          Chakula will never ask for your mobile money PIN. Only type it on your phone's own prompt.
+          Chakula will never ask for your mobile money PIN. Only type it on your phone’s own prompt.
         </Text>
       </View>
 

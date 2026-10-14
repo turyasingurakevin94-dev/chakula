@@ -1,7 +1,16 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
+import { unitPrice, type OrderLine } from './account';
 import { findRestaurant, student, type MenuItem } from './data';
 
-type CartLine = { item: MenuItem; quantity: number };
+// The same dish with different extras, pepper or note is a separate line.
+export type CartLine = OrderLine & { key: string };
+
+type Options = Pick<OrderLine, 'extras' | 'pepper' | 'note'>;
+
+function lineKey(itemId: string, o: Options = {}) {
+  const extras = (o.extras ?? []).map((e) => e.id).sort().join('+');
+  return [itemId, extras, o.pepper ?? '', (o.note ?? '').trim().toLowerCase()].join('|');
+}
 
 type CartState = {
   restaurantId: string | null;
@@ -12,10 +21,10 @@ type CartState = {
   freeDelivery: boolean;
   total: number;
   quantityOf: (itemId: string) => number;
-  add: (restaurantId: string, item: MenuItem) => void;
+  add: (restaurantId: string, item: MenuItem, options?: Options, quantity?: number) => void;
   remove: (itemId: string) => void;
   clear: () => void;
-  refill: (restaurantId: string, lines: CartLine[]) => void;
+  refill: (restaurantId: string, lines: OrderLine[]) => void;
 };
 
 const CartContext = createContext<CartState | null>(null);
@@ -26,9 +35,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<CartState>(() => {
     const count = lines.reduce((n, l) => n + l.quantity, 0);
-    const subtotal = lines.reduce((n, l) => n + l.quantity * l.item.price, 0);
+    const subtotal = lines.reduce((n, l) => n + l.quantity * unitPrice(l), 0);
     const deliveryFee = restaurantId ? findRestaurant(restaurantId)?.deliveryFee ?? 0 : 0;
-    const freeDelivery = student.freeDeliveriesLeft > 0;
+    const freeDelivery = student.freeDeliveriesLeft > 0 || deliveryFee === 0;
     return {
       restaurantId,
       lines,
@@ -37,33 +46,34 @@ export function CartProvider({ children }: { children: ReactNode }) {
       deliveryFee,
       freeDelivery,
       total: subtotal + (freeDelivery ? 0 : deliveryFee),
-      quantityOf: (itemId) => lines.find((l) => l.item.id === itemId)?.quantity ?? 0,
-      add: (rid, item) => {
+      quantityOf: (itemId) => lines.filter((l) => l.item.id === itemId).reduce((n, l) => n + l.quantity, 0),
+      add: (rid, item, options = {}, quantity = 1) => {
+        const line: CartLine = { ...options, item, quantity, key: lineKey(item.id, options) };
         // A basket holds one restaurant's food, so one rider can bring it in one trip.
         if (rid !== restaurantId) {
           setRestaurantId(rid);
-          setLines([{ item, quantity: 1 }]);
+          setLines([line]);
           return;
         }
         setLines((prev) => {
-          const existing = prev.find((l) => l.item.id === item.id);
-          if (!existing) return [...prev, { item, quantity: 1 }];
-          return prev.map((l) => (l.item.id === item.id ? { ...l, quantity: l.quantity + 1 } : l));
+          if (!prev.some((l) => l.key === line.key)) return [...prev, line];
+          return prev.map((l) => (l.key === line.key ? { ...l, quantity: l.quantity + quantity } : l));
         });
       },
+      // Takes one off the most recently added line for this dish.
       remove: (itemId) =>
-        setLines((prev) =>
-          prev
-            .map((l) => (l.item.id === itemId ? { ...l, quantity: l.quantity - 1 } : l))
-            .filter((l) => l.quantity > 0),
-        ),
+        setLines((prev) => {
+          const i = prev.map((l) => l.item.id).lastIndexOf(itemId);
+          if (i < 0) return prev;
+          return prev.map((l, j) => (j === i ? { ...l, quantity: l.quantity - 1 } : l)).filter((l) => l.quantity > 0);
+        }),
       clear: () => {
         setLines([]);
         setRestaurantId(null);
       },
       refill: (rid, next) => {
         setRestaurantId(rid);
-        setLines(next.map((l) => ({ ...l })));
+        setLines(next.map((l) => ({ ...l, key: lineKey(l.item.id, l) })));
       },
     };
   }, [lines, restaurantId]);

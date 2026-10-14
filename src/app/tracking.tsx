@@ -3,7 +3,7 @@ import { useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
-import { Display, IconButton } from '../components/ui';
+import { Display, IconButton, PrimaryButton, styles as ui } from '../components/ui';
 import { DELIVERY_MINUTES, minutesLeft, useAccount, useNow } from '../lib/account';
 import { findRestaurant } from '../lib/data';
 import { colors, fonts } from '../lib/theme';
@@ -78,6 +78,12 @@ export default function Tracking() {
           <IconButton icon="message-square" label="Message rider" variant="outline" />
           <IconButton icon="phone" label="Call rider" variant="dark" />
         </View>
+
+        {arrived && !order.rating ? (
+          <PrimaryButton floating label="Rate your order" onPress={() => router.push({ pathname: '/rate', params: { id: order.id } })}>
+            <Text style={[ui.primaryText, { flex: 1, textAlign: 'center' }]}>Got it? Rate your order</Text>
+          </PrimaryButton>
+        ) : null}
 
         <View style={{ gap: 10 }}>
           <View style={s.stop}>

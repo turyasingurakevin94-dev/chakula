@@ -2,9 +2,9 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Display, FoodImage, IconButton, PrimaryButton, Stepper, styles as ui } from '../../components/ui';
+import { Display, FoodImage, Icon, IconButton, PrimaryButton, Stepper, styles as ui } from '../../components/ui';
 import { useCart } from '../../lib/cart';
-import { findRestaurant } from '../../lib/data';
+import { findRestaurant, type MenuItem } from '../../lib/data';
 import { colors, fonts, formatUGX } from '../../lib/theme';
 
 export default function RestaurantScreen() {
@@ -27,6 +27,10 @@ export default function RestaurantScreen() {
 
   const items = restaurant.menu.filter((m) => m.category === tab);
   const showBasket = cart.count > 0 && cart.restaurantId === restaurant.id;
+  const closed = !!restaurant.opensAt;
+  const hasOptions = (item: MenuItem) => !!item.extras?.length || !!item.pepper;
+  const openDish = (item: MenuItem) => router.push({ pathname: '/dish', params: { restaurant: restaurant.id, item: item.id } });
+  const addOne = (item: MenuItem) => (hasOptions(item) ? openDish(item) : cart.add(restaurant.id, item));
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.cream }}>
@@ -49,6 +53,13 @@ export default function RestaurantScreen() {
           </View>
         </View>
 
+        {closed ? (
+          <View style={s.closed}>
+            <Icon name="moon" size={18} color={colors.orangeText} />
+            <Text style={{ flex: 1, fontFamily: fonts.semibold, fontSize: 14, color: colors.ink }}>Closed now. Opens at {restaurant.opensAt}, so have a look at the menu.</Text>
+          </View>
+        ) : null}
+
         <View style={s.tabs}>
           {restaurant.categories.map((c) => {
             const on = c === tab;
@@ -62,22 +73,34 @@ export default function RestaurantScreen() {
 
         <View style={{ paddingHorizontal: 20, paddingTop: 4 }}>
           {items.map((item, i) => (
-            <View key={item.id} style={[s.item, i < items.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.lineSoft }]}>
+            <Pressable
+              key={item.id}
+              accessibilityRole="button"
+              accessibilityLabel={`${item.name}, ${formatUGX(item.price)}`}
+              disabled={closed}
+              onPress={() => openDish(item)}
+              style={[s.item, i < items.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.lineSoft }]}
+            >
               <View style={{ flex: 1, gap: 4 }}>
                 <Text style={{ fontFamily: fonts.bold, fontSize: 16, color: colors.forest }}>{item.name}</Text>
                 <Text style={{ fontFamily: fonts.regular, fontSize: 13, lineHeight: 18, color: colors.muted }}>{item.description}</Text>
-                <Text style={{ fontFamily: fonts.semibold, fontSize: 15, color: colors.ink, marginTop: 4 }}>{formatUGX(item.price)}</Text>
+                <Text style={{ fontFamily: fonts.semibold, fontSize: 15, color: colors.ink, marginTop: 4 }}>
+                  {formatUGX(item.price)}
+                  {item.extras?.length ? <Text style={{ fontFamily: fonts.regular, fontSize: 13, color: colors.muted }}>  · extras available</Text> : null}
+                </Text>
               </View>
               <View>
-                <FoodImage tint={item.tint} size={36} style={{ width: 92, height: 92, borderRadius: 16 }} />
-                <Stepper
-                  name={item.name}
-                  quantity={cart.restaurantId === restaurant.id ? cart.quantityOf(item.id) : 0}
-                  onAdd={() => cart.add(restaurant.id, item)}
-                  onRemove={() => cart.remove(item.id)}
-                />
+                <FoodImage tint={item.tint} size={36} style={{ width: 92, height: 92, borderRadius: 16, opacity: closed ? 0.6 : 1 }} />
+                {closed ? null : (
+                  <Stepper
+                    name={item.name}
+                    quantity={cart.restaurantId === restaurant.id ? cart.quantityOf(item.id) : 0}
+                    onAdd={() => addOne(item)}
+                    onRemove={() => cart.remove(item.id)}
+                  />
+                )}
               </View>
-            </View>
+            </Pressable>
           ))}
         </View>
       </ScrollView>
@@ -116,6 +139,7 @@ const s = StyleSheet.create({
   tab: { paddingBottom: 12, minHeight: 44, justifyContent: 'flex-end' },
   tabOn: { borderBottomWidth: 2, borderBottomColor: colors.orange },
   item: { flexDirection: 'row', gap: 14, paddingVertical: 16 },
+  closed: { marginHorizontal: 16, marginTop: 14, flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, borderRadius: 16, backgroundColor: colors.peach },
   basket: { position: 'absolute', left: 16, right: 16 },
   count: { width: 28, height: 28, borderRadius: 14, backgroundColor: colors.orange, alignItems: 'center', justifyContent: 'center' },
 });

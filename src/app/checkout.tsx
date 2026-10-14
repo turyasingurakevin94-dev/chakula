@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Display, Icon, IconButton, Label, PrimaryButton, styles as ui, type IconName } from '../components/ui';
-import { useAccount } from '../lib/account';
+import { lineOptions, unitPrice, useAccount } from '../lib/account';
 import { useCart } from '../lib/cart';
 import { colors, fonts, formatUGX } from '../lib/theme';
 
@@ -54,6 +54,25 @@ export default function Checkout() {
         </View>
 
         <View style={s.section}>
+          <Label>Your order</Label>
+          <View style={[ui.card, { borderRadius: 18, overflow: 'hidden' }]}>
+            {cart.lines.map((l, i) => {
+              const options = lineOptions(l);
+              return (
+                <View key={l.key} style={[s.row, { alignItems: 'flex-start' }, i < cart.lines.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.lineSoft }]}>
+                  <Text style={[s.strong, { width: 24 }]}>{l.quantity}×</Text>
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text style={[s.strong, { fontFamily: fonts.semibold }]}>{l.item.name}</Text>
+                    {options ? <Text style={s.meta}>{options}</Text> : null}
+                  </View>
+                  <Text style={s.lineValue}>{(l.quantity * unitPrice(l)).toLocaleString('en-US')}</Text>
+                </View>
+              );
+            })}
+          </View>
+        </View>
+
+        <View style={s.section}>
           <Label>Pay with</Label>
           <View style={[ui.card, { borderRadius: 18, overflow: 'hidden' }]}>
             {methods.map((m, i) => {
@@ -87,7 +106,9 @@ export default function Checkout() {
           </View>
           <View style={s.line}>
             <Text style={s.lineLabel}>Delivery</Text>
-            {cart.freeDelivery ? (
+            {cart.deliveryFee === 0 ? (
+              <Text style={{ fontFamily: fonts.bold, fontSize: 15, color: colors.orangeText }}>Free</Text>
+            ) : cart.freeDelivery ? (
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 <Text style={[s.lineLabel, { textDecorationLine: 'line-through' }]}>{cart.deliveryFee.toLocaleString('en-US')}</Text>
                 <Text style={{ fontFamily: fonts.bold, fontSize: 15, color: colors.orangeText }}>Free</Text>

@@ -45,6 +45,10 @@ function Screens() {
         <Stack.Screen name="checkout" />
         <Stack.Screen name="tracking" />
         <Stack.Screen name="profile" />
+        <Stack.Screen name="kitchens" />
+        <Stack.Screen name="specials" />
+        <Stack.Screen name="dish" options={{ presentation: 'transparentModal', animation: 'slide_from_bottom', contentStyle: { backgroundColor: 'transparent' } }} />
+        <Stack.Screen name="rate" options={{ animation: 'slide_from_bottom' }} />
       </Stack.Protected>
     </Stack>
   );
