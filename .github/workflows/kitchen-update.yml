@@ -1,0 +1,58 @@
+# Publishes the latest kitchen app code as an EAS Update. The installed Kitchen app (see kitchen-apk.yml)
+# downloads it the next time it opens.
+# Needs a repository secret named EXPO_TOKEN (an Expo access token).
+name: Publish kitchen update
+
+on:
+  push:
+    branches: [main]
+    # JavaScript and images only. Package, lockfile or app.json changes can need native code the
+    # installed APK lacks, so those go out with a new "Build Kitchen app" run instead.
+    paths:
+      - kitchen/src/**
+      - kitchen/assets/**
+  workflow_dispatch:
+
+concurrency:
+  group: kitchen-update-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: kitchen
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: kitchen/package-lock.json
+
+      - name: Check for EXPO_TOKEN
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "::error::Add an Expo access token as the EXPO_TOKEN repository secret (Settings > Secrets and variables > Actions)."
+            exit 1
+          fi
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - run: npm ci
+
+      - run: npx tsc --noEmit
+
+      # Creates the Expo project on first run, or links to it afterwards.
+      - name: Link Expo project
+        run: eas init --non-interactive --force
+
+      - name: Publish update
+        run: eas update --branch ${{ github.ref_name }} --message "${{ github.sha }}" --platform all --non-interactive

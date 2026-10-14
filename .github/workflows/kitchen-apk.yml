@@ -1,0 +1,73 @@
+# Builds the Chakula Kitchen Android app (APK) for partner kitchens on Expo's build servers.
+# Run it from the Actions tab ("Run workflow"). The install link appears in the run summary.
+# Needs the EXPO_TOKEN repository secret.
+name: Build Kitchen app
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - kitchen/eas.json
+      - kitchen/app.json
+      - .github/workflows/kitchen-apk.yml
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: kitchen
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: kitchen/package-lock.json
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - run: npm ci
+
+      - run: npx tsc --noEmit
+
+      - name: Link Expo project
+        run: eas init --non-interactive --force
+
+      # Points the app at the project's update server, so the installed app picks up
+      # what "Publish kitchen update" publishes after each merge.
+      - name: Configure updates
+        run: eas update:configure --platform android --non-interactive
+
+      # An APK built without an update address never downloads updates, so stop here instead.
+      - name: Check update settings
+        run: |
+          npx expo config --type public --json > config.json
+          node -e '
+            const c = require("./config.json");
+            console.log("updates:", JSON.stringify(c.updates), "runtime:", JSON.stringify(c.runtimeVersion));
+            if (!c.updates || !c.updates.url) { console.error("::error::app.json has no updates.url"); process.exit(1); }
+          '
+
+      - name: Build APK
+        run: |
+          eas build --platform android --profile preview --non-interactive --json > build.json
+          cat build.json
+          node -e '
+            const b = require("./build.json")[0] || {};
+            const a = b.artifacts || {};
+            const app = b.app || {};
+            const owner = (app.ownerAccount || {}).name;
+            const page = owner && app.slug
+              ? "https://expo.dev/accounts/" + owner + "/projects/" + app.slug + "/builds/" + b.id
+              : "https://expo.dev/projects/" + (app.id || b.projectId) + "/builds/" + b.id;
+            const lines = ["## Kitchen app ready", "", "- Build page (open on your phone to install): " + page];
+            const apk = a.buildUrl || a.applicationArchiveUrl;
+            if (apk) lines.push("- Direct APK download: " + apk);
+            console.log(lines.join("\n"));
+            require("fs").appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join("\n") + "\n");
+          '
