@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { BackHeader, Body, Icon, Label, ToggleRow } from '../components/ui';
 import { clock, useKitchen } from '../lib/kitchen';
 import { colors, fonts } from '../lib/theme';
+import { versionLabel } from '../lib/updates';
 
 // Printer and POS. With every switch on, the team only ever taps Ready.
 export default function Setup() {
@@ -72,6 +73,7 @@ export default function Setup() {
           <Icon name="monitor" size={16} color={colors.muted} />
           <Text style={{ fontFamily: fonts.semibold, fontSize: 14, color: colors.muted, textDecorationLine: 'underline' }}>Open the counter display</Text>
         </Pressable>
+        <Text style={[s.meta, { textAlign: 'center', marginTop: 6 }]}>{versionLabel()}</Text>
       </ScrollView>
     </SafeAreaView>
   );
