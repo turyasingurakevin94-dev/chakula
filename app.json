@@ -31,6 +31,15 @@
     "scheme": "chakula",
     "runtimeVersion": {
       "policy": "appVersion"
+    },
+    "owner": "kevinm123s-team",
+    "updates": {
+      "url": "https://u.expo.dev/e5eb0b89-d28b-41dc-b2d1-77029b98145a"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "e5eb0b89-d28b-41dc-b2d1-77029b98145a"
+      }
     }
   }
 }

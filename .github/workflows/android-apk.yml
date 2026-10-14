@@ -38,6 +38,16 @@ jobs:
       - name: Configure updates
         run: eas update:configure --platform android --non-interactive
 
+      # An APK built without an update address never downloads updates, so stop here instead.
+      - name: Check update settings
+        run: |
+          npx expo config --type public --json > config.json
+          node -e '
+            const c = require("./config.json");
+            console.log("updates:", JSON.stringify(c.updates), "runtime:", JSON.stringify(c.runtimeVersion));
+            if (!c.updates || !c.updates.url) { console.error("::error::app.json has no updates.url"); process.exit(1); }
+          '
+
       - name: Build APK
         run: |
           eas build --platform android --profile preview --non-interactive --json > build.json
