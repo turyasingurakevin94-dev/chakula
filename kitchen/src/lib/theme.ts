@@ -31,6 +31,13 @@ export const colors = {
   peachText: '#FFB48F',
   heroMeta: '#E7DCCB',
   chevron: '#B5AA9A',
+  // Kitchen canvas tokens.
+  segment: '#F3EADF',
+  segmentText: '#4A4943',
+  toggleOff: '#DCCFBD',
+  chipBg: '#FFE8DC',
+  chipText: '#8A3412',
+  noteBg: '#F3EADF',
 } as const;
 
 export const fonts = {
@@ -39,6 +46,7 @@ export const fonts = {
   displayItalic: 'Fraunces_500Medium_Italic',
   // Titles laid over food pictures.
   displayLight: 'Fraunces_400Regular',
+  displayMedium: 'Fraunces_500Medium',
   regular: 'DMSans_400Regular',
   medium: 'DMSans_500Medium',
   semibold: 'DMSans_600SemiBold',
@@ -55,8 +63,8 @@ export const shadow = {
   elevation: 6,
 } as const;
 
-// 11px small caps with wide tracking, used for section labels.
-export const smallCaps = { fontFamily: fonts.bold, fontSize: 11, letterSpacing: 1.76, textTransform: 'uppercase', color: colors.sub } as const;
+// 12px small caps, used for section labels (as on the kitchen design canvas).
+export const smallCaps = { fontFamily: fonts.bold, fontSize: 12, letterSpacing: 0.96, textTransform: 'uppercase', color: '#6B6A63' } as const;
 
 export function formatUGX(amount: number) {
   return `UGX ${amount.toLocaleString('en-US')}`;

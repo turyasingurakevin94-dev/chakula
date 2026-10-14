@@ -5,6 +5,13 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 
 const MIN = 60_000;
 
+// The demo opens at 12:38 today, the moment the design canvas shows, and runs in real time from there.
+const opened = new Date();
+const CLOCK_OFFSET = new Date(opened.getFullYear(), opened.getMonth(), opened.getDate(), 12, 38).getTime() - opened.getTime();
+export function demoNow() {
+  return Date.now() + CLOCK_OFFSET;
+}
+
 export type Item = { qty: number; name: string; extras?: string[]; price: number };
 export type Payment = 'MTN MoMo' | 'Airtel Money' | 'Wallet' | 'Cash on delivery';
 export type Status = 'incoming' | 'cooking' | 'ready' | 'picked' | 'delivered' | 'declined';
@@ -85,7 +92,7 @@ function seed(start: number): Order[] {
     {
       id: '4819', student: 'Aisha N.', place: 'Library', paid: 'MTN MoMo', inAt: at(-12), dueAt: at(3), status: 'cooking', posSale: 1091,
       items: [{ qty: 1, name: 'Chicken pilau', extras: ['Avocado'], price: 10000 }, { qty: 1, name: 'Soda', price: 2000 }],
-      rider: { name: 'Sam', arrivesAt: at(4) },
+      rider: { name: 'Sam', arrivesAt: at(3) },
     },
     {
       id: '4818', student: 'Peter O.', place: 'Main gate', paid: 'Wallet', inAt: at(-4), dueAt: at(11), status: 'cooking', posSale: 1092,
@@ -104,7 +111,7 @@ function seed(start: number): Order[] {
     {
       id: '4817', student: 'Daniel M.', place: 'Block A', paid: 'Cash on delivery', inAt: at(-19), dueAt: at(-4), status: 'ready', readyAt: at(-5), posSale: 1089,
       items: [{ qty: 1, name: 'Beef stew & matooke', price: 9000 }],
-      rider: { name: 'Moses', arrivesAt: at(1) },
+      rider: { name: 'Moses', arrivesAt: at(0) },
     },
     {
       id: '4816', student: 'Joan M.', place: 'Block C', paid: 'MTN MoMo', inAt: at(-20), dueAt: at(-5), status: 'ready', readyAt: at(-3), posSale: 1088,
@@ -137,9 +144,6 @@ const DISHES: Dish[] = [
   { id: 'luwombo', name: 'Beef luwombo', section: 'Popular', price: 12000, minutes: 25, extras: 0, hasPhoto: true, soldOut: true, backTomorrow: true },
   { id: 'rolex', name: 'Special rolex', section: 'Popular', price: 5000, minutes: 5, extras: 3, hasPhoto: true, soldOut: false },
   { id: 'katogo', name: 'Katogo', section: 'Mains', price: 7000, minutes: 5, extras: 0, hasPhoto: false, soldOut: false },
-  { id: 'stew', name: 'Beef stew & matooke', section: 'Mains', price: 9000, minutes: 12, extras: 1, hasPhoto: true, soldOut: false },
-  { id: 'juice', name: 'Passion juice', section: 'Drinks', price: 3000, minutes: 1, extras: 0, hasPhoto: true, soldOut: false },
-  { id: 'soda', name: 'Soda', section: 'Drinks', price: 2000, minutes: 1, extras: 0, hasPhoto: true, soldOut: false },
 ];
 
 const EXTRAS: Extra[] = [
@@ -149,7 +153,7 @@ const EXTRAS: Extra[] = [
 ];
 
 // Orders served earlier today, before the ones on the board.
-export const SERVED_EARLIER = 46;
+export const SERVED_EARLIER = 48;
 
 type Kitchen = {
   now: number;
@@ -171,7 +175,7 @@ type Kitchen = {
 const KitchenContext = createContext<Kitchen | null>(null);
 
 export function KitchenProvider({ children }: { children: ReactNode }) {
-  const [start] = useState(() => Date.now());
+  const [start] = useState(demoNow);
   const [now, setNow] = useState(start);
   const [orders, setOrders] = useState<Order[]>(() => seed(start));
   const [settings, setSettings] = useState<Settings>({ open: true, autoAccept: true, printTicket: true, printSeal: true, addToPOS: true });
@@ -196,13 +200,13 @@ export function KitchenProvider({ children }: { children: ReactNode }) {
   // The clock, plus what riders and new orders do on their own.
   useEffect(() => {
     const tick = setInterval(() => {
-      const t = Date.now();
+      const t = demoNow();
       setNow(t);
       setOrders((list) =>
         list.map((o) => {
           if (o.status === 'incoming' && o.acceptBy && t > o.acceptBy) return { ...o, status: 'declined' };
           // The rider scans the bag seal when they arrive, so the kitchen never taps "Picked up".
-          if (o.status === 'ready' && o.rider && t >= o.rider.arrivesAt + 30_000) return { ...o, status: 'picked', pickedAt: t };
+          if (o.status === 'ready' && o.rider && t >= o.rider.arrivesAt + 2 * MIN) return { ...o, status: 'picked', pickedAt: t };
           if (o.status === 'picked' && o.pickedAt && t >= o.pickedAt + 6 * MIN) return { ...o, status: 'delivered', deliveredAt: t };
           return o;
         }),
@@ -215,7 +219,7 @@ export function KitchenProvider({ children }: { children: ReactNode }) {
     const arrive = () => {
       if (!settingsRef.current.open || arrived.current >= ARRIVALS.length) return;
       const next = ARRIVALS[arrived.current++];
-      const t = Date.now();
+      const t = demoNow();
       const auto = settingsRef.current.autoAccept;
       const order: Order = {
         ...next,
@@ -249,12 +253,12 @@ export function KitchenProvider({ children }: { children: ReactNode }) {
       notify,
       setSetting: (key, v) => setSettings((s) => ({ ...s, [key]: v })),
       markReady: (id) => {
-        const t = Date.now();
+        const t = demoNow();
         update(id, (o) => ({ ...o, status: 'ready', readyAt: t, rider: o.rider ?? { name: RIDERS[Number(o.id) % RIDERS.length], arrivesAt: t + 3 * MIN } }));
       },
       addTime: (id) => update(id, (o) => ({ ...o, dueAt: o.dueAt + 5 * MIN })),
       accept: (id, minutes) => {
-        const t = Date.now();
+        const t = demoNow();
         update(id, (o) => ({ ...o, status: 'cooking', inAt: t, dueAt: t + minutes * MIN, acceptBy: undefined, posSale: settingsRef.current.addToPOS ? nextSale.current++ : undefined }));
       },
       decline: (id) => update(id, (o) => ({ ...o, status: 'declined' })),
@@ -278,6 +282,16 @@ export function cookingQueue(orders: Order[]) {
   return orders.filter((o) => o.status === 'cooking').sort((a, b) => a.inAt - b.inAt || a.dueAt - b.dueAt);
 }
 
+// Cook now names on the phone, where space is tight.
+const SHORT: Record<string, string> = { 'Special rolex': 'Rolex', 'Chicken pilau': 'Pilau', 'Passion juice': 'Juice' };
+export function shortName(name: string) {
+  return SHORT[name] ?? name;
+}
+
+// The order the cook-now strip lists dishes in, as on the canvas.
+const COOK_ORDER = ['Special rolex', 'Chicken pilau', 'Katogo', 'Passion juice', 'Soda'];
+const cookRank = (name: string) => (COOK_ORDER.includes(name) ? COOK_ORDER.indexOf(name) : COOK_ORDER.length);
+
 // "4 Special rolex" totals across everything being cooked, with extras counted per dish.
 export function cookNow(orders: Order[]) {
   const totals = new Map<string, { qty: number; extras: Map<string, number> }>();
@@ -289,5 +303,5 @@ export function cookNow(orders: Order[]) {
       totals.set(i.name, row);
     }
   }
-  return [...totals.entries()].map(([name, r]) => ({ name, qty: r.qty, extras: [...r.extras.entries()].map(([e, n]) => `${n} ${e.toLowerCase()}`) }));
+  return [...totals.entries()].sort((a, b) => cookRank(a[0]) - cookRank(b[0])).map(([name, r]) => ({ name, qty: r.qty, extras: [...r.extras.entries()].map(([e, n]) => `${n} ${e.toLowerCase()}`) }));
 }

@@ -1,7 +1,7 @@
 import Feather from '@expo/vector-icons/Feather';
 import { router } from 'expo-router';
 import type { ComponentProps, ReactNode } from 'react';
-import { Pressable, StyleSheet, Switch, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
+import { Pressable, StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 import { colors, fonts, smallCaps } from '../lib/theme';
 
 export type IconName = ComponentProps<typeof Feather>['name'];
@@ -38,7 +38,7 @@ export function Card({ children, style, highlight }: { children: ReactNode; styl
   return <View style={[s.card, highlight && s.cardHighlight, style]}>{children}</View>;
 }
 
-export function BackHeader({ title, kicker, right }: { title: string; kicker?: string; right?: ReactNode }) {
+export function BackHeader({ title, kicker, right }: { title: ReactNode; kicker?: string; right?: ReactNode }) {
   return (
     <View style={s.backHeader}>
       <Pressable accessibilityRole="button" accessibilityLabel="Back" hitSlop={4} onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} style={s.round}>
@@ -46,12 +46,29 @@ export function BackHeader({ title, kicker, right }: { title: string; kicker?: s
       </Pressable>
       <View style={{ flex: 1, minWidth: 0 }}>
         {kicker ? <Label>{kicker}</Label> : null}
-        <Display size={24} numberOfLines={1}>
+        <Display size={26} numberOfLines={1}>
           {title}
         </Display>
       </View>
       {right}
     </View>
+  );
+}
+
+// The pill switch from the canvas: 52 × 32 in lists, 42 × 26 in the Open button.
+export function Toggle({ value, onChange, label, small }: { value: boolean; onChange?: (v: boolean) => void; label: string; small?: boolean }) {
+  const w = small ? 42 : 52;
+  const h = small ? 26 : 32;
+  const pad = small ? 3 : 4;
+  const knob = h - pad * 2;
+  const track = <View style={{ width: w, height: h, borderRadius: h / 2, backgroundColor: value ? colors.forest : colors.toggleOff }}>
+    <View style={{ position: 'absolute', top: pad, left: value ? w - pad - knob : pad, width: knob, height: knob, borderRadius: knob / 2, backgroundColor: value ? colors.cream : colors.card }} />
+  </View>;
+  if (!onChange) return track;
+  return (
+    <Pressable accessibilityRole="switch" accessibilityLabel={label} accessibilityState={{ checked: value }} hitSlop={6} onPress={() => onChange(!value)}>
+      {track}
+    </Pressable>
   );
 }
 
@@ -98,14 +115,7 @@ export function ToggleRow({ title, sub, value, onChange, last }: { title: string
         <Text style={{ fontFamily: fonts.bold, fontSize: 15, color: colors.forest }}>{title}</Text>
         {sub ? <Text style={{ fontFamily: fonts.regular, fontSize: 13, lineHeight: 18, color: colors.muted }}>{sub}</Text> : null}
       </View>
-      <Switch
-        accessibilityLabel={title}
-        value={value}
-        onValueChange={onChange}
-        trackColor={{ false: colors.border, true: colors.forest }}
-        thumbColor={colors.card}
-        ios_backgroundColor={colors.border}
-      />
+      <Toggle label={title} value={value} onChange={onChange} />
     </View>
   );
 }
@@ -118,7 +128,7 @@ export function Segments<T extends string>({ options, value, onChange }: { optio
         const on = o.key === value;
         return (
           <Pressable key={o.key} accessibilityRole="tab" accessibilityState={{ selected: on }} onPress={() => onChange(o.key)} style={[s.segment, on && s.segmentOn]}>
-            <Text style={{ fontFamily: on ? fonts.bold : fonts.semibold, fontSize: 14, color: on ? colors.forest : colors.muted }}>{o.label}</Text>
+            <Text style={{ fontFamily: on ? fonts.bold : fonts.semibold, fontSize: 14, color: on ? colors.forest : colors.segmentText }}>{o.label}</Text>
           </Pressable>
         );
       })}
@@ -127,11 +137,11 @@ export function Segments<T extends string>({ options, value, onChange }: { optio
 }
 
 // Extras and requests on an order line, e.g. "+ Extra egg" or "No pepper".
-export function Chip({ children }: { children: string }) {
+export function Chip({ children, size = 13, roomy }: { children: string; size?: number; roomy?: boolean }) {
   const no = children.startsWith('No ');
   return (
-    <View style={[s.chip, no ? { backgroundColor: colors.tile } : { backgroundColor: colors.peach }]}>
-      <Text style={{ fontFamily: fonts.semibold, fontSize: 13, color: no ? colors.ink : '#8A3412' }}>{no ? children : `+ ${children}`}</Text>
+    <View style={[s.chip, roomy && { paddingHorizontal: 10, paddingVertical: size > 13 ? 5 : 4, borderRadius: 10 }]}>
+      <Text style={{ fontFamily: fonts.semibold, fontSize: size, color: colors.chipText }}>{no ? children : `+ ${children}`}</Text>
     </View>
   );
 }
@@ -139,12 +149,12 @@ export function Chip({ children }: { children: string }) {
 export const s = StyleSheet.create({
   card: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, borderRadius: 20, padding: 14 },
   cardHighlight: { borderWidth: 2, borderColor: colors.orange, padding: 13 },
-  backHeader: { paddingHorizontal: 20, paddingTop: 12, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  backHeader: { paddingHorizontal: 16, paddingTop: 18, flexDirection: 'row', alignItems: 'center', gap: 8 },
   round: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' },
   button: { borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 16 },
-  toggleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14 },
-  segments: { flexDirection: 'row', backgroundColor: colors.tile, borderRadius: 16, padding: 4, gap: 4 },
+  toggleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
+  segments: { flexDirection: 'row', backgroundColor: colors.segment, borderRadius: 16, padding: 4, gap: 4 },
   segment: { flex: 1, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   segmentOn: { backgroundColor: colors.card, shadowColor: colors.forest, shadowOpacity: 0.12, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 1 },
-  chip: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  chip: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, backgroundColor: colors.chipBg },
 });
