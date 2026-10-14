@@ -5,6 +5,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { AccountProvider, useAccount } from '../lib/account';
 import { CartProvider } from '../lib/cart';
 import { colors } from '../lib/theme';
 
@@ -15,10 +16,34 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <CartProvider>
-        <StatusBar style="dark" />
-        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.cream } }} />
-      </CartProvider>
+      <AccountProvider>
+        <CartProvider>
+          <StatusBar style="dark" />
+          <Screens />
+        </CartProvider>
+      </AccountProvider>
     </SafeAreaProvider>
+  );
+}
+
+function Screens() {
+  const account = useAccount();
+  return (
+    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.cream } }}>
+      <Stack.Protected guard={!account.verified}>
+        <Stack.Screen name="sign-in" />
+        <Stack.Screen name="verify" />
+      </Stack.Protected>
+      <Stack.Protected guard={account.verified && !account.ready}>
+        <Stack.Screen name="setup" />
+      </Stack.Protected>
+      <Stack.Protected guard={account.ready}>
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="restaurant/[id]" />
+        <Stack.Screen name="checkout" />
+        <Stack.Screen name="tracking" />
+        <Stack.Screen name="profile" />
+      </Stack.Protected>
+    </Stack>
   );
 }

@@ -38,3 +38,8 @@ export const shadow = {
 export function formatUGX(amount: number) {
   return `UGX ${amount.toLocaleString('en-US')}`;
 }
+
+// "772123456" -> "772 123 456"
+export function formatPhone(digits: string) {
+  return [digits.slice(0, 3), digits.slice(3, 6), digits.slice(6, 9)].filter(Boolean).join(' ');
+}

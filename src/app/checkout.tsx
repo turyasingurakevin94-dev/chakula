@@ -3,24 +3,33 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Display, Icon, IconButton, Label, PrimaryButton, styles as ui, type IconName } from '../components/ui';
+import { useAccount } from '../lib/account';
 import { useCart } from '../lib/cart';
-import { student } from '../lib/data';
 import { colors, fonts, formatUGX } from '../lib/theme';
 
 type Method = { id: string; name: string; detail?: string; icon: IconName };
 
-const methods: Method[] = [
-  { id: 'mtn', name: 'MTN Mobile Money', detail: student.momoNumber, icon: 'smartphone' },
-  { id: 'airtel', name: 'Airtel Money', icon: 'smartphone' },
-  { id: 'wallet', name: 'Chakula Wallet', detail: `Balance ${formatUGX(student.walletBalance)}`, icon: 'credit-card' },
-  { id: 'card', name: 'Debit or credit card', icon: 'credit-card' },
-  { id: 'cash', name: 'Cash on delivery', icon: 'dollar-sign' },
-];
-
 export default function Checkout() {
   const cart = useCart();
+  const account = useAccount();
   const [method, setMethod] = useState('mtn');
-  const payLabel = method === 'cash' ? `Place order · ${formatUGX(cart.total)}` : `Pay ${formatUGX(cart.total)}`;
+  const shortOfFunds = account.balance < cart.total;
+  const methods: Method[] = [
+    { id: 'mtn', name: 'MTN Mobile Money', detail: account.maskedPhone, icon: 'smartphone' },
+    { id: 'airtel', name: 'Airtel Money', icon: 'smartphone' },
+    { id: 'wallet', name: 'Chakula Wallet', detail: `Balance ${formatUGX(account.balance)}${shortOfFunds ? ' · not enough' : ''}`, icon: 'credit-card' },
+    { id: 'card', name: 'Debit or credit card', icon: 'credit-card' },
+    { id: 'cash', name: 'Cash on delivery', icon: 'dollar-sign' },
+  ];
+  const blocked = cart.count === 0 || (method === 'wallet' && shortOfFunds);
+  const payLabel = method === 'wallet' && shortOfFunds ? 'Top up your wallet first' : method === 'cash' ? `Place order · ${formatUGX(cart.total)}` : `Pay ${formatUGX(cart.total)}`;
+
+  const pay = () => {
+    if (blocked || !cart.restaurantId) return;
+    account.placeOrder({ restaurantId: cart.restaurantId, lines: cart.lines, total: cart.total }, method === 'wallet');
+    cart.clear();
+    router.replace('/tracking');
+  };
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.cream }}>
@@ -37,8 +46,8 @@ export default function Checkout() {
               <Icon name="home" size={20} />
             </View>
             <View style={{ flex: 1, gap: 2 }}>
-              <Text style={s.strong}>{student.hostel}</Text>
-              <Text style={s.meta}>{student.deliveryNote}</Text>
+              <Text style={s.strong}>{account.address}</Text>
+              {account.note ? <Text style={s.meta}>{account.note}</Text> : null}
             </View>
             <Text style={{ fontFamily: fonts.semibold, fontSize: 14, color: colors.forest }}>Change</Text>
           </View>
@@ -95,9 +104,11 @@ export default function Checkout() {
       </ScrollView>
 
       <View style={s.footer}>
-        <PrimaryButton floating label={payLabel} onPress={() => router.replace('/tracking')}>
-          <Text style={[ui.primaryText, { flex: 1, textAlign: 'center' }]}>{payLabel}</Text>
-        </PrimaryButton>
+        <View style={{ opacity: blocked ? 0.5 : 1 }}>
+          <PrimaryButton floating={!blocked} label={payLabel} onPress={pay}>
+            <Text style={[ui.primaryText, { flex: 1, textAlign: 'center' }]}>{payLabel}</Text>
+          </PrimaryButton>
+        </View>
       </View>
     </SafeAreaView>
   );

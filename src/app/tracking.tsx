@@ -1,46 +1,41 @@
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { Display, IconButton } from '../components/ui';
-import { useCart } from '../lib/cart';
-import { findRestaurant, student } from '../lib/data';
+import { DELIVERY_MINUTES, minutesLeft, useAccount, useNow } from '../lib/account';
+import { findRestaurant } from '../lib/data';
 import { colors, fonts } from '../lib/theme';
 
 const steps = ['Confirmed', 'Cooked', 'On the way', 'At your door'];
 
 export default function Tracking() {
   const insets = useSafeAreaInsets();
-  const cart = useCart();
-  const restaurant = findRestaurant(cart.restaurantId ?? '') ?? findRestaurant('nakawa-kitchen')!;
+  const account = useAccount();
+  const now = useNow();
+  // Show the latest order, which stays on screen after it is delivered.
+  const order = account.activeOrder ?? account.orders[0]!;
+  const restaurant = findRestaurant(order.restaurantId) ?? findRestaurant('nakawa-kitchen')!;
   // Prototype only: the order moves forward on a timer. The rider app will drive this for real.
-  const [step, setStep] = useState(2);
-  const [minutes, setMinutes] = useState(8);
+  const minutes = account.activeOrder ? minutesLeft(order, now) : 0;
+  const arrived = minutes === 0;
+  const step = arrived ? 3 : minutes > DELIVERY_MINUTES - 2 ? 1 : 2;
 
   useEffect(() => {
-    const t = setInterval(() => setMinutes((m) => Math.max(0, m - 1)), 4000);
-    return () => clearInterval(t);
-  }, []);
-  useEffect(() => {
-    if (minutes === 0) setStep(3);
-  }, [minutes]);
-
-  const arrived = step === 3;
+    if (arrived && account.activeOrder) account.markDelivered(order.id);
+  }, [arrived]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.map }}>
       <MapSketch />
       <View style={[s.mapLabel, { top: insets.top + 18 }]}>
-        <Text style={{ fontFamily: fonts.bold, fontSize: 12, color: colors.cream }}>Block B</Text>
+        <Text style={{ fontFamily: fonts.bold, fontSize: 12, color: colors.cream }}>{account.place?.name.replace(' Hostel', '') ?? 'You'}</Text>
       </View>
       <IconButton
         icon="chevron-left"
-        label="Back to home"
-        onPress={() => {
-          cart.clear();
-          router.replace('/');
-        }}
+        label="Back"
+        onPress={() => router.dismissTo('/')}
         style={{ position: 'absolute', left: 16, top: insets.top + 12 }}
       />
 
@@ -52,7 +47,7 @@ export default function Tracking() {
             <Display size={44} style={{ lineHeight: 48 }}>{arrived ? 'Outside' : `${minutes} min`}</Display>
           </View>
           <Text style={[s.meta14, { textAlign: 'right' }]}>
-            Order #2048{'\n'}
+            Order #{order.id}{'\n'}
             {restaurant.name}
           </Text>
         </View>
@@ -92,7 +87,7 @@ export default function Tracking() {
           <View style={s.stop}>
             <View style={[s.dot, { backgroundColor: colors.forest }]} />
             <Text style={{ fontFamily: fonts.semibold, fontSize: 14, color: colors.forest }}>
-              {student.hostel} · {student.deliveryNote}
+              {account.note ? `${account.address} · ${account.note}` : account.address}
             </Text>
           </View>
         </View>
