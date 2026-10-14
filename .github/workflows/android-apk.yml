@@ -33,6 +33,11 @@ jobs:
       - name: Link Expo project
         run: eas init --non-interactive --force
 
+      # Points the app at the project's update server, so the installed app picks up
+      # what "Publish app update" publishes after each merge.
+      - name: Configure updates
+        run: eas update:configure --platform android --non-interactive
+
       - name: Build APK
         run: |
           eas build --platform android --profile preview --non-interactive --json > build.json
@@ -40,7 +45,12 @@ jobs:
           node -e '
             const b = require("./build.json")[0] || {};
             const a = b.artifacts || {};
-            const lines = ["## Android app ready", "", "- Build page (open on your phone to install): https://expo.dev/projects/" + b.projectId + "/builds/" + b.id];
+            const app = b.app || {};
+            const owner = (app.ownerAccount || {}).name;
+            const page = owner && app.slug
+              ? "https://expo.dev/accounts/" + owner + "/projects/" + app.slug + "/builds/" + b.id
+              : "https://expo.dev/projects/" + (app.id || b.projectId) + "/builds/" + b.id;
+            const lines = ["## Android app ready", "", "- Build page (open on your phone to install): " + page];
             const apk = a.buildUrl || a.applicationArchiveUrl;
             if (apk) lines.push("- Direct APK download: " + apk);
             console.log(lines.join("\n"));
