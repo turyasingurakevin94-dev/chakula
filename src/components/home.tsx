@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { formatClock, type OrderLine } from '../lib/account';
-import type { Restaurant } from '../lib/data';
-import { colors, fonts, formatUGX } from '../lib/theme';
-import type { Meal, QuickDish } from '../lib/usual';
-import { Display, FoodImage, Icon, Stepper } from './ui';
+import type { MenuItem, Restaurant } from '../lib/data';
+import { colors, fonts, formatUGX, smallCaps } from '../lib/theme';
+import type { QuickDish } from '../lib/usual';
+import { FoodImage, Icon, Scrim, Stepper } from './ui';
 
 // "2 × Classic rolex, African tea"
 export function dishNames(lines: OrderLine[]) {
@@ -14,19 +14,24 @@ export function dishNames(lines: OrderLine[]) {
 export function UsualCard({
   restaurant,
   lines,
-  meal,
+  usualAt,
   total,
   now,
   busy,
+  paysWith,
+  undoSeconds,
   onOrder,
   onChange,
 }: {
   restaurant: Restaurant;
   lines: OrderLine[];
-  meal: Meal;
+  // When the student usually orders it.
+  usualAt: number;
   total: number;
   now: number;
   busy: boolean;
+  paysWith: string;
+  undoSeconds: number;
   onOrder: () => void;
   onChange: () => void;
 }) {
@@ -34,19 +39,19 @@ export function UsualCard({
   const orderLabel = `Order again · ${formatUGX(total)}`;
   return (
     <View style={s.usual}>
-      <View style={{ flexDirection: 'row', gap: 14, alignItems: 'center' }}>
-        <FoodImage tint={lines[0]?.item.tint ?? restaurant.tint} size={30} style={s.usualImage} />
-        <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
-          <Text style={s.usualOverline}>Your usual {meal}</Text>
-          <Display size={20} style={{ color: colors.cream }}>
+      <View style={{ flexDirection: 'row', gap: 14, padding: 16, alignItems: 'center' }}>
+        <FoodImage tint={lines[0]?.item.tint ?? restaurant.tint} size={36} style={s.usualImage} />
+        <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
+          <Text style={[smallCaps, { color: colors.peachText }]}>Your usual · {formatClock(usualAt, true)}</Text>
+          <Text style={{ fontFamily: fonts.displayLight, fontSize: 22, lineHeight: 25, color: colors.cream }} numberOfLines={2}>
             {dishNames(lines)}
-          </Display>
-          <Text style={{ fontFamily: fonts.regular, fontSize: 13, color: '#CFE0D3' }}>
+          </Text>
+          <Text style={{ fontFamily: fonts.regular, fontSize: 13, color: colors.mint }} numberOfLines={2}>
             {restaurant.name} · at your door by {arrives}
           </Text>
         </View>
       </View>
-      <View style={{ flexDirection: 'row', gap: 10 }}>
+      <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingBottom: 16 }}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={orderLabel}
@@ -63,10 +68,16 @@ export function UsualCard({
           accessibilityRole="button"
           accessibilityLabel={`Change your usual from ${restaurant.name}`}
           onPress={onChange}
-          style={({ pressed }) => [s.usualSecondary, pressed && { backgroundColor: '#24553F' }]}
+          style={({ pressed }) => [s.usualSecondary, pressed && { backgroundColor: colors.forestMid }]}
         >
-          <Text style={{ fontFamily: fonts.bold, fontSize: 15, color: colors.cream }}>Change</Text>
+          <Text style={{ fontFamily: fonts.semibold, fontSize: 14, color: colors.cream }}>Change</Text>
         </Pressable>
+      </View>
+      <View style={s.usualFoot}>
+        <Text style={s.usualFootText} numberOfLines={1}>
+          Pays with {paysWith}
+        </Text>
+        <Text style={s.usualFootText}>{undoSeconds} seconds to undo</Text>
       </View>
     </View>
   );
@@ -86,35 +97,96 @@ export function QuickDishRow({
   onOpen: (d: QuickDish) => void;
 }) {
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingHorizontal: 20, paddingBottom: 4 }}>
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingHorizontal: 20, paddingBottom: 10 }}>
       {dishes.map((d) => (
         <Pressable
           key={`${d.restaurant.id}-${d.item.id}`}
           accessibilityRole="button"
           accessibilityLabel={`${d.item.name} from ${d.restaurant.name}, ${d.minutes} minutes`}
           onPress={() => onOpen(d)}
-          style={({ pressed }) => [s.quick, { opacity: pressed ? 0.92 : 1 }]}
+          style={({ pressed }) => [{ width: 150, gap: 8, opacity: pressed ? 0.92 : 1 }]}
         >
           <View>
-            <FoodImage tint={d.item.tint} size={34} style={{ height: 92, borderRadius: 14 }} />
+            <FoodImage tint={d.item.tint} size={36} style={{ height: 108, borderRadius: 16 }} />
+            <View style={s.timePill}>
+              <Icon name="clock" size={12} />
+              <Text style={{ fontFamily: fonts.bold, fontSize: 12, color: colors.forest }}>{d.minutes} min</Text>
+            </View>
             <Stepper name={d.item.name} quantity={quantityOf(d)} onAdd={() => onAdd(d)} onRemove={() => onRemove(d)} />
           </View>
-          <View style={{ gap: 2, paddingHorizontal: 4, paddingTop: 10 }}>
-            <Text style={{ fontFamily: fonts.bold, fontSize: 14, color: colors.forest }} numberOfLines={1}>
+          <View>
+            <Text style={s.cardTitle} numberOfLines={1}>
               {d.item.name}
             </Text>
             <Text style={{ fontFamily: fonts.regular, fontSize: 12, color: colors.muted }} numberOfLines={1}>
-              {d.restaurant.name}
+              {d.restaurant.name} · {formatUGX(d.item.price)}
             </Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
-              <Icon name="clock" size={12} color={colors.orangeText} />
-              <Text style={{ fontFamily: fonts.bold, fontSize: 12, color: colors.orangeText }}>{d.minutes} min</Text>
-              <Text style={{ fontFamily: fonts.regular, fontSize: 12, color: colors.muted }}> · {formatUGX(d.item.price)}</Text>
-            </View>
           </View>
         </Pressable>
       ))}
     </ScrollView>
+  );
+}
+
+// Full-width featured dish with its title laid over the picture.
+export function ChefsPick({ restaurant, item, freeDeliveries, onOpen, onAdd }: { restaurant: Restaurant; item: MenuItem; freeDeliveries: number; onOpen: () => void; onAdd: () => void }) {
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel={`Chef’s pick tonight: ${item.name} from ${restaurant.name}`} onPress={onOpen} style={({ pressed }) => [s.hero, { opacity: pressed ? 0.95 : 1 }]}>
+      <FoodImage tint={item.tint} size={60} style={[StyleSheet.absoluteFill, { paddingTop: 44, paddingBottom: 96 }]} />
+      <Scrim id="chefs-pick" />
+      {freeDeliveries > 0 ? <Text style={s.heroPill}>Free delivery · first {freeDeliveries} orders</Text> : null}
+      <View style={s.heroFoot}>
+        <View style={{ flex: 1, gap: 4 }}>
+          <Text style={[smallCaps, { color: colors.peachText }]}>Chef’s pick tonight</Text>
+          <Text style={{ fontFamily: fonts.displayLight, fontSize: 26, lineHeight: 29, color: colors.cream }}>{item.name}</Text>
+          <Text style={{ fontFamily: fonts.regular, fontSize: 13, color: colors.heroMeta }}>
+            {restaurant.name} · {restaurant.minutes} min · {formatUGX(item.price)}
+          </Text>
+        </View>
+        <Pressable accessibilityRole="button" accessibilityLabel={`Add ${item.name}`} hitSlop={6} onPress={onAdd} style={s.heroAdd}>
+          <Icon name="plus" size={20} />
+        </Pressable>
+      </View>
+    </Pressable>
+  );
+}
+
+export function CategoryChips({ categories, selected, onSelect }: { categories: { id: string; label: string; tint: string }[]; selected: string | null; onSelect: (id: string | null) => void }) {
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 16, paddingTop: 4 }}>
+      {categories.map((c) => {
+        const on = c.id === selected;
+        return (
+          <Pressable
+            key={c.id}
+            accessibilityRole="button"
+            accessibilityLabel={c.label}
+            accessibilityState={{ selected: on }}
+            onPress={() => onSelect(on ? null : c.id)}
+            style={{ width: 64, alignItems: 'center', gap: 6 }}
+          >
+            <View style={[s.chipRing, on && { borderColor: colors.forest }]}>
+              <FoodImage tint={c.tint} size={26} style={s.chipImage} />
+            </View>
+            <Text style={{ fontSize: 12, fontFamily: on ? fonts.bold : fonts.medium, color: on ? colors.forest : colors.muted }}>{c.label}</Text>
+          </Pressable>
+        );
+      })}
+    </ScrollView>
+  );
+}
+
+export function DishCard({ name, price, tint, onPress }: { name: string; price: number; tint: string; onPress: () => void }) {
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel={`${name}, ${formatUGX(price)}`} onPress={onPress} style={({ pressed }) => [{ width: 150, gap: 8, opacity: pressed ? 0.92 : 1 }]}>
+      <FoodImage tint={tint} size={40} style={{ height: 112, borderRadius: 16 }} />
+      <View>
+        <Text style={s.cardTitle} numberOfLines={1}>
+          {name}
+        </Text>
+        <Text style={{ fontFamily: fonts.regular, fontSize: 13, color: colors.muted }}>{formatUGX(price)}</Text>
+      </View>
+    </Pressable>
   );
 }
 
@@ -134,7 +206,7 @@ export function UndoBar({ summary, seconds, onUndo }: { summary: string; seconds
       </View>
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={{ fontFamily: fonts.bold, fontSize: 15, color: colors.cream }}>Ordered</Text>
-        <Text style={{ fontFamily: fonts.regular, fontSize: 13, color: '#CFE0D3' }} numberOfLines={1}>
+        <Text style={{ fontFamily: fonts.regular, fontSize: 13, color: colors.mint }} numberOfLines={1}>
           {summary}
         </Text>
       </View>
@@ -147,12 +219,31 @@ export function UndoBar({ summary, seconds, onUndo }: { summary: string; seconds
 }
 
 const s = StyleSheet.create({
-  usual: { marginHorizontal: 20, marginTop: 18, padding: 16, borderRadius: 22, backgroundColor: colors.forest, gap: 16 },
-  usualImage: { width: 72, height: 72, borderRadius: 16 },
-  usualOverline: { fontFamily: fonts.bold, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', color: colors.orange },
-  usualPrimary: { flex: 1, height: 48, borderRadius: 14, backgroundColor: colors.cream, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
-  usualSecondary: { height: 48, borderRadius: 14, borderWidth: 1, borderColor: '#4F7D66', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
-  quick: { width: 156, padding: 8, paddingBottom: 12, borderRadius: 20, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line },
+  usual: { marginHorizontal: 20, marginTop: 16, borderRadius: 22, backgroundColor: colors.forest, overflow: 'hidden' },
+  usualImage: { width: 88, height: 88, borderRadius: 18 },
+  usualPrimary: { flex: 1, height: 50, borderRadius: 14, backgroundColor: colors.cream, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
+  usualSecondary: { height: 50, borderRadius: 14, borderWidth: 1, borderColor: colors.forestLine, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14 },
+  usualFoot: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, paddingHorizontal: 16, paddingVertical: 10, backgroundColor: colors.forestMid },
+  usualFootText: { fontFamily: fonts.regular, fontSize: 12, color: colors.mint, flexShrink: 1 },
+  timePill: { position: 'absolute', left: 8, top: 8, flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.cream, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 8 },
+  cardTitle: { fontFamily: fonts.semibold, fontSize: 15, color: colors.forest },
+  hero: { marginHorizontal: 20, height: 224, borderRadius: 22, overflow: 'hidden', backgroundColor: colors.forest },
+  heroPill: {
+    position: 'absolute',
+    left: 16,
+    top: 16,
+    ...smallCaps,
+    color: colors.cream,
+    backgroundColor: 'rgba(15,42,31,0.55)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
+  heroFoot: { position: 'absolute', left: 18, right: 18, bottom: 16, flexDirection: 'row', alignItems: 'flex-end', gap: 12 },
+  heroAdd: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.cream, alignItems: 'center', justifyContent: 'center' },
+  chipRing: { width: 62, height: 62, borderRadius: 31, borderWidth: 1, borderColor: 'transparent', alignItems: 'center', justifyContent: 'center' },
+  chipImage: { width: 56, height: 56, borderRadius: 28 },
   undo: {
     position: 'absolute',
     left: 16,

@@ -2,7 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Display, FoodImage, Icon, IconButton, Label, PrimaryButton, styles as ui } from '../components/ui';
+import { Display, FoodImage, Icon, IconButton, PrimaryButton, styles as ui } from '../components/ui';
 import { unitPrice, type Pepper } from '../lib/account';
 import { useCart } from '../lib/cart';
 import { findRestaurant, type Extra } from '../lib/data';
@@ -43,10 +43,10 @@ export default function Dish() {
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
       <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={() => router.back()} style={s.backdrop} />
-      <View style={[s.sheet, { marginTop: insets.top + 40 }]}>
+      <View style={[s.sheet, { marginTop: insets.top + 56 }]}>
         <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 16 }}>
-          <FoodImage tint={item.tint} size={72} style={{ height: 190 }} />
-          <IconButton icon="x" label="Close" onPress={() => router.back()} style={{ position: 'absolute', right: 16, top: 16 }} />
+          <FoodImage tint={item.tint} size={80} style={{ height: 230 }} />
+          <IconButton icon="x" label="Close" size={40} onPress={() => router.back()} style={{ position: 'absolute', right: 16, top: 16 }} />
 
           <View style={{ paddingHorizontal: 20, paddingTop: 18, gap: 6 }}>
             <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 }}>
@@ -60,10 +60,7 @@ export default function Dish() {
 
           {item.extras?.length ? (
             <View style={s.section}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <Label>Make it yours</Label>
-                <Text style={s.meta}>Optional</Text>
-              </View>
+              <Text style={s.label}>Add extras</Text>
               <View style={[ui.card, { borderRadius: 18, overflow: 'hidden' }]}>
                 {item.extras.map((e, i) => {
                   const on = extras.some((x) => x.id === e.id);
@@ -87,7 +84,7 @@ export default function Dish() {
 
           {item.pepper ? (
             <View style={s.section}>
-              <Label>Pepper</Label>
+              <Text style={s.label}>Pepper</Text>
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 {peppers.map((p) => {
                   const on = p === pepper;
@@ -116,16 +113,16 @@ export default function Dish() {
         <View style={[s.footer, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]}>
           <View style={[ui.card, s.qty]}>
             <Pressable accessibilityRole="button" accessibilityLabel="One less" hitSlop={6} onPress={() => setQuantity((q) => Math.max(1, q - 1))} style={s.qtyHit}>
-              <Icon name="minus" size={18} color={quantity > 1 ? colors.forest : colors.line} />
+              <Icon name="minus" size={18} color={quantity > 1 ? colors.forest : colors.border} />
             </Pressable>
-            <Text style={{ fontFamily: fonts.bold, fontSize: 16, color: colors.forest, minWidth: 18, textAlign: 'center' }}>{quantity}</Text>
+            <Text style={{ fontFamily: fonts.bold, fontSize: 17, color: colors.forest, minWidth: 18, textAlign: 'center' }}>{quantity}</Text>
             <Pressable accessibilityRole="button" accessibilityLabel="One more" hitSlop={6} onPress={() => setQuantity((q) => Math.min(20, q + 1))} style={s.qtyHit}>
               <Icon name="plus" size={18} />
             </Pressable>
           </View>
           <View style={{ flex: 1 }}>
             <PrimaryButton floating label={`Add ${quantity} to basket, ${formatUGX(total)}`} onPress={add}>
-              <Text style={[ui.primaryText, { flex: 1, textAlign: 'center', fontSize: 16 }]}>Add · {formatUGX(total)}</Text>
+              <Text style={[ui.primaryText, { flex: 1, textAlign: 'center', fontFamily: fonts.bold, fontSize: 17 }]}>Add · {formatUGX(total)}</Text>
             </PrimaryButton>
           </View>
         </View>
@@ -137,15 +134,16 @@ export default function Dish() {
 const s = StyleSheet.create({
   backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(27,67,50,0.45)' },
   sheet: { flex: 1, backgroundColor: colors.cream, borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: 'hidden' },
-  section: { paddingHorizontal: 20, paddingTop: 18, gap: 8 },
-  extra: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, minHeight: 50 },
+  section: { paddingHorizontal: 20, paddingTop: 16, gap: 8 },
+  label: { fontFamily: fonts.bold, fontSize: 12, letterSpacing: 0.96, textTransform: 'uppercase', color: colors.muted },
+  extra: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, minHeight: 48 },
   divider: { borderBottomWidth: 1, borderBottomColor: colors.lineSoft },
-  check: { width: 22, height: 22, borderRadius: 6, borderWidth: 1.5, borderColor: '#D9CBB8', alignItems: 'center', justifyContent: 'center' },
-  pepper: { flex: 1, height: 42, borderRadius: 12, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center' },
+  check: { width: 22, height: 22, borderRadius: 7, borderWidth: 2, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
+  pepper: { flex: 1, height: 40, borderRadius: 12, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center' },
   note: { height: 48, borderRadius: 14, paddingHorizontal: 16, fontFamily: fonts.regular, fontSize: 14, color: colors.ink },
-  footer: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.lineSoft, backgroundColor: colors.cream },
-  qty: { height: 60, borderRadius: 18, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, gap: 6 },
-  qtyHit: { width: 36, height: 44, alignItems: 'center', justifyContent: 'center' },
+  footer: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingTop: 10, backgroundColor: colors.cream },
+  qty: { height: 60, borderRadius: 18, borderColor: colors.border, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, gap: 4 },
+  qtyHit: { width: 40, height: 44, alignItems: 'center', justifyContent: 'center' },
   meta: { fontFamily: fonts.regular, fontSize: 13, color: colors.muted },
   meta14: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 20, color: colors.muted },
 });
