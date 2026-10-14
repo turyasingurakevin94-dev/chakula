@@ -6,10 +6,12 @@ name: Publish app update
 on:
   push:
     branches: [main]
-    # The kitchen app publishes its own updates (kitchen-update.yml).
+    # The kitchen and rider apps publish their own updates (kitchen-update.yml, rider-update.yml).
     paths-ignore:
       - kitchen/**
+      - rider/**
       - .github/workflows/kitchen-*.yml
+      - .github/workflows/rider-*.yml
   workflow_dispatch:
 
 concurrency:

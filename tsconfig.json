@@ -5,6 +5,7 @@
   },
   "exclude": [
     "kitchen",
+    "rider",
     "node_modules"
   ]
 }
