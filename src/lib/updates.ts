@@ -14,7 +14,11 @@ export function useApplyUpdates() {
     const openedAt = Date.now();
     let busy = false;
     let ready = false;
+    // Counted from opening, or from the latest return to the app.
+    let since = openedAt;
+    const soon = () => Date.now() - since < RELOAD_WINDOW_MS && AppState.currentState === 'active';
     const check = async (resumed: boolean) => {
+      if (resumed) since = Date.now();
       if (ready) {
         if (resumed) await Updates.reloadAsync().catch(() => {});
         return;
@@ -28,7 +32,7 @@ export function useApplyUpdates() {
           const fetched = await Updates.fetchUpdateAsync();
           if (fetched.isNew || fetched.isRollBackToEmbedded) {
             ready = true;
-            if (resumed || Date.now() - openedAt < RELOAD_WINDOW_MS) await Updates.reloadAsync();
+            if (soon()) await Updates.reloadAsync();
           }
         }
       } catch {
