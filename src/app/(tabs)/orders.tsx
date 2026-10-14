@@ -2,8 +2,8 @@ import { router } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Display, FoodImage, Icon, Label, styles as ui } from '../../components/ui';
-import { DELIVERY_MINUTES, formatWhen, minutesLeft, useAccount, useNow, type Order } from '../../lib/account';
-import { useCart } from '../../lib/cart';
+import { DELIVERY_MINUTES, formatClock, formatWhen, isWaiting, minutesLeft, useAccount, useNow, type Order } from '../../lib/account';
+import { todaysLines, useCart } from '../../lib/cart';
 import { findRestaurant, findSpecial } from '../../lib/data';
 import { colors, fonts, formatUGX } from '../../lib/theme';
 
@@ -15,11 +15,8 @@ export default function Orders() {
   const past = account.orders.filter((o) => o.delivered);
 
   const again = (order: Order) => {
-    const restaurant = findRestaurant(order.restaurantId);
-    if (!restaurant) return;
-    // Use today's menu prices, not what was paid last time.
-    const lines = order.lines.map((l) => ({ ...l, item: restaurant.menu.find((m) => m.id === l.item.id) ?? l.item }));
-    cart.refill(restaurant.id, lines);
+    if (!findRestaurant(order.restaurantId)) return;
+    cart.refill(order.restaurantId, todaysLines(order));
     router.push('/checkout');
   };
 
@@ -30,7 +27,7 @@ export default function Orders() {
           <Display>Orders</Display>
         </View>
 
-        {active ? <ActiveOrder order={active} minutes={minutesLeft(active, now)} /> : null}
+        {active ? <ActiveOrder order={active} minutes={minutesLeft(active, now)} waiting={isWaiting(active, now)} /> : null}
 
         {account.preorders.length > 0 ? (
           <View style={s.section}>
@@ -103,26 +100,27 @@ export default function Orders() {
   );
 }
 
-function ActiveOrder({ order, minutes }: { order: Order; minutes: number }) {
+function ActiveOrder({ order, minutes, waiting }: { order: Order; minutes: number; waiting: boolean }) {
   const r = findRestaurant(order.restaurantId);
   const arrived = minutes === 0;
+  const scheduled = waiting && order.scheduledFor ? formatClock(order.scheduledFor, true) : null;
   // Same four steps as the tracking screen: confirmed, cooked, on the way, at your door.
-  const step = arrived ? 3 : minutes > DELIVERY_MINUTES - 2 ? 1 : 2;
+  const step = scheduled ? 0 : arrived ? 3 : minutes > DELIVERY_MINUTES - 2 ? 1 : 2;
   return (
     <View style={s.section}>
-      <Label>{arrived ? 'Arrived' : 'On the way'}</Label>
+      <Label>{scheduled ? 'Coming later' : arrived ? 'Arrived' : 'On the way'}</Label>
       <Pressable accessibilityRole="button" accessibilityLabel="Track your order" onPress={() => router.push('/tracking')} style={({ pressed }) => [s.active, { opacity: pressed ? 0.94 : 1 }]}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <View style={{ gap: 2 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+          <View style={{ flex: 1, gap: 2 }}>
             <Text style={{ fontFamily: fonts.regular, fontSize: 13, color: '#CFE0D3' }}>
               {r?.name} · #{order.id}
             </Text>
             <Display size={28} style={{ color: colors.cream }}>
-              {arrived ? 'At your door' : `${minutes} min away`}
+              {scheduled ? `Scheduled for ${scheduled}` : arrived ? 'At your door' : `${minutes} min away`}
             </Display>
           </View>
           <View style={s.bike}>
-            <Icon name={arrived ? 'check' : 'navigation'} size={24} color={colors.forest} />
+            <Icon name={scheduled ? 'calendar' : arrived ? 'check' : 'navigation'} size={24} color={colors.forest} />
           </View>
         </View>
         <View style={{ flexDirection: 'row', gap: 6 }}>
@@ -131,7 +129,7 @@ function ActiveOrder({ order, minutes }: { order: Order; minutes: number }) {
           ))}
         </View>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-          <Text style={{ fontFamily: fonts.regular, fontSize: 14, color: colors.cream }}>{arrived ? 'Brian is outside' : 'Brian is riding over'}</Text>
+          <Text style={{ fontFamily: fonts.regular, fontSize: 14, color: colors.cream }}>{scheduled ? 'The kitchen cooks it in time' : arrived ? 'Brian is outside' : 'Brian is riding over'}</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
             <Text style={{ fontFamily: fonts.bold, fontSize: 14, color: colors.cream }}>Track</Text>
             <Icon name="chevron-right" size={16} color={colors.cream} />

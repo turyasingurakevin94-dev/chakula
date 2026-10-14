@@ -1,11 +1,17 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Display, FoodImage, Icon, styles as ui } from '../../components/ui';
-import { useAccount } from '../../lib/account';
-import { foodCategories, restaurants, specials, student } from '../../lib/data';
+import { dishNames, QuickDishRow, UndoBar, UsualCard } from '../../components/home';
+import { Display, FoodImage, Icon, PrimaryButton, styles as ui } from '../../components/ui';
+import { useAccount, useNow } from '../../lib/account';
+import { priceBasket, todaysLines, useCart } from '../../lib/cart';
+import { findRestaurant, foodCategories, restaurants, specials, student } from '../../lib/data';
 import { colors, fonts, formatUGX } from '../../lib/theme';
+import { mealAt, pickUsual, quickDishes } from '../../lib/usual';
+
+// Seconds an "Order again" can still be taken back before tracking opens.
+const UNDO_SECONDS = 5;
 
 function greeting() {
   const h = new Date().getHours();
@@ -16,13 +22,53 @@ function greeting() {
 
 export default function Home() {
   const account = useAccount();
+  const cart = useCart();
+  const now = useNow();
   const [category, setCategory] = useState('All');
+  // The order placed from "Your usual", while it can still be undone.
+  const [justOrdered, setJustOrdered] = useState<{ id: string; summary: string } | null>(null);
   const fastest = restaurants.filter((r) => !r.opensAt).sort((a, b) => a.minutes - b.minutes);
   const special = specials[0]!;
+  const quick = quickDishes();
+
+  const usual = pickUsual(account.orders, now);
+  const usualKitchen = usual ? findRestaurant(usual.restaurantId) : undefined;
+  const usualLines = usual ? todaysLines(usual) : [];
+  const usualTotal = usual ? priceBasket(usual.restaurantId, usualLines).total : 0;
+
+  useEffect(() => {
+    if (!justOrdered) return;
+    const t = setTimeout(() => {
+      setJustOrdered(null);
+      router.push('/tracking');
+    }, UNDO_SECONDS * 1000);
+    return () => clearTimeout(t);
+  }, [justOrdered]);
+
+  // Pays the way the student paid last time. A wallet that can't cover it falls back to MTN, which asks on the phone.
+  const orderUsual = () => {
+    if (!usual || justOrdered) return;
+    const last = account.orders[0]?.method ?? 'mtn';
+    const method = last === 'wallet' && account.balance < usualTotal ? 'mtn' : last;
+    const id = account.placeOrder({ restaurantId: usual.restaurantId, lines: usualLines, total: usualTotal, method });
+    setJustOrdered({ id, summary: `${dishNames(usualLines)} · ${formatUGX(usualTotal)}` });
+  };
+
+  const undo = () => {
+    if (!justOrdered) return;
+    account.cancelOrder(justOrdered.id);
+    setJustOrdered(null);
+  };
+
+  const changeUsual = () => {
+    if (!usual) return;
+    cart.refill(usual.restaurantId, usualLines);
+    router.push(`/restaurant/${usual.restaurantId}`);
+  };
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.cream }} edges={['top']}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ paddingBottom: cart.count > 0 || justOrdered ? 104 : 32 }} showsVerticalScrollIndicator={false}>
         <View style={s.header}>
           <Pressable accessibilityRole="button" accessibilityLabel={`Deliver to ${account.address}. Change address`} onPress={() => router.push('/profile')} style={s.address}>
             <View style={s.pin}>
@@ -52,6 +98,35 @@ export default function Home() {
           <Icon name="search" size={20} color={colors.muted} />
           <Text style={{ flex: 1, fontFamily: fonts.regular, fontSize: 15, color: colors.muted }}>Search rolex, pilau, juice…</Text>
         </Pressable>
+
+        {usual && usualKitchen ? (
+          <UsualCard
+            restaurant={usualKitchen}
+            lines={usualLines}
+            meal={mealAt(now)}
+            total={usualTotal}
+            now={now}
+            busy={!!justOrdered}
+            onOrder={orderUsual}
+            onChange={changeUsual}
+          />
+        ) : null}
+
+        {quick.length > 0 ? (
+          <>
+            <View style={s.sectionHead}>
+              <Display size={21}>Ready in 15</Display>
+              <Text style={{ fontFamily: fonts.regular, fontSize: 13, color: colors.muted }}>Quick to cook, close by</Text>
+            </View>
+            <QuickDishRow
+              dishes={quick}
+              quantityOf={(d) => (cart.restaurantId === d.restaurant.id ? cart.quantityOf(d.item.id) : 0)}
+              onAdd={(d) => cart.add(d.restaurant.id, d.item)}
+              onRemove={(d) => cart.remove(d.item.id)}
+              onOpen={(d) => router.push(`/restaurant/${d.restaurant.id}`)}
+            />
+          </>
+        ) : null}
 
         <View style={s.promo}>
           <View style={{ flex: 1, gap: 6 }}>
@@ -137,6 +212,21 @@ export default function Home() {
         </Pressable>
       </ScrollView>
 
+      {justOrdered ? (
+        <UndoBar summary={justOrdered.summary} seconds={UNDO_SECONDS} onUndo={undo} />
+      ) : cart.count > 0 && cart.restaurantId ? (
+        <View style={s.basket}>
+          <PrimaryButton floating label={`View basket, ${cart.count} items`} onPress={() => router.push('/checkout')}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <View style={s.count}>
+                <Text style={{ fontFamily: fonts.bold, fontSize: 14, color: colors.forest }}>{cart.count}</Text>
+              </View>
+              <Text style={{ fontFamily: fonts.medium, fontSize: 15, color: colors.cream }}>View basket</Text>
+            </View>
+            <Text style={ui.primaryText}>{formatUGX(cart.subtotal)}</Text>
+          </PrimaryButton>
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -188,6 +278,8 @@ const s = StyleSheet.create({
   chip: { height: 40, paddingHorizontal: 16, borderRadius: 20, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.card, justifyContent: 'center' },
   sectionHead: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 12, flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
   restaurantCard: { width: 262, overflow: 'hidden' },
+  basket: { position: 'absolute', left: 16, right: 16, bottom: 16 },
+  count: { width: 28, height: 28, borderRadius: 14, backgroundColor: colors.orange, alignItems: 'center', justifyContent: 'center' },
   special: { marginHorizontal: 20, flexDirection: 'row', alignItems: 'center', gap: 14, padding: 12, borderRadius: 20 },
   timeTag: {
     position: 'absolute',

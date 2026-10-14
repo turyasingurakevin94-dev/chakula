@@ -13,6 +13,8 @@ export type MenuItem = {
   extras?: Extra[];
   // Offer a pepper level (none, mild, hot) on the dish sheet.
   pepper?: boolean;
+  // Minutes the kitchen needs to cook it, before the rider leaves.
+  prepMinutes?: number;
 };
 
 const rolexExtras: Extra[] = [
@@ -52,11 +54,11 @@ export const restaurants: Restaurant[] = [
     tint: colors.peach,
     categories: ['Popular', 'Mains', 'Rolex', 'Drinks'],
     menu: [
-      { id: 'pilau', name: 'Chicken pilau', description: 'Spiced rice, tender chicken, kachumbari on the side', price: 9000, category: 'Popular', tint: colors.sand, pepper: true, extras: [{ id: 'avocado', name: 'Avocado', price: 1000 }, { id: 'extra-chicken', name: 'Extra chicken', price: 3000 }] },
-      { id: 'luwombo', name: 'Beef luwombo', description: 'Slow-steamed in banana leaves, with matooke', price: 12000, category: 'Popular', tint: colors.sage },
-      { id: 'rolex', name: 'Special rolex', description: 'Two eggs, cabbage, tomato, rolled in fresh chapati', price: 5000, category: 'Rolex', tint: colors.peach, pepper: true, extras: rolexExtras },
-      { id: 'katogo', name: 'Katogo', description: 'Matooke and offals in a rich stew', price: 7000, category: 'Mains', tint: colors.sand },
-      { id: 'passion', name: 'Passion juice', description: 'Freshly blended, no added sugar', price: 3000, category: 'Drinks', tint: colors.peach },
+      { id: 'pilau', name: 'Chicken pilau', description: 'Spiced rice, tender chicken, kachumbari on the side', price: 9000, category: 'Popular', tint: colors.sand, prepMinutes: 15, pepper: true, extras: [{ id: 'avocado', name: 'Avocado', price: 1000 }, { id: 'extra-chicken', name: 'Extra chicken', price: 3000 }] },
+      { id: 'luwombo', name: 'Beef luwombo', description: 'Slow-steamed in banana leaves, with matooke', price: 12000, category: 'Popular', tint: colors.sage, prepMinutes: 15 },
+      { id: 'rolex', name: 'Special rolex', description: 'Two eggs, cabbage, tomato, rolled in fresh chapati', price: 5000, category: 'Rolex', tint: colors.peach, prepMinutes: 5, pepper: true, extras: rolexExtras },
+      { id: 'katogo', name: 'Katogo', description: 'Matooke and offals in a rich stew', price: 7000, category: 'Mains', tint: colors.sand, prepMinutes: 5 },
+      { id: 'passion', name: 'Passion juice', description: 'Freshly blended, no added sugar', price: 3000, category: 'Drinks', tint: colors.peach, prepMinutes: 2 },
     ],
   },
   {
@@ -72,9 +74,9 @@ export const restaurants: Restaurant[] = [
     tint: colors.sand,
     categories: ['Popular', 'Rolex', 'Drinks'],
     menu: [
-      { id: 'rolex-classic', name: 'Classic rolex', description: 'One egg, cabbage, tomato', price: 3000, category: 'Popular', tint: colors.peach, pepper: true, extras: rolexExtras },
-      { id: 'rolex-special', name: 'Special rolex', description: 'Two eggs, sausage, veggies', price: 6000, category: 'Rolex', tint: colors.sand, pepper: true, extras: rolexExtras.filter((e) => e.id !== 'sausage') },
-      { id: 'tea', name: 'African tea', description: 'Spiced milk tea', price: 1500, category: 'Drinks', tint: colors.sage },
+      { id: 'rolex-classic', name: 'Classic rolex', description: 'One egg, cabbage, tomato', price: 3000, category: 'Popular', tint: colors.peach, prepMinutes: 4, pepper: true, extras: rolexExtras },
+      { id: 'rolex-special', name: 'Special rolex', description: 'Two eggs, sausage, veggies', price: 6000, category: 'Rolex', tint: colors.sand, prepMinutes: 5, pepper: true, extras: rolexExtras.filter((e) => e.id !== 'sausage') },
+      { id: 'tea', name: 'African tea', description: 'Spiced milk tea', price: 1500, category: 'Drinks', tint: colors.sage, prepMinutes: 2 },
     ],
   },
   {
@@ -90,8 +92,8 @@ export const restaurants: Restaurant[] = [
     tint: colors.sage,
     categories: ['Popular', 'Drinks'],
     menu: [
-      { id: 'bowl', name: 'Chicken power bowl', description: 'Grilled chicken, rice, avocado, greens', price: 14000, category: 'Popular', tint: colors.sage, extras: [{ id: 'egg', name: 'Boiled egg', price: 1000 }, { id: 'extra-chicken', name: 'Extra chicken', price: 4000 }] },
-      { id: 'mango', name: 'Mango smoothie', description: 'Mango, banana, yoghurt', price: 5000, category: 'Drinks', tint: colors.sand },
+      { id: 'bowl', name: 'Chicken power bowl', description: 'Grilled chicken, rice, avocado, greens', price: 14000, category: 'Popular', tint: colors.sage, prepMinutes: 10, extras: [{ id: 'egg', name: 'Boiled egg', price: 1000 }, { id: 'extra-chicken', name: 'Extra chicken', price: 4000 }] },
+      { id: 'mango', name: 'Mango smoothie', description: 'Mango, banana, yoghurt', price: 5000, category: 'Drinks', tint: colors.sand, prepMinutes: 3 },
     ],
   },
   {
@@ -107,9 +109,9 @@ export const restaurants: Restaurant[] = [
     tint: colors.sand,
     categories: ['Popular', 'Drinks'],
     menu: [
-      { id: 'chips-chicken', name: 'Chips and quarter chicken', description: 'Crispy chips, fried chicken, kachumbari', price: 12000, category: 'Popular', tint: colors.sand, pepper: true },
-      { id: 'chips-sausage', name: 'Chips and sausage', description: 'Two beef sausages on crispy chips', price: 7000, category: 'Popular', tint: colors.peach, pepper: true },
-      { id: 'soda', name: 'Soda', description: '500 ml, cold', price: 2000, category: 'Drinks', tint: colors.sage },
+      { id: 'chips-chicken', name: 'Chips and quarter chicken', description: 'Crispy chips, fried chicken, kachumbari', price: 12000, category: 'Popular', tint: colors.sand, prepMinutes: 12, pepper: true },
+      { id: 'chips-sausage', name: 'Chips and sausage', description: 'Two beef sausages on crispy chips', price: 7000, category: 'Popular', tint: colors.peach, prepMinutes: 8, pepper: true },
+      { id: 'soda', name: 'Soda', description: '500 ml, cold', price: 2000, category: 'Drinks', tint: colors.sage, prepMinutes: 1 },
     ],
   },
   {
@@ -125,7 +127,7 @@ export const restaurants: Restaurant[] = [
     tint: colors.track,
     opensAt: '6:00 pm',
     categories: ['Popular'],
-    menu: [{ id: 'muchomo', name: 'Goat muchomo', description: 'Grilled goat skewers with gonja', price: 10000, category: 'Popular', tint: colors.sand }],
+    menu: [{ id: 'muchomo', name: 'Goat muchomo', description: 'Grilled goat skewers with gonja', price: 10000, category: 'Popular', tint: colors.sand, prepMinutes: 20 }],
   },
 ];
 

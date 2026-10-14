@@ -4,7 +4,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { Display, IconButton, PrimaryButton, styles as ui } from '../components/ui';
-import { DELIVERY_MINUTES, minutesLeft, useAccount, useNow } from '../lib/account';
+import { DELIVERY_MINUTES, formatClock, isWaiting, minutesLeft, useAccount, useNow } from '../lib/account';
 import { findRestaurant } from '../lib/data';
 import { colors, fonts } from '../lib/theme';
 
@@ -20,7 +20,9 @@ export default function Tracking() {
   // Prototype only: the order moves forward on a timer. The rider app will drive this for real.
   const minutes = account.activeOrder ? minutesLeft(order, now) : 0;
   const arrived = minutes === 0;
-  const step = arrived ? 3 : minutes > DELIVERY_MINUTES - 2 ? 1 : 2;
+  // A scheduled order sits at "Confirmed" until it is time to cook.
+  const waiting = !!account.activeOrder && isWaiting(order, now);
+  const step = waiting ? 0 : arrived ? 3 : minutes > DELIVERY_MINUTES - 2 ? 1 : 2;
 
   useEffect(() => {
     if (arrived && account.activeOrder) account.markDelivered(order.id);
@@ -43,8 +45,17 @@ export default function Tracking() {
         <View style={s.handle} />
         <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
           <View style={{ gap: 2 }}>
-            <Text style={s.meta14}>{arrived ? 'Your rider is here' : 'Arriving in'}</Text>
-            <Display size={44} style={{ lineHeight: 48 }}>{arrived ? 'Outside' : `${minutes} min`}</Display>
+            {waiting && order.scheduledFor ? (
+              <>
+                <Text style={s.meta14}>Scheduled for</Text>
+                <Display size={44} style={{ lineHeight: 48 }}>{formatClock(order.scheduledFor, true)}</Display>
+              </>
+            ) : (
+              <>
+                <Text style={s.meta14}>{arrived ? 'Your rider is here' : 'Arriving in'}</Text>
+                <Display size={44} style={{ lineHeight: 48 }}>{arrived ? 'Outside' : `${minutes} min`}</Display>
+              </>
+            )}
           </View>
           <Text style={[s.meta14, { textAlign: 'right' }]}>
             Order #{order.id}{'\n'}
@@ -88,7 +99,7 @@ export default function Tracking() {
         <View style={{ gap: 10 }}>
           <View style={s.stop}>
             <View style={[s.dot, { backgroundColor: colors.muted }]} />
-            <Text style={s.meta14}>Picked up from {restaurant.name}</Text>
+            <Text style={s.meta14}>{waiting ? 'From' : 'Picked up from'} {restaurant.name}</Text>
           </View>
           <View style={s.stop}>
             <View style={[s.dot, { backgroundColor: colors.forest }]} />

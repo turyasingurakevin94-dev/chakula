@@ -3,16 +3,47 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Display, Icon, IconButton, Label, PrimaryButton, styles as ui, type IconName } from '../components/ui';
-import { lineOptions, unitPrice, useAccount } from '../lib/account';
+import { formatClock, lineOptions, unitPrice, useAccount, type PayMethod } from '../lib/account';
 import { useCart } from '../lib/cart';
+import { findRestaurant } from '../lib/data';
 import { colors, fonts, formatUGX } from '../lib/theme';
 
-type Method = { id: string; name: string; detail?: string; icon: IconName };
+type Method = { id: PayMethod; name: string; detail?: string; icon: IconName };
+
+// Lectures end at five past; food can be waiting when the student walks out.
+const lectureEnds: [number, number][] = [
+  [10, 5],
+  [13, 5],
+  [16, 5],
+];
+
+type Slot = { time: number; afterClass: boolean };
+
+// The next four half-hour slots at least 30 minutes away, plus today's lecture ends that are coming up.
+function deliverySlots(now: number): Slot[] {
+  const earliest = now + 30 * 60 * 1000;
+  const half = 30 * 60 * 1000;
+  const first = Math.ceil(earliest / half) * half;
+  const slots: Slot[] = [0, 1, 2, 3].map((i) => ({ time: first + i * half, afterClass: false }));
+  for (const [h, m] of lectureEnds) {
+    const d = new Date(now);
+    d.setHours(h, m, 0, 0);
+    if (d.getTime() >= earliest) slots.push({ time: d.getTime(), afterClass: true });
+  }
+  return slots.sort((a, b) => a.time - b.time);
+}
 
 export default function Checkout() {
   const cart = useCart();
   const account = useAccount();
-  const [method, setMethod] = useState('mtn');
+  const [method, setMethod] = useState<PayMethod>('mtn');
+  // As soon as possible unless the student switches to Schedule and picks a slot.
+  const [scheduling, setScheduling] = useState(false);
+  const [slot, setSlot] = useState<number | null>(null);
+  const [now] = useState(Date.now);
+  const slots = deliverySlots(now);
+  const minutes = findRestaurant(cart.restaurantId ?? '')?.minutes ?? 15;
+  const scheduledFor = scheduling ? slot : null;
   const shortOfFunds = account.balance < cart.total;
   const methods: Method[] = [
     { id: 'mtn', name: 'MTN Mobile Money', detail: account.maskedPhone, icon: 'smartphone' },
@@ -21,12 +52,19 @@ export default function Checkout() {
     { id: 'card', name: 'Debit or credit card', icon: 'credit-card' },
     { id: 'cash', name: 'Cash on delivery', icon: 'dollar-sign' },
   ];
-  const blocked = cart.count === 0 || (method === 'wallet' && shortOfFunds);
-  const payLabel = method === 'wallet' && shortOfFunds ? 'Top up your wallet first' : method === 'cash' ? `Place order · ${formatUGX(cart.total)}` : `Pay ${formatUGX(cart.total)}`;
+  const blocked = cart.count === 0 || (method === 'wallet' && shortOfFunds) || (scheduling && slot === null);
+  const payLabel =
+    method === 'wallet' && shortOfFunds
+      ? 'Top up your wallet first'
+      : scheduling && slot === null
+        ? 'Pick a delivery time'
+        : method === 'cash'
+          ? `Place order · ${formatUGX(cart.total)}`
+          : `Pay ${formatUGX(cart.total)}`;
 
   const pay = () => {
     if (blocked || !cart.restaurantId) return;
-    account.placeOrder({ restaurantId: cart.restaurantId, lines: cart.lines, total: cart.total }, method === 'wallet');
+    account.placeOrder({ restaurantId: cart.restaurantId, lines: cart.lines, total: cart.total, method, ...(scheduledFor ? { scheduledFor } : {}) });
     cart.clear();
     router.replace('/tracking');
   };
@@ -50,6 +88,69 @@ export default function Checkout() {
               {account.note ? <Text style={s.meta}>{account.note}</Text> : null}
             </View>
             <Text style={{ fontFamily: fonts.semibold, fontSize: 14, color: colors.forest }}>Change</Text>
+          </View>
+        </View>
+
+        <View style={s.section}>
+          <Label>When</Label>
+          <View style={[ui.card, { borderRadius: 18, overflow: 'hidden' }]}>
+            <Pressable
+              accessibilityRole="radio"
+              accessibilityState={{ checked: !scheduling }}
+              onPress={() => setScheduling(false)}
+              style={[s.row, { backgroundColor: !scheduling ? '#FFF4EC' : colors.card, borderBottomWidth: 1, borderBottomColor: colors.lineSoft }]}
+            >
+              <View style={[s.iconTile, { width: 36, height: 36, borderRadius: 10, backgroundColor: !scheduling ? colors.forest : colors.lineSoft }]}>
+                <Icon name="zap" size={18} color={!scheduling ? colors.cream : colors.forest} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[s.strong, scheduling && { fontFamily: fonts.semibold, color: colors.ink }]}>As soon as possible</Text>
+                <Text style={s.meta}>
+                  About {minutes} min · at your door by {formatClock(now + minutes * 60 * 1000)}
+                </Text>
+              </View>
+              <View style={[s.radio, !scheduling && { borderColor: colors.forest }]}>{!scheduling ? <View style={s.radioDot} /> : null}</View>
+            </Pressable>
+            <Pressable
+              accessibilityRole="radio"
+              accessibilityState={{ checked: scheduling }}
+              onPress={() => setScheduling(true)}
+              style={[s.row, { backgroundColor: scheduling ? '#FFF4EC' : colors.card }]}
+            >
+              <View style={[s.iconTile, { width: 36, height: 36, borderRadius: 10, backgroundColor: scheduling ? colors.forest : colors.lineSoft }]}>
+                <Icon name="calendar" size={18} color={scheduling ? colors.cream : colors.forest} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[s.strong, !scheduling && { fontFamily: fonts.semibold, color: colors.ink }]}>Schedule</Text>
+                <Text style={s.meta}>{scheduledFor ? `Arrives at ${formatClock(scheduledFor, true)}` : 'Pick a time, e.g. when your lecture ends'}</Text>
+              </View>
+              <View style={[s.radio, scheduling && { borderColor: colors.forest }]}>{scheduling ? <View style={s.radioDot} /> : null}</View>
+            </Pressable>
+            {scheduling ? (
+              <View style={s.slots}>
+                {slots.map((sl) => {
+                  const on = sl.time === slot;
+                  const label = formatClock(sl.time, true);
+                  return (
+                    <Pressable
+                      key={sl.time}
+                      accessibilityRole="radio"
+                      accessibilityState={{ checked: on }}
+                      accessibilityLabel={sl.afterClass ? `${label}, after lectures` : label}
+                      onPress={() => setSlot(sl.time)}
+                      style={[s.slot, on && { backgroundColor: colors.forest, borderColor: colors.forest }]}
+                    >
+                      <Text style={{ fontFamily: on ? fonts.bold : fonts.semibold, fontSize: 14, color: on ? colors.cream : colors.ink }}>{label}</Text>
+                      {sl.afterClass ? <Text style={{ fontFamily: fonts.regular, fontSize: 11, color: on ? '#CFE0D3' : colors.muted }}>After lectures</Text> : null}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ) : null}
+          </View>
+          <View style={s.promise}>
+            <Icon name="shield" size={14} color={colors.forest} />
+            <Text style={{ fontFamily: fonts.medium, fontSize: 13, color: colors.forest }}>On time, or your next delivery is free.</Text>
           </View>
         </View>
 
@@ -149,4 +250,7 @@ const s = StyleSheet.create({
   lineValue: { fontFamily: fonts.regular, fontSize: 15, color: colors.ink },
   total: { borderTopWidth: 1, borderTopColor: '#E2D4C1', borderStyle: 'dashed', paddingTop: 12 },
   footer: { position: 'absolute', left: 16, right: 16, bottom: 24 },
+  slots: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 16, paddingBottom: 16, paddingTop: 2, backgroundColor: '#FFF4EC' },
+  slot: { minHeight: 40, minWidth: 92, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center' },
+  promise: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 4 },
 });
