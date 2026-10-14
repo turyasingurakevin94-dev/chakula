@@ -13,9 +13,10 @@ export function useApplyUpdates() {
       busy = true;
       try {
         const result = await Updates.checkForUpdateAsync();
-        if (result.isAvailable) {
+        // A roll back to the built-in code (after a bad update) is applied the same way.
+        if (result.isAvailable || result.isRollBackToEmbedded) {
           const fetched = await Updates.fetchUpdateAsync();
-          if (fetched.isNew) await Updates.reloadAsync();
+          if (fetched.isNew || fetched.isRollBackToEmbedded) await Updates.reloadAsync();
         }
       } catch {
         // Offline or the update server is unreachable: keep running the current version.
