@@ -86,6 +86,9 @@ function Toast() {
 // A new version has downloaded but the app stayed open, so offer the restart instead of forcing it.
 function UpdateBar() {
   const insets = useSafeAreaInsets();
+  const { orders } = useKitchen();
+  // Never over the new-order alert, where a mis-tap would restart instead of accepting.
+  if (orders.some((o) => o.status === 'incoming')) return null;
   return (
     <View style={{ position: 'absolute', left: 16, right: 16, bottom: insets.bottom + 84, alignItems: 'center' }}>
       <Pressable
