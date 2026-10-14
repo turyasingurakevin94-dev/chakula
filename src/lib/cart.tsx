@@ -1,5 +1,5 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
-import { unitPrice, type Order, type OrderLine } from './account';
+import { unitPrice, type Order, type OrderLine, type PayMethod } from './account';
 import { findRestaurant, student, type MenuItem } from './data';
 
 // The same dish with different extras, pepper or note is a separate line.
@@ -12,11 +12,11 @@ function lineKey(itemId: string, o: Options = {}) {
   return [itemId, extras, o.pepper ?? '', (o.note ?? '').trim().toLowerCase()].join('|');
 }
 
-// What a basket of these lines costs, with delivery.
-export function priceBasket(restaurantId: string | null, lines: OrderLine[]) {
+// What a basket of these lines costs, with delivery. Orders paid from the wallet always deliver free.
+export function priceBasket(restaurantId: string | null, lines: OrderLine[], method?: PayMethod) {
   const subtotal = lines.reduce((n, l) => n + l.quantity * unitPrice(l), 0);
   const deliveryFee = restaurantId ? findRestaurant(restaurantId)?.deliveryFee ?? 0 : 0;
-  const freeDelivery = student.freeDeliveriesLeft > 0 || deliveryFee === 0;
+  const freeDelivery = student.freeDeliveriesLeft > 0 || deliveryFee === 0 || method === 'wallet';
   return { subtotal, deliveryFee, freeDelivery, total: subtotal + (freeDelivery ? 0 : deliveryFee) };
 }
 

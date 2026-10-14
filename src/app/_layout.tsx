@@ -1,5 +1,5 @@
 import { DMSans_400Regular, DMSans_500Medium, DMSans_600SemiBold, DMSans_700Bold } from '@expo-google-fonts/dm-sans';
-import { Fraunces_600SemiBold } from '@expo-google-fonts/fraunces';
+import { Fraunces_400Regular, Fraunces_500Medium_Italic, Fraunces_600SemiBold } from '@expo-google-fonts/fraunces';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -12,7 +12,7 @@ import { useApplyUpdates } from '../lib/updates';
 
 export default function RootLayout() {
   useApplyUpdates();
-  const [loaded] = useFonts({ Fraunces_600SemiBold, DMSans_400Regular, DMSans_500Medium, DMSans_600SemiBold, DMSans_700Bold });
+  const [loaded] = useFonts({ Fraunces_400Regular, Fraunces_500Medium_Italic, Fraunces_600SemiBold, DMSans_400Regular, DMSans_500Medium, DMSans_600SemiBold, DMSans_700Bold });
 
   if (!loaded) return <View style={{ flex: 1, backgroundColor: colors.cream }} />;
 
@@ -45,6 +45,10 @@ function Screens() {
         <Stack.Screen name="checkout" />
         <Stack.Screen name="tracking" />
         <Stack.Screen name="profile" />
+        <Stack.Screen name="wallet" />
+        <Stack.Screen name="help" />
+        <Stack.Screen name="search" />
+        <Stack.Screen name="supper" />
         <Stack.Screen name="kitchens" />
         <Stack.Screen name="specials" />
         <Stack.Screen name="dish" options={{ presentation: 'transparentModal', animation: 'slide_from_bottom', contentStyle: { backgroundColor: 'transparent' } }} />

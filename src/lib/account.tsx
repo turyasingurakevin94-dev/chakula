@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { findSpecial, type Extra, type MenuItem } from './data';
+import { findPlanKind, planMeals, planPrice, type PlanKindId, type PlanPeriod } from './plans';
 
 // Prototype account state, kept in memory. Sign-in, wallet and orders move to the backend later.
 
@@ -48,6 +49,33 @@ export type Preorder = { id: string; specialId: string; slot: string };
 
 export type WalletEntry = { id: string; title: string; when: string; amount: number };
 
+// Top up more, get more: the bonus credited on top of a top up of at least this amount.
+export const topUpBonuses: { amount: number; bonus: number }[] = [
+  { amount: 20000, bonus: 500 },
+  { amount: 50000, bonus: 2000 },
+  { amount: 100000, bonus: 5000 },
+];
+
+export function bonusFor(amount: number) {
+  return topUpBonuses.reduce((b, t) => (amount >= t.amount ? t.bonus : b), 0);
+}
+
+export type MealPlan = {
+  kindId: PlanKindId;
+  period: PlanPeriod;
+  price: number;
+  meals: number;
+  used: number;
+  // Meals skipped and saved for later.
+  carried: number;
+  paused: boolean;
+  startedAt: number;
+  // The dish picked for a day's main meal, by day key ("2026-10-14").
+  choices: Record<string, string>;
+  // Days whose main meal was skipped.
+  skipped: string[];
+};
+
 // Demo pacing: one "minute" of delivery passes every 4 seconds, so a whole delivery fits in a test run.
 export const DEMO_MINUTE_MS = 4000;
 export const DELIVERY_MINUTES = 8;
@@ -79,7 +107,7 @@ function sampleOrders(): Order[] {
   const rolexAndTea = () => [{ item: item('rolex-classic', 'Classic rolex', 3000, '#FFE4D6'), quantity: 2 }, { item: item('tea', 'African tea', 1500, '#E3EBDD'), quantity: 1 }];
   const pilauAndJuice = () => [{ item: item('pilau', 'Chicken pilau', 9000, '#F4E7C5'), quantity: 1 }, { item: item('passion', 'Passion juice', 3000, '#FFE4D6'), quantity: 1 }];
   return [
-    { id: '2041', restaurantId: 'rolex-corner', placedAt: at(1, 8, 10), delivered: true, rating: rated(5), total: 7500, method: 'mtn', lines: rolexAndTea() },
+    { id: '2041', restaurantId: 'rolex-corner', placedAt: at(1, 8, 10), delivered: true, total: 7500, method: 'mtn', lines: rolexAndTea() },
     { id: '2037', restaurantId: 'nakawa-kitchen', placedAt: at(2, 19, 30), delivered: true, rating: rated(5), total: 12000, method: 'mtn', lines: pilauAndJuice() },
     { id: '2033', restaurantId: 'green-bowl', placedAt: at(2, 13, 15), delivered: true, rating: rated(4), total: 19000, method: 'mtn', lines: [{ item: item('bowl', 'Chicken power bowl', 14000, '#E3EBDD'), quantity: 1 }, { item: item('mango', 'Mango smoothie', 5000, '#F4E7C5'), quantity: 1 }] },
     { id: '2026', restaurantId: 'rolex-corner', placedAt: at(3, 7, 50), delivered: true, rating: rated(5), total: 7500, method: 'mtn', lines: rolexAndTea() },
@@ -101,7 +129,9 @@ type AccountState = {
   address: string;
   balance: number;
   wallet: WalletEntry[];
-  hasToppedUp: boolean;
+  // Top up bonuses credited so far.
+  bonusEarned: number;
+  plan: MealPlan | null;
   orders: Order[];
   activeOrder: Order | null;
   preorders: Preorder[];
@@ -110,7 +140,14 @@ type AccountState = {
   verify: () => void;
   saveProfile: (name: string, place: Place, room: string, note: string) => void;
   signOut: () => void;
-  topUp: (amount: number) => void;
+  // Credits the amount plus any bonus, and returns the bonus.
+  topUp: (amount: number) => number;
+  withdraw: (amount: number) => void;
+  startPlan: (kindId: PlanKindId, period: PlanPeriod) => void;
+  togglePlanPause: () => void;
+  chooseMeal: (day: string, dishId: string) => void;
+  skipMeal: (day: string) => void;
+  unskipMeal: (day: string) => void;
   // Returns the new order's id. Wallet orders are charged straight away.
   placeOrder: (order: Omit<Order, 'id' | 'placedAt' | 'delivered'>) => string;
   // Takes back an order placed by mistake and refunds a wallet charge.
@@ -132,7 +169,8 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   const [note, setNote] = useState('');
   const [balance, setBalance] = useState(4500);
   const [wallet, setWallet] = useState<WalletEntry[]>([{ id: 'w1', title: 'Welcome credit', when: 'When you joined', amount: 4500 }]);
-  const [hasToppedUp, setHasToppedUp] = useState(false);
+  const [bonusEarned, setBonusEarned] = useState(0);
+  const [plan, setPlan] = useState<MealPlan | null>(null);
   const [orders, setOrders] = useState<Order[]>(sampleOrders);
   const [preorders, setPreorders] = useState<Preorder[]>([]);
 
@@ -153,7 +191,8 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       address: place ? [place.name, room].filter(Boolean).join(', ') : '',
       balance,
       wallet,
-      hasToppedUp,
+      bonusEarned,
+      plan,
       orders,
       activeOrder,
       preorders,
@@ -174,15 +213,32 @@ export function AccountProvider({ children }: { children: ReactNode }) {
         setVerified(false);
       },
       topUp: (amount) => {
-        const bonus = hasToppedUp ? 0 : 2000;
+        // Prototype: credits straight away. Real top ups wait for the MTN prompt to clear.
+        const bonus = bonusFor(amount);
         setBalance((b) => b + amount + bonus);
+        setBonusEarned((n) => n + bonus);
         setWallet((w) => [
-          ...(bonus ? [{ id: `b${Date.now()}`, title: 'First top up bonus', when: 'Just now', amount: bonus }] : []),
+          ...(bonus ? [{ id: `b${Date.now()}`, title: 'Top up bonus', when: 'Just now', amount: bonus }] : []),
           { id: `t${Date.now()}`, title: 'Top up from MTN', when: 'Just now', amount },
           ...w,
         ]);
-        setHasToppedUp(true);
+        return bonus;
       },
+      withdraw: (amount) => {
+        const take = Math.min(amount, balance);
+        if (take <= 0) return;
+        setBalance((b) => b - take);
+        setWallet((w) => [{ id: `wd${Date.now()}`, title: 'Withdrawn to MTN', when: 'Just now', amount: -take }, ...w]);
+      },
+      startPlan: (kindId, period) => {
+        const kind = findPlanKind(kindId);
+        if (!kind) return;
+        setPlan({ kindId, period, price: planPrice(kind, period), meals: planMeals(kind, period), used: 0, carried: 0, paused: false, startedAt: Date.now(), choices: {}, skipped: [] });
+      },
+      togglePlanPause: () => setPlan((p) => (p ? { ...p, paused: !p.paused } : p)),
+      chooseMeal: (day, dishId) => setPlan((p) => (p ? { ...p, choices: { ...p.choices, [day]: dishId }, skipped: p.skipped.filter((d) => d !== day), carried: p.skipped.includes(day) ? p.carried - 1 : p.carried } : p)),
+      skipMeal: (day) => setPlan((p) => (p && !p.skipped.includes(day) ? { ...p, skipped: [...p.skipped, day], carried: p.carried + 1 } : p)),
+      unskipMeal: (day) => setPlan((p) => (p && p.skipped.includes(day) ? { ...p, skipped: p.skipped.filter((d) => d !== day), carried: p.carried - 1 } : p)),
       placeOrder: (o) => {
         const id = String(Math.max(2047, ...orders.map((p) => Number(p.id))) + 1);
         setOrders((prev) => [{ ...o, id, placedAt: Date.now(), delivered: false }, ...prev.map((p) => ({ ...p, delivered: true }))]);
@@ -213,7 +269,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       preorder: (sid, slot) => setPreorders((prev) => [{ id: `p${Date.now()}`, specialId: sid, slot }, ...prev]),
       cancelPreorder: (id) => setPreorders((prev) => prev.filter((p) => p.id !== id)),
     };
-  }, [phone, verified, name, place, room, note, balance, wallet, hasToppedUp, orders, preorders]);
+  }, [phone, verified, name, place, room, note, balance, wallet, bonusEarned, plan, orders, preorders]);
 
   return <AccountContext.Provider value={value}>{children}</AccountContext.Provider>;
 }

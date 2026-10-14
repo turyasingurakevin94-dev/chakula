@@ -152,7 +152,30 @@ export const specials: Special[] = [
   { id: 'tilapia', day: 'Saturday', name: 'Whole tilapia & chips', vendor: 'Ggaba Fish Spot', description: 'Fried whole tilapia, chips, kachumbari', price: 20000, slots: ['1:00 pm', '7:00 pm'], portions: 18, capacity: 20, tint: colors.sage },
 ];
 
-export const foodCategories = ['All', 'Rolex', 'Local food', 'Chicken & chips', 'Juices'];
+// Photo chips on Home. Each one narrows "Popular tonight".
+export const foodCategories: { id: string; label: string; tint: string; test: (r: Restaurant, m: MenuItem) => boolean }[] = [
+  { id: 'rolex', label: 'Rolex', tint: colors.peach, test: (_r, m) => m.id.startsWith('rolex') },
+  { id: 'local', label: 'Local', tint: colors.sand, test: (r) => r.id === 'nakawa-kitchen' },
+  { id: 'chicken', label: 'Chicken', tint: colors.sand, test: (_r, m) => /chicken/i.test(m.name) },
+  { id: 'juice', label: 'Juice', tint: colors.peach, test: (_r, m) => m.category === 'Drinks' },
+  { id: 'bowls', label: 'Bowls', tint: colors.sage, test: (r) => r.id === 'green-bowl' },
+];
+
+// Main dishes from open kitchens, most liked kitchens first. Drinks only show under the Juice chip.
+export function popularDishes(category?: string) {
+  const chip = foodCategories.find((c) => c.id === category);
+  return restaurants
+    .filter((r) => !r.opensAt)
+    .sort((a, b) => b.ratingCount - a.ratingCount)
+    .flatMap((r) => r.menu.map((item) => ({ restaurant: r, item })))
+    .filter(({ restaurant, item }) => (chip ? chip.test(restaurant, item) : item.category !== 'Drinks'));
+}
+
+// Tonight's featured dish on Home.
+export const chefsPick = { restaurantId: 'nakawa-kitchen', itemId: 'pilau' };
+
+// WhatsApp number for support, in international format without "+". Not set up yet.
+export const supportWhatsApp: string | null = null;
 
 export const student = {
   firstName: 'Kevin',
