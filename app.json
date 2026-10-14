@@ -30,7 +30,7 @@
     ],
     "scheme": "chakula",
     "runtimeVersion": {
-      "policy": "sdkVersion"
+      "policy": "appVersion"
     }
   }
 }

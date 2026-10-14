@@ -11,11 +11,11 @@ npx expo start --web
 npm run typecheck
 ```
 
-## Open it on your phone (Expo Go)
-Every push to `main` publishes the app as an EAS Update (`.github/workflows/expo-go.yml`).
-Setup, once: add an Expo access token as the `EXPO_TOKEN` repository secret
-(Settings > Secrets and variables > Actions). Then open the project on expo.dev, go to Updates,
-and scan the "Preview" QR code with Expo Go.
+## Install it on an Android phone
+`.github/workflows/android-apk.yml` builds an installable APK on Expo's servers. Run it from the
+Actions tab ("Build Android app" > "Run workflow"); the run summary links to the install page.
+After that, every push to `main` publishes an update (`expo-go.yml`) that the installed app
+downloads the next time it opens. Both workflows need the `EXPO_TOKEN` repository secret.
 
 ## Layout
 - `src/app/`: screens (home, `restaurant/[id]`, checkout, tracking)
