@@ -39,7 +39,7 @@ export default function Search() {
         {matches.length > 0 ? <Label style={{ marginTop: 18 }}>Dishes</Label> : null}
         {matches.map(({ item, restaurant }) => (
           <Pressable key={`${restaurant.id}-${item.id}`} onPress={() => router.push(`/restaurant/${restaurant.id}`)} style={[ui.card, s.row]}>
-            <FoodImage tint={item.tint} size={24} style={s.thumb} />
+            <FoodImage tint={item.tint} photo={item.photo} size={24} style={s.thumb} />
             <View style={{ flex: 1, gap: 2 }}>
               <Text style={s.strong}>{item.name}</Text>
               <Text style={s.meta}>
@@ -53,7 +53,7 @@ export default function Search() {
         {places.length > 0 ? <Label style={{ marginTop: 18 }}>{q ? 'Kitchens' : 'All kitchens near you'}</Label> : null}
         {places.map((r) => (
           <Pressable key={r.id} onPress={() => router.push(`/restaurant/${r.id}`)} style={[ui.card, s.row]}>
-            <FoodImage tint={r.tint} size={24} style={s.thumb} />
+            <FoodImage tint={r.tint} photo={r.photo} size={24} style={s.thumb} />
             <View style={{ flex: 1, gap: 2 }}>
               <Text style={s.strong}>{r.name}</Text>
               <Text style={s.meta}>

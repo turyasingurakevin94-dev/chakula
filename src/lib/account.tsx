@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { findSpecial, type Extra, type MenuItem } from './data';
+import type { PhotoKey } from './photos';
 import { findPlanKind, planMeals, planPrice, type PlanKindId, type PlanPeriod } from './plans';
 
 // Prototype account state, kept in memory. Sign-in, wallet and orders move to the backend later.
@@ -96,7 +97,7 @@ export function minutesLeft(order: Order, now: number) {
 const day = 24 * 60 * 60 * 1000;
 
 function sampleOrders(): Order[] {
-  const item = (id: string, name: string, price: number, tint: string): MenuItem => ({ id, name, price, tint, description: '', category: 'Popular' });
+  const item = (id: string, name: string, price: number, tint: string, photo: PhotoKey): MenuItem => ({ id, name, price, tint, photo, description: '', category: 'Popular' });
   const rated = (stars: number): Rating => ({ stars, tags: [], tip: 0 });
   // daysAgo at a clock time, so "Your usual" has a breakfast, a lunch and a supper habit to find.
   const at = (daysAgo: number, hour: number, minute = 0) => {
@@ -104,12 +105,12 @@ function sampleOrders(): Order[] {
     d.setHours(hour, minute, 0, 0);
     return d.getTime();
   };
-  const rolexAndTea = () => [{ item: item('rolex-classic', 'Classic rolex', 3000, '#FFE4D6'), quantity: 2 }, { item: item('tea', 'African tea', 1500, '#E3EBDD'), quantity: 1 }];
-  const pilauAndJuice = () => [{ item: item('pilau', 'Chicken pilau', 9000, '#F4E7C5'), quantity: 1 }, { item: item('passion', 'Passion juice', 3000, '#FFE4D6'), quantity: 1 }];
+  const rolexAndTea = () => [{ item: item('rolex-classic', 'Classic rolex', 3000, '#FFE4D6', 'rolex'), quantity: 2 }, { item: item('tea', 'African tea', 1500, '#E3EBDD', 'tea'), quantity: 1 }];
+  const pilauAndJuice = () => [{ item: item('pilau', 'Chicken pilau', 9000, '#F4E7C5', 'pilau'), quantity: 1 }, { item: item('passion', 'Passion juice', 3000, '#FFE4D6', 'passion'), quantity: 1 }];
   return [
     { id: '2041', restaurantId: 'rolex-corner', placedAt: at(1, 8, 10), delivered: true, total: 7500, method: 'mtn', lines: rolexAndTea() },
     { id: '2037', restaurantId: 'nakawa-kitchen', placedAt: at(2, 19, 30), delivered: true, rating: rated(5), total: 12000, method: 'mtn', lines: pilauAndJuice() },
-    { id: '2033', restaurantId: 'green-bowl', placedAt: at(2, 13, 15), delivered: true, rating: rated(4), total: 19000, method: 'mtn', lines: [{ item: item('bowl', 'Chicken power bowl', 14000, '#E3EBDD'), quantity: 1 }, { item: item('mango', 'Mango smoothie', 5000, '#F4E7C5'), quantity: 1 }] },
+    { id: '2033', restaurantId: 'green-bowl', placedAt: at(2, 13, 15), delivered: true, rating: rated(4), total: 19000, method: 'mtn', lines: [{ item: item('bowl', 'Chicken power bowl', 14000, '#E3EBDD', 'bowl'), quantity: 1 }, { item: item('mango', 'Mango smoothie', 5000, '#F4E7C5', 'mango'), quantity: 1 }] },
     { id: '2026', restaurantId: 'rolex-corner', placedAt: at(3, 7, 50), delivered: true, rating: rated(5), total: 7500, method: 'mtn', lines: rolexAndTea() },
     { id: '2019', restaurantId: 'nakawa-kitchen', placedAt: at(5, 20, 5), delivered: true, rating: rated(5), total: 12000, method: 'mtn', lines: pilauAndJuice() },
   ];

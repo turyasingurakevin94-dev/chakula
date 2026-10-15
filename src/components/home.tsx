@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { formatClock, type OrderLine } from '../lib/account';
 import type { MenuItem, Restaurant } from '../lib/data';
+import type { PhotoKey } from '../lib/photos';
 import { colors, fonts, formatUGX, smallCaps } from '../lib/theme';
 import type { QuickDish } from '../lib/usual';
 import { FoodImage, Icon, Scrim, Stepper } from './ui';
@@ -40,7 +41,7 @@ export function UsualCard({
   return (
     <View style={s.usual}>
       <View style={{ flexDirection: 'row', gap: 14, padding: 16, alignItems: 'center' }}>
-        <FoodImage tint={lines[0]?.item.tint ?? restaurant.tint} size={36} style={s.usualImage} />
+        <FoodImage tint={lines[0]?.item.tint ?? restaurant.tint} photo={lines[0]?.item.photo ?? restaurant.photo} size={36} style={s.usualImage} />
         <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
           <Text style={[smallCaps, { color: colors.peachText }]}>Your usual · {formatClock(usualAt, true)}</Text>
           <Text style={{ fontFamily: fonts.displayLight, fontSize: 22, lineHeight: 25, color: colors.cream }} numberOfLines={2}>
@@ -107,7 +108,7 @@ export function QuickDishRow({
           style={({ pressed }) => [{ width: 150, gap: 8, opacity: pressed ? 0.92 : 1 }]}
         >
           <View>
-            <FoodImage tint={d.item.tint} size={36} style={{ height: 108, borderRadius: 16 }} />
+            <FoodImage tint={d.item.tint} photo={d.item.photo} size={36} style={{ height: 108, borderRadius: 16 }} />
             <View style={s.timePill}>
               <Icon name="clock" size={12} />
               <Text style={{ fontFamily: fonts.bold, fontSize: 12, color: colors.forest }}>{d.minutes} min</Text>
@@ -132,7 +133,7 @@ export function QuickDishRow({
 export function ChefsPick({ restaurant, item, freeDeliveries, onOpen, onAdd }: { restaurant: Restaurant; item: MenuItem; freeDeliveries: number; onOpen: () => void; onAdd: () => void }) {
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={`Chef’s pick tonight: ${item.name} from ${restaurant.name}`} onPress={onOpen} style={({ pressed }) => [s.hero, { opacity: pressed ? 0.95 : 1 }]}>
-      <FoodImage tint={item.tint} size={60} style={[StyleSheet.absoluteFill, { paddingTop: 44, paddingBottom: 96 }]} />
+      <FoodImage tint={item.tint} photo={item.photo} size={60} style={[StyleSheet.absoluteFill, { paddingTop: 44, paddingBottom: 96 }]} />
       <Scrim id="chefs-pick" />
       {freeDeliveries > 0 ? <Text style={s.heroPill}>Free delivery · first {freeDeliveries} orders</Text> : null}
       <View style={s.heroFoot}>
@@ -151,7 +152,7 @@ export function ChefsPick({ restaurant, item, freeDeliveries, onOpen, onAdd }: {
   );
 }
 
-export function CategoryChips({ categories, selected, onSelect }: { categories: { id: string; label: string; tint: string }[]; selected: string | null; onSelect: (id: string | null) => void }) {
+export function CategoryChips({ categories, selected, onSelect }: { categories: { id: string; label: string; tint: string; photo?: PhotoKey }[]; selected: string | null; onSelect: (id: string | null) => void }) {
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 16, paddingTop: 4 }}>
       {categories.map((c) => {
@@ -166,7 +167,7 @@ export function CategoryChips({ categories, selected, onSelect }: { categories: 
             style={{ width: 64, alignItems: 'center', gap: 6 }}
           >
             <View style={[s.chipRing, on && { borderColor: colors.forest }]}>
-              <FoodImage tint={c.tint} size={26} style={s.chipImage} />
+              <FoodImage tint={c.tint} photo={c.photo} size={26} style={s.chipImage} />
             </View>
             <Text style={{ fontSize: 12, fontFamily: on ? fonts.bold : fonts.medium, color: on ? colors.forest : colors.muted }}>{c.label}</Text>
           </Pressable>
@@ -176,10 +177,10 @@ export function CategoryChips({ categories, selected, onSelect }: { categories: 
   );
 }
 
-export function DishCard({ name, price, tint, onPress }: { name: string; price: number; tint: string; onPress: () => void }) {
+export function DishCard({ name, price, tint, photo, onPress }: { name: string; price: number; tint: string; photo?: PhotoKey; onPress: () => void }) {
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={`${name}, ${formatUGX(price)}`} onPress={onPress} style={({ pressed }) => [{ width: 150, gap: 8, opacity: pressed ? 0.92 : 1 }]}>
-      <FoodImage tint={tint} size={40} style={{ height: 112, borderRadius: 16 }} />
+      <FoodImage tint={tint} photo={photo} size={40} style={{ height: 112, borderRadius: 16 }} />
       <View>
         <Text style={s.cardTitle} numberOfLines={1}>
           {name}

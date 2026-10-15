@@ -47,7 +47,7 @@ export default function Help() {
             <Label>Problem with your last order?</Label>
             <View style={[ui.card, { padding: 14, gap: 14, borderRadius: 20 }]}>
               <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
-                <FoodImage tint={last.lines[0]?.item.tint ?? kitchen.tint} size={22} style={{ width: 52, height: 52, borderRadius: 12 }} />
+                <FoodImage tint={last.lines[0]?.item.tint ?? kitchen.tint} photo={last.lines[0]?.item.photo ?? kitchen.photo} size={22} style={{ width: 52, height: 52, borderRadius: 12 }} />
                 <View style={{ flex: 1, gap: 2 }}>
                   <Text style={{ fontFamily: fonts.bold, fontSize: 15, color: colors.forest }}>{kitchen.name}</Text>
                   <Text style={{ fontFamily: fonts.regular, fontSize: 13, color: colors.muted }}>

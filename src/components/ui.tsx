@@ -1,8 +1,9 @@
 import Feather from '@expo/vector-icons/Feather';
 import { router } from 'expo-router';
 import type { ComponentProps, ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
+import { photos, type PhotoKey } from '../lib/photos';
 import { colors, fonts, radius, shadow, smallCaps } from '../lib/theme';
 
 export type IconName = ComponentProps<typeof Feather>['name'];
@@ -76,14 +77,18 @@ export function BackHeader({ title, onBack, right }: { title: string; onBack?: (
   );
 }
 
-// Stand-in for food photography until vendors upload real photos.
-export function FoodImage({ tint, size = 44, style, children }: { tint: string; size?: number; style?: StyleProp<ViewStyle>; children?: ReactNode }) {
+// A dish or kitchen photo, on its tint while it loads. Without a photo it falls back to the drawn bowl.
+export function FoodImage({ tint, photo, size = 44, style, children }: { tint: string; photo?: PhotoKey; size?: number; style?: StyleProp<ViewStyle>; children?: ReactNode }) {
   return (
     <View style={[{ backgroundColor: tint, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }, style]}>
-      <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="rgba(184,68,26,0.45)" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round">
-        <Path d="M3 12h18a9 9 0 0 1-18 0z" />
-        <Path d="M8 8c0-2 2-2 2-4M13 8c0-2 2-2 2-4" />
-      </Svg>
+      {photo ? (
+        <Image source={photos[photo]} style={[StyleSheet.absoluteFill, { width: '100%', height: '100%' }]} resizeMode="cover" accessibilityIgnoresInvertColors />
+      ) : (
+        <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="rgba(184,68,26,0.45)" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round">
+          <Path d="M3 12h18a9 9 0 0 1-18 0z" />
+          <Path d="M8 8c0-2 2-2 2-4M13 8c0-2 2-2 2-4" />
+        </Svg>
+      )}
       {children}
     </View>
   );

@@ -84,7 +84,7 @@ export function PlanPicker() {
                 style={[ui.card, s.plan, on && { borderWidth: 2, borderColor: colors.forest, backgroundColor: colors.highlight }]}
               >
                 {k.id === 'lunch-supper' ? <Text style={s.mostPicked}>Most picked</Text> : null}
-                <FoodImage tint={k.tint} size={30} style={{ width: 72, height: 72, borderRadius: 14 }} />
+                <FoodImage tint={k.tint} photo={k.photo} size={30} style={{ width: 72, height: 72, borderRadius: 14 }} />
                 <View style={{ flex: 1, gap: 2 }}>
                   <Text style={{ fontFamily: fonts.bold, fontSize: 16, color: colors.forest }}>{k.name}</Text>
                   <Text style={{ fontFamily: fonts.regular, fontSize: 13, color: colors.muted }}>
@@ -248,7 +248,7 @@ export function MyPlan({ plan }: { plan: MealPlan }) {
                           onPress={() => account.chooseMeal(next.day, d.id)}
                           style={[s.option, on && { borderWidth: 2, borderColor: colors.forest, backgroundColor: colors.highlight }]}
                         >
-                          <FoodImage tint={d.tint} size={30} style={{ height: 78 }} />
+                          <FoodImage tint={d.tint} photo={d.photo} size={30} style={{ height: 78 }} />
                           {on ? (
                             <View style={s.tick}>
                               <Icon name="check" size={12} color={colors.cream} />
@@ -316,7 +316,7 @@ function OtherMeal({ meal, now, dish }: { meal: PlanMeal; now: number; dish: Pla
   const detail = now < t.door ? `${dish.kitchen} · arrives ${formatClock(t.door, true)}` : `${dish.kitchen} · arrived ${formatClock(t.door, true)}`;
   return (
     <View style={[ui.card, { padding: 10, flexDirection: 'row', gap: 12, alignItems: 'center', borderRadius: 20 }]}>
-      <FoodImage tint={dish.tint} size={26} style={{ width: 60, height: 60, borderRadius: 14 }} />
+      <FoodImage tint={dish.tint} photo={dish.photo} size={26} style={{ width: 60, height: 60, borderRadius: 14 }} />
       <View style={{ flex: 1, gap: 2 }}>
         <Text style={{ fontFamily: fonts.bold, fontSize: 12, letterSpacing: 0.7, textTransform: 'uppercase', color: colors.green }}>{status}</Text>
         <Text style={{ fontFamily: fonts.bold, fontSize: 15, color: colors.forest }}>{dish.name}</Text>
@@ -363,7 +363,7 @@ export function ChooseMeal() {
 
         <View style={{ paddingHorizontal: 20, paddingTop: 14 }}>
           <View style={s.picked}>
-            <FoodImage tint={picked.tint} size={44} style={[StyleSheet.absoluteFill, { paddingTop: 36, paddingBottom: 80 }]} />
+            <FoodImage tint={picked.tint} photo={picked.photo} size={44} style={[StyleSheet.absoluteFill, { paddingTop: 36, paddingBottom: 80 }]} />
             <Scrim id="picked-scrim" />
             <Text style={s.pickedPill}>Picked for you</Text>
             <View style={s.pickedFoot}>
@@ -431,7 +431,7 @@ function DishRow({ dish, extra, on, onPress }: { dish: PlanDish; extra: number; 
   return (
     <Pressable accessibilityRole="radio" accessibilityState={{ checked: on }} accessibilityLabel={`${dish.name} from ${dish.kitchen}, ${extra ? `${extra} more` : 'covered'}`} onPress={onPress} style={({ pressed }) => [s.dishRow, pressed && { opacity: 0.85 }]}>
       <View>
-        <FoodImage tint={dish.tint} size={28} style={{ width: 64, height: 64, borderRadius: 14 }} />
+        <FoodImage tint={dish.tint} photo={dish.photo} size={28} style={{ width: 64, height: 64, borderRadius: 14 }} />
         {on ? (
           <View style={[s.tick, { right: -4, top: -4 }]}>
             <Icon name="check" size={12} color={colors.cream} />

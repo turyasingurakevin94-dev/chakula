@@ -45,7 +45,7 @@ export default function Dish() {
       <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={() => router.back()} style={s.backdrop} />
       <View style={[s.sheet, { marginTop: insets.top + 56 }]}>
         <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 16 }}>
-          <FoodImage tint={item.tint} size={80} style={{ height: 230 }} />
+          <FoodImage tint={item.tint} photo={item.photo} size={80} style={{ height: 230 }} />
           <IconButton icon="x" label="Close" size={40} onPress={() => router.back()} style={{ position: 'absolute', right: 16, top: 16 }} />
 
           <View style={{ paddingHorizontal: 20, paddingTop: 18, gap: 6 }}>

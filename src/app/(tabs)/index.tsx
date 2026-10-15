@@ -180,7 +180,7 @@ export default function Home() {
         </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingHorizontal: 20 }}>
           {popular.map(({ restaurant, item }) => (
-            <DishCard key={`${restaurant.id}-${item.id}`} name={item.name} price={item.price} tint={item.tint} onPress={() => router.push(`/restaurant/${restaurant.id}`)} />
+            <DishCard key={`${restaurant.id}-${item.id}`} name={item.name} price={item.price} tint={item.tint} photo={item.photo} onPress={() => router.push(`/restaurant/${restaurant.id}`)} />
           ))}
         </ScrollView>
 
@@ -196,7 +196,7 @@ export default function Home() {
           onPress={() => router.push('/specials')}
           style={({ pressed }) => [ui.card, s.special, { opacity: pressed ? 0.92 : 1 }]}
         >
-          <FoodImage tint={special.tint} size={28} style={{ width: 64, height: 64, borderRadius: 14 }} />
+          <FoodImage tint={special.tint} photo={special.photo} size={28} style={{ width: 64, height: 64, borderRadius: 14 }} />
           <View style={{ flex: 1, gap: 2 }}>
             <Text style={{ fontFamily: fonts.bold, fontSize: 12, letterSpacing: 0.7, textTransform: 'uppercase', color: colors.orangeText }}>This {special.day}</Text>
             <Text style={{ fontFamily: fonts.bold, fontSize: 15, color: colors.forest }}>{special.name}</Text>
