@@ -7,6 +7,8 @@ import { AppState } from 'react-native';
 // only if the update arrives within a few seconds of opening; otherwise wait until the app has been
 // in the background and comes back.
 const RELOAD_WINDOW_MS = 4000;
+// How long the app must have been in the background for a return to count.
+const AWAY_MS = 15000;
 
 export function useApplyUpdates() {
   useEffect(() => {
@@ -43,8 +45,12 @@ export function useApplyUpdates() {
     };
     check(false);
     let last = AppState.currentState;
+    let leftAt = 0;
     const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active' && last === 'background') check(true);
+      if (state === 'background' && last !== 'background') leftAt = Date.now();
+      // System dialogs (like the "Allow notifications" prompt) briefly send the app to the background.
+      // Restarting then would wipe what the student is doing, so only count a real trip away.
+      if (state === 'active' && last === 'background' && Date.now() - leftAt >= AWAY_MS) check(true);
       last = state;
     });
     return () => sub.remove();
