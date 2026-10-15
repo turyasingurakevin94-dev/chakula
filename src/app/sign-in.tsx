@@ -14,11 +14,21 @@ export default function SignIn() {
   // Ugandan mobile numbers are 9 digits after +256 and start with 7.
   const valid = /^7\d{8}$/.test(digits);
   const showError = digits.length === 9 && !valid;
+  const [sending, setSending] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
 
-  const send = () => {
-    if (!valid) return;
-    account.startSignIn(digits);
-    router.push('/verify');
+  const send = async () => {
+    if (!valid || sending) return;
+    setSending(true);
+    setFailed(null);
+    try {
+      await account.startSignIn(digits);
+      router.push('/verify');
+    } catch (e) {
+      setFailed(e instanceof Error ? e.message : 'That didn’t work. Try again.');
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -68,8 +78,8 @@ export default function SignIn() {
               style={[s.input, { borderColor: showError ? colors.orangeText : colors.forest }]}
             />
           </View>
-          {showError ? (
-            <Text style={[s.hint, { color: colors.orangeText }]}>That doesn’t look like an MTN or Airtel number.</Text>
+          {showError || failed ? (
+            <Text style={[s.hint, { color: colors.orangeText }]}>{failed ?? 'That doesn’t look like an MTN or Airtel number.'}</Text>
           ) : (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <Icon name="gift" size={15} />

@@ -112,7 +112,7 @@ export function connectLive(onMessage: (m: LiveMessage) => void) {
 
 // Sends this phone's Expo push token, so the server can ring it. Older APKs without the
 // notifications module, or a refused permission, just skip it.
-async function registerPush(app: AppName) {
+export async function registerPush(app: AppName) {
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const N = require('expo-notifications') as typeof import('expo-notifications');

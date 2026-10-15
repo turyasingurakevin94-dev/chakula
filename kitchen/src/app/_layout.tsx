@@ -3,13 +3,16 @@ import { Fraunces_400Regular, Fraunces_500Medium, Fraunces_500Medium_Italic, Fra
 import { useFonts } from 'expo-font';
 import { Stack, type ErrorBoundaryProps } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import type { ReactNode } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AlertHost } from '../components/alerts';
 import { Incoming } from '../components/incoming';
+import { SignIn } from '../components/signin';
 import { Icon } from '../components/ui';
 import { Unseen } from '../components/unseen';
 import { KitchenProvider, useKitchen } from '../lib/kitchen';
+import { onServer } from '../lib/server';
 import { colors, fonts } from '../lib/theme';
 import { restartNow, useApplyUpdates } from '../lib/updates';
 
@@ -38,22 +41,31 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <KitchenProvider>
         <StatusBar style="dark" />
-        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.cream } }}>
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="order/[id]" />
-          <Stack.Screen name="receipt/[id]" />
-          <Stack.Screen name="setup" />
-          <Stack.Screen name="display" />
-          <Stack.Screen name="alerts" />
-        </Stack>
-        <Incoming />
-        <Unseen />
-        <Toast />
-        <AlertHost />
+        <SignedIn>
+          <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.cream } }}>
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="order/[id]" />
+            <Stack.Screen name="receipt/[id]" />
+            <Stack.Screen name="setup" />
+            <Stack.Screen name="display" />
+            <Stack.Screen name="alerts" />
+          </Stack>
+          <Incoming />
+          <Unseen />
+          <Toast />
+          <AlertHost />
+        </SignedIn>
         {updateReady ? <UpdateBar /> : null}
       </KitchenProvider>
     </SafeAreaProvider>
   );
+}
+
+// On the server, the counter signs in before seeing any orders. Without it, straight in.
+function SignedIn({ children }: { children: ReactNode }) {
+  const { user } = useKitchen();
+  if (onServer && !user) return <SignIn />;
+  return <>{children}</>;
 }
 
 // "New order 4824 accepted and printed", shown briefly at the top.
