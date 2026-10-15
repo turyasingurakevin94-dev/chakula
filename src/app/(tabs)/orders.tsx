@@ -1,5 +1,6 @@
 import { router } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { onServer } from '../../lib/server';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Display, FoodImage, Icon, Label, Stars, styles as ui } from '../../components/ui';
 import { DELIVERY_MINUTES, formatClock, formatWhen, isWaiting, minutesLeft, useAccount, useNow, type Order } from '../../lib/account';
@@ -99,7 +100,7 @@ export default function Orders() {
           {!active && past.length === 0 ? (
             <View style={{ alignItems: 'center', paddingTop: 64, gap: 8 }}>
               <Display size={22}>No orders yet</Display>
-              <Text style={s.meta}>Your first three deliveries are free.</Text>
+              <Text style={s.meta}>{onServer ? 'Your orders will show here.' : 'Your first three deliveries are free.'}</Text>
             </View>
           ) : null}
         </View>

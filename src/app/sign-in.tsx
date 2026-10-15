@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { FoodImage, Icon, Label, PrimaryButton } from '../components/ui';
 import { useAccount } from '../lib/account';
+import { onServer } from '../lib/server';
 import { colors, fonts, formatPhone, smallCaps } from '../lib/theme';
 
 export default function SignIn() {
@@ -80,7 +81,8 @@ export default function SignIn() {
           </View>
           {showError || failed ? (
             <Text style={[s.hint, { color: colors.orangeText }]}>{failed ?? 'That doesn’t look like an MTN or Airtel number.'}</Text>
-          ) : (
+          ) : onServer ? null : (
+            // The server doesn't give free deliveries yet, so the offer only shows in the sample app.
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <Icon name="gift" size={15} />
               <Text style={s.hint}>Your first three deliveries are on us.</Text>
