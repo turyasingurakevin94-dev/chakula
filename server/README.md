@@ -68,8 +68,21 @@ All bodies are JSON. Signed-in calls send `Authorization: Bearer <token>`.
 - `src/providers/` SMS (console or Africa's Talking), push (console or Expo), payments (dev for now)
 - `src/schema.sql` tables; `src/seed.ts` sample data; `src/db.ts` PGlite or Postgres
 
+## Using it from the apps
+
+All three apps use this server when started or built with `EXPO_PUBLIC_API_URL`; without it they
+run on their sample data as before. On a phone use the computer's address on the same Wi-Fi:
+
+```bash
+EXPO_PUBLIC_API_URL=http://192.168.1.20:4000 npx expo start --clear   # in the repo root, kitchen/ or rider/
+```
+
+Use `--clear` whenever the address changes, or Metro may keep the old one.
+
 ## Not built yet
 
-Real MTN and Airtel payments (waiting on the provider choice and business accounts), card and
-wallet, refunds, offering a run to one rider at a time, SMS backup when a push isn't seen in 60
-seconds, meal plans, ratings, an admin screen, and the apps calling this server.
+Real MTN and Airtel payments (waiting on the provider and business accounts), card and wallet,
+refunds, ordering for later, offering a run to one rider at a time, SMS backup when a push isn't
+seen in 60 seconds, meal plans, ratings and tips, rider pay, an admin screen, staying signed in
+after the app restarts (needs secure storage in a new APK), and phone GPS for riders (needs
+expo-location in a new APK).
