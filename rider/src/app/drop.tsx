@@ -3,13 +3,13 @@ import { useCallback, useRef, useState } from 'react';
 import { Animated, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BackButton, Body, Button, Headline, Icon, Label, Num } from '../components/ui';
-import { useRider } from '../lib/rider';
+import { clockTime, contactStudent, useRider } from '../lib/rider';
 import { onServer } from '../lib/server';
 import { colors, fonts, money } from '../lib/theme';
 
 // Hand over: collect any cash, then type the student's 4-digit code. The last digit completes the drop.
 export default function Drop() {
-  const { run, stop, stopIndex, completeStop, backToRoute, notify, handOver } = useRider();
+  const { run, stop, stopIndex, completeStop, backToRoute, notify, handOver, arrivedAt } = useRider();
   const [code, setCode] = useState('');
   const [wrong, setWrong] = useState(false);
   // On the server: the code is being checked, and the server's words when it doesn't match.
@@ -79,7 +79,7 @@ export default function Drop() {
         <View style={s.header}>
           <BackButton label="Back to route" onPress={back} />
           <Label style={{ flex: 1 }}>
-            Stop {stopIndex + 1} of {run.stops.length} · arrived {stop.eta}
+            Stop {stopIndex + 1} of {run.stops.length} · arrived {stop.eta || (arrivedAt ? clockTime(new Date(arrivedAt)) : 'now')}
           </Label>
           {/* On the server the code is checked there, so the handover needs a connection. */}
           {onServer ? null : (
@@ -101,10 +101,10 @@ export default function Drop() {
           </View>
 
           <View style={{ paddingHorizontal: 20, paddingTop: 14, flexDirection: 'row', gap: 10 }}>
-            <Button variant="secondary" icon="phone" height={48} style={{ flex: 1, borderRadius: 16, gap: 8 }} onPress={() => notify(`Calling ${stop.first} through Chakula`)}>
+            <Button variant="secondary" icon="phone" height={48} style={{ flex: 1, borderRadius: 16, gap: 8 }} onPress={() => (onServer ? contactStudent(stop, 'call', notify) : notify(`Calling ${stop.first} through Chakula`))}>
               Call
             </Button>
-            <Button variant="secondary" icon="message-square" height={48} size={14} style={{ flex: 1, borderRadius: 16, paddingHorizontal: 8, gap: 8 }} onPress={() => notify(`Sent "I'm here" to ${stop.first}`)}>
+            <Button variant="secondary" icon="message-square" height={48} size={14} style={{ flex: 1, borderRadius: 16, paddingHorizontal: 8, gap: 8 }} onPress={() => (onServer ? contactStudent(stop, 'text', notify) : notify(`Sent "I'm here" to ${stop.first}`))}>
               Send &quot;I&apos;m here&quot;
             </Button>
           </View>
@@ -178,7 +178,7 @@ export default function Drop() {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <Icon name="shield" size={16} color={colors.sealed} />
             <Text style={{ fontFamily: fonts.regular, fontSize: 13, color: colors.muted }}>
-              Bag {stop.bag} · sealed {stop.sealedAt} · scanned {run.pickupAt}
+              Bag {stop.bag} · sealed {stop.sealedAt} · {onServer ? `picked up ${stop.pickedAt ?? ''}` : `scanned ${run.pickupAt}`}
             </Text>
           </View>
           <Pressable accessibilityRole="link" onPress={() => router.push('/help')}>

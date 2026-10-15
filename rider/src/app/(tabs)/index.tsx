@@ -39,7 +39,7 @@ export default function Today() {
             <View style={s.onlineHalo}>
               <View style={s.onlineDot} />
             </View>
-            <Text style={{ fontFamily: fonts.semibold, fontSize: 13, color: colors.forest }}>Online · {onlineFor(onlineSince, now)}</Text>
+            <Text style={{ fontFamily: fonts.semibold, fontSize: 13, color: colors.forest }}>{onServer ? 'Online' : `Online · ${onlineFor(onlineSince, now)}`}</Text>
           </Pressable>
         </View>
 
@@ -49,19 +49,20 @@ export default function Today() {
             <Italic>{riderName}.</Italic>
           </Headline>
           <View style={{ flexDirection: 'row', gap: 18 }}>
-            <Stat value="4.9" label="rating" />
-            <Stat value="98%" label="on time" />
-            <Stat value={String(drops)} label="drops today" />
+            {/* Ratings and on-time figures aren't on the server yet. */}
+            {onServer ? null : <Stat value="4.9" label="rating" />}
+            {onServer ? null : <Stat value="98%" label="on time" />}
+            <Stat value={String(drops)} label={drops === 1 ? 'drop today' : 'drops today'} />
           </View>
         </View>
 
-        <View style={{ paddingHorizontal: 20, paddingTop: 20 }}>{run ? <Ticket run={run} current={stage === 'waiting' || stage === 'pickup' ? -1 : stopIndex} /> : <ShiftDone />}</View>
+        <View style={{ paddingHorizontal: 20, paddingTop: 20 }}>{run ? <Ticket run={run} current={stage === 'waiting' || stage === 'pickup' ? -1 : stopIndex} /> : onServer ? <Idle cash={cash} /> : <ShiftDone />}</View>
 
         {cta ? <View style={{ paddingHorizontal: 20, paddingTop: 14 }}>{cta}</View> : null}
 
         <View style={s.tiles}>
           <Pressable accessibilityRole="button" onPress={() => router.navigate('/money')} style={s.tile}>
-            <Label>Tonight&apos;s pay</Label>
+            <Label>{onServer ? 'Today’s pay' : 'Tonight’s pay'}</Label>
             <Num size={22}>{money(pay)}</Num>
           </Pressable>
           <Pressable accessibilityRole="button" onPress={() => router.push('/cash')} style={s.tile}>
@@ -84,7 +85,16 @@ function Stat({ value, label }: { value: string; label: string }) {
 
 function Ticket({ run, current }: { run: Run; current: number }) {
   const { stage } = useRider();
-  const kicker = stage === 'waiting' ? `Next run · pick up ${run.pickupAt}` : stage === 'pickup' ? `At the hatch · ${run.pickupAt}` : 'On the road';
+  const kicker =
+    stage === 'waiting'
+      ? onServer
+        ? 'Your run · pick up'
+        : `Next run · pick up ${run.pickupAt}`
+      : stage === 'pickup'
+        ? onServer
+          ? 'At the kitchen'
+          : `At the hatch · ${run.pickupAt}`
+        : 'On the road';
   return (
     <View style={s.ticketShadow}>
       <View style={s.ticket}>
@@ -92,9 +102,7 @@ function Ticket({ run, current }: { run: Run; current: number }) {
           <View style={{ flex: 1, gap: 4 }}>
             <Label>{kicker}</Label>
             <Num size={28}>{onServer ? pickupOrder(run)[0]!.name : KITCHEN}</Num>
-            <Body style={{ fontSize: 13, color: colors.body }}>
-              {run.stops.length} sealed bag{run.stops.length === 1 ? '' : 's'} · {run.away}
-            </Body>
+            <Body style={{ fontSize: 13, color: colors.body }}>{onServer ? bagState(run) : `${run.stops.length} sealed bag${run.stops.length === 1 ? '' : 's'} · ${run.away}`}</Body>
           </View>
           {run.slot !== undefined ? (
             <View style={{ alignItems: 'center' }}>
@@ -116,7 +124,7 @@ function Ticket({ run, current }: { run: Run; current: number }) {
                 <Bold size={14} style={[{ flex: 1, fontFamily: fonts.semibold }, done && { color: colors.muted, textDecorationLine: 'line-through' }]}>
                   {stop.place}
                 </Bold>
-                <Body style={{ color: colors.muted }}>{stop.eta}</Body>
+                <Body style={{ color: colors.muted }}>{onServer ? (stop.status === 'delivered' ? 'delivered' : stop.cash > 0 ? `cash ${money(stop.cash)}` : 'paid') : stop.eta}</Body>
               </View>
             );
           })}
@@ -128,6 +136,34 @@ function Ticket({ run, current }: { run: Run; current: number }) {
       </View>
     </View>
   );
+}
+
+// On the server, between runs: nothing invented about shifts or meal plans.
+function Idle({ cash }: { cash: number }) {
+  return (
+    <View style={[s.ticketShadow]}>
+      <View style={[s.ticket, { padding: 20, gap: 6 }]}>
+        <Label>Waiting for a run</Label>
+        <Num size={26}>No runs right now.</Num>
+        <Body style={{ color: colors.body }}>
+          We&apos;ll ring you when one comes in. Keep Chakula open while you&apos;re on shift.
+          {cash > 0 ? ` You're holding UGX ${money(cash)} in cash; hand it in at the kitchen when you finish.` : ''}
+        </Body>
+      </View>
+    </View>
+  );
+}
+
+// "1 bag · sealed and waiting", "2 bags · the kitchen is still cooking".
+function bagState(run: Run) {
+  const n = run.stops.length;
+  const bags = `${n} bag${n === 1 ? '' : 's'}`;
+  const onBike = run.stops.filter((x) => x.status === 'picked_up' || x.status === 'at_gate' || x.status === 'delivered').length;
+  const sealed = run.stops.filter((x) => x.status === 'ready').length;
+  if (onBike === n) return `${bags} · on your bike`;
+  if (sealed + onBike === n) return `${bags} · sealed and waiting`;
+  if (sealed + onBike > 0) return `${bags} · ${sealed + onBike} sealed, the kitchen is still cooking`;
+  return `${bags} · the kitchen is still cooking`;
 }
 
 function ShiftDone() {

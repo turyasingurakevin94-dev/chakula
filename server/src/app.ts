@@ -213,6 +213,8 @@ export async function createServer(config: Config) {
     const user = c.get('user');
     return c.json((await orders.forRider(user)).map(({ order, lines }) => viewOrder(order, lines, user)));
   });
+  // Today's deliveries, the drops count and the cash collected, for the Run and Money screens.
+  app.get('/rider/today', signedIn('rider'), async (c) => c.json(await orders.today(c.get('user'))));
   app.post('/rider/orders/:id/take', signedIn('rider'), riderStep(orders.take));
   app.post('/rider/orders/:id/pick-up', signedIn('rider'), riderStep(orders.pickUp));
   app.post('/rider/orders/:id/at-gate', signedIn('rider'), riderStep(orders.atGate));

@@ -12,7 +12,7 @@ import { versionLabel } from '../lib/updates';
 // Sign in with the phone number Chakula has for the rider, then the 6-digit SMS code. Only on the
 // server; the sample app has no sign-in.
 export default function SignIn() {
-  const { user, signIn } = useRider();
+  const { user, signIn, restoring } = useRider();
   const [phone, setPhone] = useState('');
   // The number the code went to, once sent.
   const [sentTo, setSentTo] = useState<string | null>(null);
@@ -22,6 +22,7 @@ export default function SignIn() {
   const codeInput = useRef<TextInput>(null);
 
   if (!onServer || user) return <Redirect href="/" />;
+  if (restoring) return <View style={{ flex: 1, backgroundColor: colors.cream }} />;
 
   const send = async () => {
     if (busy) return;

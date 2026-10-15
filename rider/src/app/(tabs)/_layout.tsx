@@ -18,8 +18,10 @@ const tabs: Record<string, { label: string; icon: TabIcon }> = {
 type TabBarProps = Parameters<NonNullable<ComponentProps<typeof Tabs>['tabBar']>>[0];
 
 export default function TabsLayout() {
-  const { online, user } = useRider();
-  // On the server, sign in first.
+  const { online, user, restoring } = useRider();
+  // On the server, the saved sign-in is checked first (a plain cream screen, no sign-in flash).
+  if (onServer && restoring) return <View style={{ flex: 1, backgroundColor: colors.cream }} />;
+  // Then sign in, when there was none.
   if (onServer && !user) return <Redirect href="/sign-in" />;
   // Offline riders start with the shift check.
   if (!online) return <Redirect href="/start" />;

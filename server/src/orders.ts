@@ -95,6 +95,15 @@ export function viewOrder(o: OrderRow, lines: LineRow[], viewer: User) {
 }
 export type OrderView = ReturnType<typeof viewOrder>;
 
+// Kampala is UTC+3 all year (no daylight saving), so "today" for a rider starts at 21:00 UTC.
+const KAMPALA_MS = 3 * 3600_000;
+export function kampalaDay(now = new Date()) {
+  const local = new Date(now.getTime() + KAMPALA_MS);
+  const day = local.toISOString().slice(0, 10);
+  const start = new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate()) - KAMPALA_MS);
+  return { day, start, end: new Date(start.getTime() + 86_400_000) };
+}
+
 export function createOrders(db: Db, deps: { payments: () => PaymentProvider; onEvent: (e: OrderEvent) => void }) {
   async function load(where: string, params: unknown[], limit = 50) {
     const orders = await db.query<OrderRow>(`${SELECT} where ${where} order by o.created_at desc limit ${limit}`, params);
@@ -248,6 +257,28 @@ export function createOrders(db: Db, deps: { payments: () => PaymentProvider; on
     // Runs waiting for a rider, then the rider's own unfinished ones.
     forRider: (user: User) =>
       load("(o.rider_id is null and o.status in ('cooking', 'ready')) or (o.rider_id = $1 and o.status = any($2))", [user.id, ACTIVE], 100),
+
+    // The rider's deliveries today (Kampala day): what the Run and Money screens count.
+    async today(rider: User, now = new Date()) {
+      const { day, start, end } = kampalaDay(now);
+      const rows = await db.query<{ id: string; number: number; delivered_at: Date; kitchen_name: string; drop_name: string; total: number; pay_method: 'mtn' | 'airtel' | 'cash' }>(
+        `select o.id, o.number, o.delivered_at, k.name as kitchen_name, d.name as drop_name, o.total, o.pay_method
+         from orders o
+         join kitchens k on k.id = o.kitchen_id
+         join drop_points d on d.id = o.drop_point_id
+         where o.rider_id = $1 and o.status = 'delivered' and o.delivered_at >= $2 and o.delivered_at < $3
+         order by o.delivered_at desc`,
+        [rider.id, start, end],
+      );
+      return {
+        day,
+        drops: rows.length,
+        cashCollected: rows.filter((r) => r.pay_method === 'cash').reduce((n, r) => n + r.total, 0),
+        orders: rows.map((r) => ({
+          id: r.id, number: r.number, deliveredAt: r.delivered_at, kitchen: r.kitchen_name, dropPoint: r.drop_name, total: r.total, payMethod: r.pay_method,
+        })),
+      };
+    },
 
     async take(rider: User, id: string) {
       const rows = await db.query("update orders set rider_id = $2, rider_at = now() where id = $1 and rider_id is null and status in ('cooking', 'ready') returning id", [id, rider.id]);
