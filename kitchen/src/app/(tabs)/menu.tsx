@@ -1,7 +1,7 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Circle, Path } from 'react-native-svg';
-import { Display, Icon, Label, Toggle } from '../../components/ui';
+import { Display, DishPhoto, Icon, Label, Toggle } from '../../components/ui';
 import { useKitchen, type Dish } from '../../lib/kitchen';
 import { colors, fonts } from '../../lib/theme';
 
@@ -58,9 +58,7 @@ export default function Menu() {
                 .map((d) => (
                   <View key={d.id} style={s.row}>
                     {d.hasPhoto ? (
-                      <View style={s.photo}>
-                        <Text style={s.photoLabel}>Kitchen photo</Text>
-                      </View>
+                      <DishPhoto name={d.name} size={64} radius={14} style={d.soldOut && { opacity: 0.45 }} />
                     ) : (
                       <Pressable accessibilityRole="button" accessibilityLabel={`Add a photo of ${d.name}`} onPress={() => k.notify('The camera opens here in the real app')} style={[s.photo, s.photoMissing]}>
                         <Camera color={colors.forest} />
@@ -112,7 +110,6 @@ const s = StyleSheet.create({
   row: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, borderRadius: 18, padding: 10, flexDirection: 'row', alignItems: 'center', gap: 12 },
   photo: { width: 64, height: 64, borderRadius: 14, backgroundColor: colors.food, alignItems: 'center', justifyContent: 'center', gap: 2 },
   photoMissing: { backgroundColor: 'transparent', borderWidth: 1.5, borderStyle: 'dashed', borderColor: '#C9B9A3' },
-  photoLabel: { fontFamily: fonts.semibold, fontSize: 11, color: '#8C7F6C', textAlign: 'center' },
   name: { fontFamily: fonts.bold, fontSize: 15, color: colors.forest },
   meta: { fontFamily: fonts.regular, fontSize: 13, color: colors.muted },
   extra: { height: 36, borderRadius: 12, paddingHorizontal: 12, justifyContent: 'center', backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line },

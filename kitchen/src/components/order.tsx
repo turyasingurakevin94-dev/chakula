@@ -2,7 +2,7 @@ import { Text, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import type { Order } from '../lib/kitchen';
 import { colors, fonts } from '../lib/theme';
-import { Chip } from './ui';
+import { Chip, DishPhoto } from './ui';
 
 // "1× Chicken pilau  + Avocado", one row per dish, as on the Orders board.
 export function Lines({ order }: { order: Order }) {
@@ -10,6 +10,7 @@ export function Lines({ order }: { order: Order }) {
     <View style={{ gap: 4 }}>
       {order.items.map((i) => (
         <View key={i.name} style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
+          <DishPhoto name={i.name} size={28} radius={8} style={{ marginRight: 2 }} />
           <Text style={{ fontFamily: fonts.bold, fontSize: 15, lineHeight: 22, color: colors.ink }}>
             {i.qty}× {i.name}
           </Text>
