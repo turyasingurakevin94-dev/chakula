@@ -5,10 +5,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Bike, Note } from '../../components/order';
 import { BackHeader, Body, Chip, DishPhoto, Icon } from '../../components/ui';
 import { clock, minutesUntil, useKitchen, type Status } from '../../lib/kitchen';
+import { onServer } from '../../lib/server';
 import { colors, fonts, smallCaps } from '../../lib/theme';
 
 const STEPS: { key: Status; label: string }[] = [
-  { key: 'incoming', label: 'Printed' },
+  // Nothing prints on the server version yet.
+  { key: 'incoming', label: onServer ? 'In' : 'Printed' },
   { key: 'cooking', label: 'Cooking' },
   { key: 'ready', label: 'Ready' },
   { key: 'picked', label: 'Picked up' },
@@ -116,7 +118,7 @@ export default function OrderScreen() {
               </Text>
             </View>
           ) : null}
-          {cooking && !o.swap ? (
+          {cooking && !o.swap && !onServer ? (
             <Pressable accessibilityRole="button" onPress={() => setSwapping((v) => !v)} style={s.swap}>
               <Text style={s.smallText}>Out of something? Offer a swap</Text>
             </Pressable>
@@ -143,22 +145,58 @@ export default function OrderScreen() {
         </View>
 
         <View style={[s.card, { paddingHorizontal: 16, paddingVertical: 6 }]}>
-          <View style={[s.row, o.rider && { borderBottomWidth: 1, borderBottomColor: colors.lineSoft }]}>
-            <View style={s.iconWell}>
-              <Icon name="printer" size={18} />
+          {onServer ? (
+            <View style={[s.row, (o.rider || o.status === 'ready') && { borderBottomWidth: 1, borderBottomColor: colors.lineSoft }]}>
+              <View style={s.iconWell}>
+                <Icon name="clock" size={18} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.rowTitle}>In at {clock(o.inAt)}</Text>
+                <Text style={s.meta}>
+                  {o.paid === 'Cash on delivery' ? 'Cash on delivery' : `Paid by ${o.paid}`}
+                  {o.sale ? ` · UGX ${o.sale.subtotal.toLocaleString('en-US')} food` : ''}
+                </Text>
+              </View>
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={s.rowTitle}>{o.live && o.printed === false && k.settings.printTicket ? 'Ticket didn’t print' : printed ? `${printed} printed` : 'Nothing printed'}</Text>
-              <Text style={s.meta}>
-                {clock(o.inAt)}
-                {o.posSale ? ` · sale ${o.posSale} is in your POS` : ''}
-              </Text>
+          ) : (
+            <View style={[s.row, o.rider && { borderBottomWidth: 1, borderBottomColor: colors.lineSoft }]}>
+              <View style={s.iconWell}>
+                <Icon name="printer" size={18} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.rowTitle}>{o.live && o.printed === false && k.settings.printTicket ? 'Ticket didn’t print' : printed ? `${printed} printed` : 'Nothing printed'}</Text>
+                <Text style={s.meta}>
+                  {clock(o.inAt)}
+                  {o.posSale ? ` · sale ${o.posSale} is in your POS` : ''}
+                </Text>
+              </View>
+              <Pressable accessibilityRole="link" accessibilityLabel={`Reprint order ${o.id}`} onPress={() => router.push(`/receipt/${o.id}`)} style={{ height: 44, justifyContent: 'center' }}>
+                <Text style={s.link}>Reprint</Text>
+              </Pressable>
             </View>
-            <Pressable accessibilityRole="link" accessibilityLabel={`Reprint order ${o.id}`} onPress={() => router.push(`/receipt/${o.id}`)} style={{ height: 44, justifyContent: 'center' }}>
-              <Text style={s.link}>Reprint</Text>
-            </Pressable>
-          </View>
-          {o.rider ? (
+          )}
+          {onServer && !o.rider && o.status === 'ready' ? (
+            <View style={s.row}>
+              <View style={s.iconWell}>
+                <Bike />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.rowTitle}>Finding a rider</Text>
+                <Text style={s.meta}>Keep the bag on the shelf. Nothing for you to do.</Text>
+              </View>
+            </View>
+          ) : null}
+          {o.rider && onServer ? (
+            <View style={s.row}>
+              <View style={s.iconWell}>
+                <Bike />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.rowTitle}>{o.status === 'picked' || o.status === 'delivered' ? `${o.rider.name} picked it up${o.pickedAt ? ` at ${clock(o.pickedAt)}` : ''}` : `${o.rider.name} is coming for it`}</Text>
+                <Text style={s.meta}>{o.status === 'delivered' ? `Delivered at ${o.deliveredAt ? clock(o.deliveredAt) : ''}` : o.status === 'picked' ? 'On the way to the student.' : 'Hand them the bag when they get to the counter.'}</Text>
+              </View>
+            </View>
+          ) : o.rider ? (
             <View style={s.row}>
               <View style={s.iconWell}>
                 <Bike />

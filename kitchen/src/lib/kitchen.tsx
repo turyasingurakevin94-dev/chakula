@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { defaultHears, type Device, type Hears, type RowKey } from './alerts';
 import { photoFor } from './photos';
-import { api, connectLive, onServer, ServerError, setToken, type ServerOrder, type ServerStatus, type ServerUser } from './server';
+import { api, connectLive, getToken, loadSession, onServer, saveSession, ServerError, setToken, type ServerOrder, type ServerStatus, type ServerUser } from './server';
 
 // Everything here is sample data held in memory, like the student app. Times are set relative to
 // when the app opens, so the board always looks like a lunch rush in progress.
@@ -51,6 +51,8 @@ export type Order = {
   seenAt?: number;
   // "Something ran out": the student is choosing a swap, then has chosen.
   swap?: { item: string; askedAt: number; chose?: string };
+  // On the server: the order's money, for the Money tab. Subtotal is the food; total adds delivery.
+  sale?: { subtotal: number; total: number; payMethod: ServerOrder['payMethod']; paid: boolean };
 };
 
 export type Settings = {
@@ -185,6 +187,7 @@ export const SERVED_EARLIER = onServer ? 0 : 48;
 
 type ServerKitchen = {
   id: string;
+  name: string;
   open: boolean;
   menu: { id: string; name: string; category: string; price: number; prepMinutes: number; soldOut: boolean; extras: { id: string; name: string; price: number; soldOut: boolean }[] }[];
 };
@@ -224,6 +227,7 @@ function fromServer(so: ServerOrder, was?: Order): Order | null {
     deliveredAt: ms(so.times.delivered),
     // The server doesn't know when the rider reaches the hatch yet, so expect them when the food is due.
     rider: so.rider ? { name: so.rider.name ?? 'Rider', arrivesAt: pickedAt ?? dueAt } : undefined,
+    sale: { subtotal: so.subtotal, total: so.total, payMethod: so.payMethod, paid: so.paid },
   };
 }
 
@@ -263,7 +267,14 @@ function menuFromServer(k: ServerKitchen) {
 type Kitchen = {
   // The signed-in counter account. Always null without the server.
   user: ServerUser | null;
+  // On the server, while the saved sign-in is being read back at start. Nothing shows meanwhile.
+  restoring: boolean;
   signIn: (user: ServerUser) => void;
+  signOut: () => void;
+  // "Nakawa Kitchen", or the signed-in kitchen's name from the server.
+  kitchenName: string;
+  // On the server: the last try to load the board couldn't reach it. Always false without the server.
+  offline: boolean;
   now: number;
   orders: Order[];
   settings: Settings;
@@ -296,6 +307,9 @@ export function KitchenProvider({ children }: { children: ReactNode }) {
   const [toast, setToast] = useState<string | null>(null);
   const [hears, setHearsState] = useState<Hears>(defaultHears);
   const [user, setUser] = useState<ServerUser | null>(null);
+  const [restoring, setRestoring] = useState(onServer);
+  const [kitchenName, setKitchenName] = useState('Nakawa Kitchen');
+  const [offline, setOffline] = useState(false);
   const arrived = useRef(0);
   const nextSale = useRef(1095);
   const settingsRef = useRef(settings);
@@ -310,8 +324,65 @@ export function KitchenProvider({ children }: { children: ReactNode }) {
     if (e instanceof ServerError && e.status === 401) {
       setToken(null);
       setUser(null);
+      void saveSession(null);
     }
     setToast(e instanceof ServerError ? e.message : 'Something went wrong. Try again.');
+  }, []);
+
+  // Signed in: kept on the phone so the counter opens straight onto the board next time.
+  const signIn = useCallback((u: ServerUser) => {
+    setUser(u);
+    const t = getToken();
+    if (t) void saveSession({ token: t, user: u });
+  }, []);
+
+  const signOut = useCallback(() => {
+    if (getToken()) void api('POST', '/auth/sign-out', undefined, 5000).catch(() => {});
+    setToken(null);
+    setUser(null);
+    void saveSession(null);
+  }, []);
+
+  // At start, on the server: the saved sign-in, if any. With the account saved alongside the token
+  // the board shows at once and GET /me checks it in the background; a server that can't be reached
+  // never holds the app up (the board retries on its own). 401 means signed out elsewhere.
+  useEffect(() => {
+    if (!onServer) return;
+    let gone = false;
+    const restore = async () => {
+      const saved = await loadSession();
+      if (gone) return;
+      if (!saved) {
+        setRestoring(false);
+        return;
+      }
+      setToken(saved.token);
+      if (saved.user) {
+        setUser(saved.user);
+        setRestoring(false);
+      }
+      try {
+        const me = await api<ServerUser>('GET', '/me', undefined, 8000);
+        if (gone) return;
+        if (me.role !== 'kitchen') throw new ServerError(401, 'Sign in with the kitchen’s number.');
+        setUser((u) => (u && u.id === me.id && u.kitchenId === me.kitchenId && u.name === me.name ? u : me));
+        void saveSession({ token: saved.token, user: me });
+      } catch (e) {
+        if (gone) return;
+        if (e instanceof ServerError && e.status === 401) {
+          setToken(null);
+          setUser(null);
+          void saveSession(null);
+        }
+        // Unreachable with no saved account: back to sign in rather than wait.
+      } finally {
+        if (!gone) setRestoring(false);
+      }
+    };
+    void restore();
+    return () => {
+      gone = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -325,11 +396,31 @@ export function KitchenProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!onServer || !user) return;
     let loaded = false;
+    let menuLoaded = false;
     let gone = false;
+    // The menu and the Open switch, until they've loaded once (they may not at a start with no signal).
+    const loadKitchen = () =>
+      api<ServerKitchen[]>('GET', '/kitchens')
+        .then((all) => {
+          const mine = all.find((k) => k.id === user.kitchenId);
+          if (!mine || gone) return;
+          menuLoaded = true;
+          if (mine.name) setKitchenName(mine.name);
+          const menu = menuFromServer(mine);
+          setDishes(menu.dishes);
+          setExtras(menu.extras);
+          setSettings((s) => ({ ...s, open: mine.open }));
+        })
+        .catch((e) => {
+          // No signal shows on the board already (see reload).
+          if (!gone && !(e instanceof ServerError && e.status === 0)) fail(e);
+        });
     const reload = async () => {
+      if (!menuLoaded) void loadKitchen();
       try {
         const list = await api<ServerOrder[]>('GET', '/kitchen/orders');
         if (gone) return;
+        setOffline(false);
         const arriving = loaded;
         loaded = true;
         setOrders((board) => {
@@ -337,20 +428,21 @@ export function KitchenProvider({ children }: { children: ReactNode }) {
           return list.reduce((b, so) => upsert(b, so, arriving), kept);
         });
       } catch (e) {
-        if (!gone) fail(e);
+        if (gone) return;
+        if (e instanceof ServerError && e.status === 0) {
+          // Shown on the board instead of a toast; the live connection retries and reloads.
+          setOffline(true);
+          if (!retry) retry = setTimeout(() => {
+            retry = null;
+            void reload();
+          }, 15_000);
+          return;
+        }
+        fail(e);
       }
     };
+    let retry: ReturnType<typeof setTimeout> | null = null;
     void reload();
-    api<ServerKitchen[]>('GET', '/kitchens')
-      .then((all) => {
-        const mine = all.find((k) => k.id === user.kitchenId);
-        if (!mine || gone) return;
-        const menu = menuFromServer(mine);
-        setDishes(menu.dishes);
-        setExtras(menu.extras);
-        setSettings((s) => ({ ...s, open: mine.open }));
-      })
-      .catch((e) => !gone && fail(e));
     const stop = connectLive((m) => {
       if (m.type === 'hello') void reload();
       if (m.type !== 'order' || m.order.kitchen.id !== user.kitchenId) return;
@@ -363,8 +455,10 @@ export function KitchenProvider({ children }: { children: ReactNode }) {
     });
     return () => {
       gone = true;
+      if (retry) clearTimeout(retry);
       stop();
       setOrders([]);
+      setOffline(false);
     };
   }, [user, fail]);
 
@@ -436,7 +530,11 @@ export function KitchenProvider({ children }: { children: ReactNode }) {
   const value = useMemo<Kitchen>(
     () => ({
       user,
-      signIn: setUser,
+      restoring,
+      signIn,
+      signOut,
+      kitchenName,
+      offline,
       now,
       orders,
       settings,
@@ -499,7 +597,7 @@ export function KitchenProvider({ children }: { children: ReactNode }) {
         for (const dishId of e.dishIds ?? []) void send(`/kitchen/dishes/${encodeURIComponent(dishId)}/extras/${encodeURIComponent(id)}`, { soldOut: !e.soldOut }, undo);
       },
     }),
-    [user, now, orders, settings, dishes, extras, toast, notify, update, hears, send, fail],
+    [user, restoring, signIn, signOut, kitchenName, offline, now, orders, settings, dishes, extras, toast, notify, update, hears, send, fail],
   );
 
   return <KitchenContext.Provider value={value}>{children}</KitchenContext.Provider>;
@@ -513,6 +611,8 @@ export function useKitchen() {
 
 // Riders reaching the hatch within `within` ms, each with the bags they collect.
 export function ridersDue(orders: Order[], now: number, within = 2 * MIN) {
+  // The server doesn't say when a rider reaches the hatch yet, so there's nothing to count down to.
+  if (onServer) return [];
   const runs = new Map<string, { name: string; arrivesAt: number; orders: Order[] }>();
   for (const o of orders) {
     if (!o.rider || (o.status !== 'cooking' && o.status !== 'ready')) continue;

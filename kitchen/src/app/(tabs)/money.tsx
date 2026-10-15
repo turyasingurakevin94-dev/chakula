@@ -1,8 +1,9 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Defs, Line, Path, Pattern, RadialGradient, Rect, Stop } from 'react-native-svg';
-import { Display, Label } from '../../components/ui';
-import { useKitchen } from '../../lib/kitchen';
+import { Body, Display, Icon, Label } from '../../components/ui';
+import { clock, useKitchen, type Order } from '../../lib/kitchen';
+import { onServer } from '../../lib/server';
 import { colors, fonts } from '../../lib/theme';
 
 const LOCKED = 401_400;
@@ -56,8 +57,96 @@ function Hatch() {
   );
 }
 
-// Sample figures from the design. The payout guarantee and timing still need Kevin's sign-off.
 export default function Money() {
+  return onServer ? <ServerMoney /> : <SampleMoney />;
+}
+
+// On the server: real figures from the orders the board already has (this kitchen's last 24 hours),
+// counted from midnight. Food sales are the dishes and extras; delivery fees aren't the kitchen's.
+// Payouts aren't on the server yet, so no account, guarantee or history is shown.
+const IN_PROGRESS: Order['status'][] = ['cooking', 'ready', 'picked'];
+
+function ServerMoney() {
+  const k = useKitchen();
+  const midnight = new Date(k.now);
+  midnight.setHours(0, 0, 0, 0);
+  const today = k.orders.filter((o) => o.sale && o.inAt >= midnight.getTime());
+  const delivered = today.filter((o) => o.status === 'delivered');
+  const going = today.filter((o) => IN_PROGRESS.includes(o.status));
+  const food = (list: Order[]) => list.reduce((sum, o) => sum + (o.sale?.subtotal ?? 0), 0);
+  const sales = food(delivered);
+  const cash = delivered.filter((o) => o.sale?.payMethod === 'cash');
+  const momo = delivered.filter((o) => o.sale?.payMethod !== 'cash');
+  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.cream }} edges={['top']}>
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
+        <View style={{ paddingTop: 22, gap: 2 }}>
+          <Label>{k.kitchenName}</Label>
+          <Display>Money</Display>
+        </View>
+
+        <View style={[s.card, { marginTop: 16, padding: 18, gap: 14 }]} accessibilityLabel={`Food sales today: UGX ${n(sales)} from ${plural(delivered.length, 'delivered order')}`}>
+          <View style={{ gap: 4 }}>
+            <Label>Food sales today</Label>
+            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
+              <Text style={{ fontFamily: fonts.bold, fontSize: 14, color: colors.muted }}>UGX</Text>
+              <Text style={{ fontFamily: fonts.displayMedium, fontSize: 42, lineHeight: 46, letterSpacing: -0.4, color: colors.forest }}>{n(sales)}</Text>
+            </View>
+            <Text style={{ fontFamily: fonts.regular, fontSize: 14, color: colors.segmentText }}>
+              From {plural(delivered.length, 'delivered order')}
+              {delivered.length ? ` · last at ${clock(Math.max(...delivered.map((o) => o.deliveredAt ?? o.inAt)))}` : ''}
+            </Text>
+          </View>
+          {sales > 0 ? (
+            <View style={s.split} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+              {food(momo) > 0 ? <View style={{ flex: food(momo), backgroundColor: colors.forest }} /> : null}
+              {food(cash) > 0 ? <View style={{ flex: food(cash), backgroundColor: colors.orange }} /> : null}
+            </View>
+          ) : null}
+          <View style={{ borderTopWidth: 1, borderTopColor: colors.lineSoft }}>
+            <SplitRow color={colors.forest} title="Mobile money" sub={plural(momo.length, 'order')} amount={food(momo)} />
+            <SplitRow color={colors.orange} title="Cash on delivery" sub={cash.length ? `${plural(cash.length, 'order')} · riders collect it` : plural(0, 'order')} amount={food(cash)} last />
+          </View>
+        </View>
+
+        <View style={[s.card, { marginTop: 12, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12 }]}>
+          <View style={s.iconWell}>
+            <Icon name="clock" size={18} />
+          </View>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={s.rowTitle}>{going.length ? `${plural(going.length, 'order')} still in progress` : 'Nothing in progress'}</Text>
+            <Text style={{ fontFamily: fonts.regular, fontSize: 13, lineHeight: 18, color: colors.segmentText }}>
+              {going.length ? 'Cooking, ready or with a rider. They count once delivered.' : 'Orders count here once they’re delivered.'}
+            </Text>
+          </View>
+          {going.length ? <Text style={{ fontFamily: fonts.bold, fontSize: 15, color: colors.muted }}>{n(food(going))}</Text> : null}
+        </View>
+
+        <Body style={{ color: colors.muted, paddingTop: 18, paddingHorizontal: 4, fontSize: 13, lineHeight: 19 }}>
+          What students paid for the food on orders placed since midnight; delivery fees aren’t included. Payouts to your kitchen are set up with Chakula directly.
+        </Body>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+function SplitRow({ color, title, sub, amount, last }: { color: string; title: string; sub: string; amount: number; last?: boolean }) {
+  return (
+    <View style={[s.paidRow, !last && { borderBottomWidth: 1, borderBottomColor: colors.lineSoft }]}>
+      <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: color }} />
+      <View style={{ flex: 1 }}>
+        <Text style={{ fontFamily: fonts.bold, fontSize: 14, color: colors.forest }}>{title}</Text>
+        <Text style={{ fontFamily: fonts.regular, fontSize: 12, color: colors.muted }}>{sub}</Text>
+      </View>
+      <Text style={{ fontFamily: fonts.bold, fontSize: 15, color: colors.forest }}>{n(amount)}</Text>
+    </View>
+  );
+}
+
+// Sample figures from the design. The payout guarantee and timing still need Kevin's sign-off.
+function SampleMoney() {
   const k = useKitchen();
   const payout = new Date(k.now);
   payout.setHours(22, 0, 0, 0);
@@ -171,5 +260,6 @@ const s = StyleSheet.create({
   rowTitle: { fontFamily: fonts.bold, fontSize: 15, color: colors.forest },
   paidRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
   tick: { width: 28, height: 28, borderRadius: 14, backgroundColor: colors.forest, alignItems: 'center', justifyContent: 'center' },
+  split: { height: 10, borderRadius: 5, overflow: 'hidden', flexDirection: 'row', backgroundColor: colors.lineSoft },
   statement: { height: 48, borderRadius: 14, borderWidth: 1, borderColor: colors.toggleOff, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
 });

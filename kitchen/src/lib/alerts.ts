@@ -1,14 +1,18 @@
 import type { AlertKind, Daily } from './notify';
+import { onServer } from './server';
 
 // "Who hears what": each alert, and whether the counter tablet, the kitchen phone and the owner's
 // phone hear it. Matches the K-Settings board on the notifications canvas.
 
 export type Device = 'tablet' | 'phone' | 'owner';
-export const DEVICES: { key: Device; label: string }[] = [
+const ALL_DEVICES: { key: Device; label: string }[] = [
   { key: 'tablet', label: 'Counter tablet' },
   { key: 'phone', label: 'Kitchen phone' },
   { key: 'owner', label: "Owner's phone" },
 ];
+// On the server only this phone rings: the counter tablet board and the owner's phone and texts
+// aren't connected yet.
+export const DEVICES = onServer ? ALL_DEVICES.filter((d) => d.key === 'phone') : ALL_DEVICES;
 
 // on/off: a switch, with its starting value. locked: always on. sms: always on, by text message.
 // none: not offered on that device.
@@ -18,7 +22,7 @@ export type RowKey = Exclude<AlertKind, 'bell'> | 'offline';
 
 export type Row = { key: RowKey; title: string; detail: string; cells: Record<Device, Cell> };
 
-export const ROWS: Row[] = [
+const ALL_ROWS: Row[] = [
   // The canvas lets the phone turn this off; Kevin asked for the critical ones locked on, since many
   // kitchens have only the phone.
   { key: 'newOrder', title: 'New order', detail: 'Bell once, ticket prints', cells: { tablet: 'locked', phone: 'locked', owner: 'none' } },
@@ -31,6 +35,15 @@ export const ROWS: Row[] = [
   { key: 'offline', title: 'Kitchen went offline', detail: 'Tablet or internet down', cells: { tablet: 'none', phone: 'locked', owner: 'sms' } },
 ];
 
+// On the server, only the alerts that work there: no printer, no rider arrival time, no swaps, and no
+// daily prep list or payout to report yet.
+const SERVER_ROWS: Partial<Record<RowKey, Pick<Row, 'title' | 'detail'>>> = {
+  newOrder: { title: 'New order', detail: 'Bell once' },
+  notSeen: { title: 'Nobody opened it', detail: 'Rings until someone taps' },
+  runningOver: { title: 'Ticket running over', detail: 'Soft chime, turns orange' },
+};
+export const ROWS: Row[] = onServer ? ALL_ROWS.filter((r) => SERVER_ROWS[r.key]).map((r) => ({ ...r, ...SERVER_ROWS[r.key] })) : ALL_ROWS;
+
 export type Hears = Record<RowKey, Record<Device, boolean>>;
 
 export function isLocked(c: Cell) {
@@ -39,9 +52,9 @@ export function isLocked(c: Cell) {
 
 export function defaultHears(): Hears {
   const out = {} as Hears;
-  for (const r of ROWS) {
+  for (const r of ALL_ROWS) {
     out[r.key] = { tablet: false, phone: false, owner: false };
-    for (const d of DEVICES) out[r.key][d.key] = r.cells[d.key] === 'on' || isLocked(r.cells[d.key]);
+    for (const d of ALL_DEVICES) out[r.key][d.key] = r.cells[d.key] === 'on' || isLocked(r.cells[d.key]);
   }
   return out;
 }
