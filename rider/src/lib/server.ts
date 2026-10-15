@@ -191,10 +191,12 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
 
 export async function api<T>(method: 'GET' | 'POST' | 'PATCH', path: string, body?: unknown): Promise<T> {
   let res: Response;
+  // The token this request is sent with; a 401 only signs out if it is still the current one.
+  const sent = token;
   try {
     res = await fetch(`${SERVER_URL}${path}`, {
       method,
-      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      headers: { 'Content-Type': 'application/json', ...(sent ? { Authorization: `Bearer ${sent}` } : {}) },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {
@@ -202,7 +204,7 @@ export async function api<T>(method: 'GET' | 'POST' | 'PATCH', path: string, bod
   }
   const json = await res.json().catch(() => ({}));
   // A refused token: forget it and go back to sign in.
-  if (res.status === 401 && token) {
+  if (res.status === 401 && sent && token === sent) {
     clearSession();
     signedOutHandler?.();
   }

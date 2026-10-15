@@ -441,7 +441,7 @@ export function RiderProvider({ children }: { children: ReactNode }) {
   // A server offer rings a moment after it arrives, when the rider is free for it.
   const nextOffer = offerable[0];
   useEffect(() => {
-    if (!onServer || !online || !nextOffer || stage !== 'waiting' || offer) return;
+    if (!onServer || !user || !online || !nextOffer || stage !== 'waiting' || offer) return;
     const t = setTimeout(() => {
       const bag = toStop(nextOffer);
       setOffer({ runId: nextOffer.id, at: Date.now() });

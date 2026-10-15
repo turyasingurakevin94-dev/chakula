@@ -51,7 +51,7 @@ function openHref(href: string) {
 }
 
 export function AlertsProvider({ children }: { children: ReactNode }) {
-  const { alertsPrimed, primeAlerts, activeOrder } = useAccount();
+  const { alertsPrimed, primeAlerts, activeOrder, orders } = useAccount();
   const [banner, setBanner] = useState<(BannerAlert & { orderKey?: string }) | null>(null);
   const [visible, setVisible] = useState(false);
   const [permission, setPermission] = useState<PermissionState | 'checking'>(() => (notify.available ? 'checking' : 'unavailable'));
@@ -65,7 +65,7 @@ export function AlertsProvider({ children }: { children: ReactNode }) {
   // A banner about a server order ("Moses is at the gate, code 3227") goes once that order is
   // delivered or cancelled, so it never sits stale over the tracking or rate screens.
   const orderKey = banner?.orderKey;
-  const stale = !!orderKey && activeOrder?.serverId !== orderKey;
+  const stale = !!orderKey && !orders.some((o) => o.serverId === orderKey && !o.delivered);
   useEffect(() => {
     if (!stale) return;
     // It slides away at once (see `visible` below); once it has, it is dropped altogether.

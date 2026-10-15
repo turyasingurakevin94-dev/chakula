@@ -67,7 +67,7 @@ export function useServerOrders(user: ServerUser | null, events: OrderEvents) {
   useEffect(() => {
     if (!user) return;
     // "hello" comes on every (re)connect, so anything missed while the signal was gone is loaded again.
-    return connectLive((m) => {
+    const close = connectLive((m) => {
       if (m.type === 'hello') void load();
       if (m.type === 'order') {
         const before = put(m.order);
@@ -79,7 +79,12 @@ export function useServerOrders(user: ServerUser | null, events: OrderEvents) {
         handlers.current.onGone?.(m.orderId, 'taken');
       }
     });
-  }, [user, load, put, remove]);
+    return () => {
+      close();
+      // Signed out (or someone else signed in): drop this rider's orders, so none rings as an offer after.
+      save({});
+    };
+  }, [user, load, put, remove, save]);
 
   // GPS while carrying food, so the student sees the dot move.
   const carrying = !!user && Object.values(orders).some((o) => o.rider?.id === user.id && (o.status === 'picked_up' || o.status === 'at_gate'));
