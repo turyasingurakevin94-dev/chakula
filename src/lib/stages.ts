@@ -40,8 +40,41 @@ export function stageStartsAt(order: Order, stage: Stage) {
 }
 
 // The clock time promised at checkout, counted in real minutes as on the tracking screen.
+// On the server it is the real delivery time once delivered, and a fresh estimate before.
 export function arriveBy(order: Order) {
-  return order.scheduledFor ?? order.placedAt + DELIVERY_MINUTES * 60 * 1000;
+  return stepTimes(order).times[4];
+}
+
+const MIN = 60 * 1000;
+// Minutes from the kitchen starting to each tracking step: confirmed, cooked, on the way, at the gate, at the room.
+const STEP_MINUTES = [0, 2, 3, DELIVERY_MINUTES - 1, DELIVERY_MINUTES];
+
+// A clock time for each of the five tracking steps, and whether it is when the step really happened.
+// Sample orders use the plan from when the order was placed. Server orders use the real times for
+// steps that happened, and estimate the steps still ahead from the latest real one.
+export function stepTimes(order: Order): { times: number[]; real: boolean[] } {
+  const start = order.scheduledFor ? order.scheduledFor - DELIVERY_MINUTES * MIN : order.placedAt;
+  const planned = [order.placedAt, start + 2 * MIN, start + 3 * MIN, (order.scheduledFor ?? order.placedAt + DELIVERY_MINUTES * MIN) - MIN, order.scheduledFor ?? order.placedAt + DELIVERY_MINUTES * MIN];
+  const t = order.times;
+  if (!order.serverId || !t) return { times: planned, real: planned.map(() => false) };
+  const parse = (iso: string | null) => (iso ? Date.parse(iso) : NaN);
+  const actual = [parse(t.placed), parse(t.ready), parse(t.pickedUp), parse(t.atGate), parse(t.delivered)];
+  const times: number[] = [];
+  const real: boolean[] = [];
+  // The latest step that really happened, to count the rest from.
+  let anchor = { at: order.placedAt, minutes: 0 };
+  for (let i = 0; i < 5; i++) {
+    const at = actual[i]!;
+    if (Number.isFinite(at)) {
+      times.push(at);
+      real.push(true);
+      anchor = { at, minutes: STEP_MINUTES[i]! };
+    } else {
+      times.push(Math.max(planned[i]!, anchor.at + (STEP_MINUTES[i]! - anchor.minutes) * MIN));
+      real.push(false);
+    }
+  }
+  return { times, real };
 }
 
 // The two stages that make a sound: picked up, and at the gate.

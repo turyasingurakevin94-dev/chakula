@@ -49,6 +49,8 @@ export default function RootLayout() {
 
 function Screens() {
   const account = useAccount();
+  // On the server, a saved sign-in is checked first, so sign-in doesn't flash before Home.
+  if (account.restoring) return <View style={{ flex: 1, backgroundColor: colors.cream }} />;
   return (
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.cream } }}>
       <Stack.Protected guard={!account.verified}>
