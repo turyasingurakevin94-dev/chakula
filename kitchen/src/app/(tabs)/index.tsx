@@ -2,7 +2,7 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Lines } from '../../components/order';
+import { Countdown, Lines, TimeBar } from '../../components/order';
 import { Body, Button, Card, Display, Icon, Label, Segments, Toggle } from '../../components/ui';
 import { clock, cookingQueue, cookNow, shortName, minutesUntil, ordinal, SERVED_EARLIER, useKitchen, type Order } from '../../lib/kitchen';
 import { colors, fonts } from '../../lib/theme';
@@ -79,7 +79,7 @@ export default function Orders() {
                 {queue.slice(0, 2).map((o, i) => (
                   <CookingCard key={o.id} order={o} rank={i + 1} now={k.now} onReady={() => k.markReady(o.id)} />
                 ))}
-                {queue[2] ? <NextRow order={queue[2]} after={queue.slice(3)} /> : null}
+                {queue[2] ? <NextRow order={queue[2]} after={queue.slice(3)} now={k.now} /> : null}
               </>
             ) : (
               <Empty icon="coffee" text="Nothing to cook right now. New orders print and appear here by themselves." />
@@ -110,8 +110,6 @@ export default function Orders() {
 }
 
 function CookingCard({ order: o, rank, now, onReady }: { order: Order; rank: number; now: number; onReady: () => void }) {
-  const left = minutesUntil(o.dueAt, now);
-  const late = left < 0;
   const first = rank === 1;
   return (
     <Card highlight={first} style={{ gap: 10, paddingTop: first ? 11 : 12, paddingBottom: first ? 13 : 14 }}>
@@ -128,11 +126,9 @@ function CookingCard({ order: o, rank, now, onReady }: { order: Order; rank: num
             In at {clock(o.inAt)} · {o.tag ?? o.place}
           </Text>
         </View>
-        <View style={{ alignItems: 'flex-end' }}>
-          <Text style={s.due}>{late ? 'Late' : 'Due'}</Text>
-          <Text style={{ fontFamily: fonts.bold, fontSize: 15, color: late || left <= 4 ? colors.orangeText : colors.forest }}>{clock(o.dueAt)}</Text>
-        </View>
+        <Countdown order={o} now={now} />
       </Pressable>
+      <TimeBar order={o} now={now} first={first} />
       <Lines order={o} />
       {o.note ? <Text style={s.note}>“{o.note}”</Text> : null}
       <Button height={48} label={`Order ${o.id} is ready`} onPress={onReady}>
@@ -143,7 +139,7 @@ function CookingCard({ order: o, rank, now, onReady }: { order: Order; rank: num
 }
 
 // From the 3rd order on, one compact row; the rest wait their turn.
-function NextRow({ order: o, after }: { order: Order; after: Order[] }) {
+function NextRow({ order: o, after, now }: { order: Order; after: Order[]; now: number }) {
   return (
     <Pressable accessibilityRole="link" accessibilityLabel={`Order ${o.id} for ${o.student}, 3rd in line`} onPress={() => router.push(`/order/${o.id}`)}>
       <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12 }}>
@@ -160,7 +156,7 @@ function NextRow({ order: o, after }: { order: Order; after: Order[] }) {
             {after.length ? ` · then ${after.map((x, i) => `${ordinal(i + 4)}: ${x.id}`).join(', ')}` : ''}
           </Text>
         </View>
-        <Text style={{ fontFamily: fonts.bold, fontSize: 15, color: colors.forest }}>{clock(o.dueAt)}</Text>
+        <Countdown order={o} now={now} size={18} />
       </Card>
     </Pressable>
   );
@@ -214,7 +210,6 @@ const s = StyleSheet.create({
   dot: { width: 8, height: 8, borderRadius: 4 },
   round: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' },
   openPill: { height: 44, borderRadius: 22, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, flexDirection: 'row', alignItems: 'center', gap: 10, paddingLeft: 14, paddingRight: 8 },
-  due: { fontFamily: fonts.bold, fontSize: 11, letterSpacing: 0.66, textTransform: 'uppercase', color: colors.muted },
   cookNow: { backgroundColor: colors.forest, borderRadius: 18, paddingHorizontal: 14, paddingVertical: 12, gap: 8 },
   cookNowLabel: { fontFamily: fonts.bold, fontSize: 11, letterSpacing: 1.1, textTransform: 'uppercase', color: '#A9C4B2' },
   orderHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },

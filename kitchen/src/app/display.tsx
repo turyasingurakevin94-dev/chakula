@@ -179,9 +179,12 @@ function CookCard({ order: o, rank, now, onReady }: { order: Order; rank: number
             </View>
           ) : null}
           <View style={{ flex: 1 }} />
-          <Text style={{ fontFamily: fonts.bold, fontSize: 13, color: left <= 4 ? colors.orangeText : colors.forest }}>
-            Due {clock(o.dueAt)} · {left < 0 ? `${-left} min late` : `${left} min`}
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
+            <Text style={{ fontFamily: fonts.display, fontSize: 22, lineHeight: 24, color: left <= 4 ? colors.orangeText : colors.forest }}>{Math.abs(left)} min</Text>
+            <Text style={{ fontFamily: fonts.regular, fontSize: 12, color: left < 0 ? colors.orangeText : colors.muted }}>
+              {left < 0 ? 'late' : 'left'} · due {clock(o.dueAt)}
+            </Text>
+          </View>
         </View>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
           {o.items.map((i, n) => (
