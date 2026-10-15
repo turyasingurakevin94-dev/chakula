@@ -76,7 +76,7 @@ export function viewOrder(o: OrderRow, lines: LineRow[], viewer: User) {
     kitchen: { id: o.kitchen_id, name: o.kitchen_name },
     dropPoint: { id: o.drop_point_id, name: o.drop_name },
     student: { name: isStudent ? o.student_name : shortName(o.student_name), ...(isRider ? { phone: o.student_phone } : {}) },
-    lines: lines.map((l) => ({ dishId: l.dish_id, name: l.name, unitPrice: l.unit_price, quantity: l.quantity, extras: l.extras, pepper: l.pepper, note: l.note })),
+    lines: lines.map((l) => ({ dishId: l.dish_id, name: l.name, unitPrice: l.unit_price, quantity: l.quantity, extras: typeof l.extras === 'string' ? JSON.parse(l.extras) : l.extras, pepper: l.pepper, note: l.note })),
     subtotal: o.subtotal,
     deliveryFee: o.delivery_fee,
     total: o.total,
@@ -191,7 +191,7 @@ export function createOrders(db: Db, deps: { payments: () => PaymentProvider; on
         );
         for (const [i, l] of priced.entries()) {
           await t.query(
-            'insert into order_lines (order_id, line, dish_id, name, unit_price, quantity, extras, pepper, note) values ($1,$2,$3,$4,$5,$6,$7,$8,$9)',
+            'insert into order_lines (order_id, line, dish_id, name, unit_price, quantity, extras, pepper, note) values ($1,$2,$3,$4,$5,$6,$7::text::jsonb,$8,$9)',
             [id, i, l.dish.id, l.dish.name, l.unit, l.quantity, JSON.stringify(l.extras), l.pepper, l.note],
           );
         }
