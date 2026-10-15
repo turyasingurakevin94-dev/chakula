@@ -9,7 +9,7 @@ import { Incoming } from '../components/incoming';
 import { Icon } from '../components/ui';
 import { KitchenProvider, useKitchen } from '../lib/kitchen';
 import { colors, fonts } from '../lib/theme';
-import { useApplyUpdates } from '../lib/updates';
+import { restartNow, useApplyUpdates } from '../lib/updates';
 
 export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
   return (
@@ -27,7 +27,7 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
 }
 
 export default function RootLayout() {
-  useApplyUpdates();
+  const updateReady = useApplyUpdates();
   const [loaded] = useFonts({ Fraunces_400Regular, Fraunces_500Medium, Fraunces_500Medium_Italic, Fraunces_600SemiBold, DMSans_400Regular, DMSans_500Medium, DMSans_600SemiBold, DMSans_700Bold });
 
   if (!loaded) return <View style={{ flex: 1, backgroundColor: colors.cream }} />;
@@ -45,6 +45,7 @@ export default function RootLayout() {
         </Stack>
         <Incoming />
         <Toast />
+        {updateReady ? <UpdateBar /> : null}
       </KitchenProvider>
     </SafeAreaProvider>
   );
@@ -78,6 +79,26 @@ function Toast() {
         <Icon name="printer" size={18} />
         <Text style={{ fontFamily: fonts.semibold, fontSize: 14, color: colors.forest }}>{toast}</Text>
       </View>
+    </View>
+  );
+}
+
+// A new version has downloaded but the app stayed open, so offer the restart instead of forcing it.
+function UpdateBar() {
+  const insets = useSafeAreaInsets();
+  const { orders } = useKitchen();
+  // Never over the new-order alert, where a mis-tap would restart instead of accepting.
+  if (orders.some((o) => o.status === 'incoming')) return null;
+  return (
+    <View style={{ position: 'absolute', left: 16, right: 16, bottom: insets.bottom + 84, alignItems: 'center' }}>
+      <Pressable
+        accessibilityRole="button"
+        onPress={restartNow}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.forest, borderRadius: 18, paddingHorizontal: 18, paddingVertical: 12, elevation: 6 }}
+      >
+        <Icon name="refresh-cw" size={16} color={colors.cream} />
+        <Text style={{ fontFamily: fonts.semibold, fontSize: 14, color: colors.cream }}>New version ready · Tap to restart</Text>
+      </Pressable>
     </View>
   );
 }

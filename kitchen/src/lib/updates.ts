@@ -1,14 +1,16 @@
 import * as Updates from 'expo-updates';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { AppState } from 'react-native';
 
 // By default a new update only shows on the launch after it downloads. Check on open and when the
 // app comes back to the front. A restart wipes what the student is doing, so restart straight away
 // only if the update arrives within a few seconds of opening; otherwise wait until the app has been
-// in the background and comes back.
+// in the background and comes back. A kitchen phone may never leave the front, so the caller also
+// gets `ready` to offer a restart button.
 const RELOAD_WINDOW_MS = 4000;
 
 export function useApplyUpdates() {
+  const [waiting, setWaiting] = useState(false);
   useEffect(() => {
     if (__DEV__ || !Updates.isEnabled) return;
     const openedAt = Date.now();
@@ -33,6 +35,7 @@ export function useApplyUpdates() {
           if (fetched.isNew || fetched.isRollBackToEmbedded) {
             ready = true;
             if (soon()) await Updates.reloadAsync();
+            else setWaiting(true);
           }
         }
       } catch {
@@ -49,9 +52,14 @@ export function useApplyUpdates() {
     });
     return () => sub.remove();
   }, []);
+  return waiting;
 }
 
-// Shown at the bottom of Profile so we can tell which version a phone is running.
+export function restartNow() {
+  Updates.reloadAsync().catch(() => {});
+}
+
+// Shown at the bottom of Printer and POS so we can tell which version a phone is running.
 export function versionLabel() {
   const parts = [`Version ${Updates.runtimeVersion || '1.0.0'}`];
   if (Updates.isEmbeddedLaunch || !Updates.createdAt) parts.push('built-in code');
