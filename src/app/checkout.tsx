@@ -1,9 +1,10 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { PlacePicker } from '../components/placePicker';
 import { BackHeader, Display, FoodImage, Icon, Label, PrimaryButton, styles as ui } from '../components/ui';
-import { formatClock, lineOptions, places, unitPrice, useAccount, type PayMethod } from '../lib/account';
+import { formatClock, lineOptions, unitPrice, useAccount, type PayMethod } from '../lib/account';
 import { priceBasket, useCart } from '../lib/cart';
 import { findRestaurant, student } from '../lib/data';
 import { colors, fonts, formatUGX } from '../lib/theme';
@@ -36,6 +37,7 @@ function deliverySlots(now: number): Slot[] {
 export default function Checkout() {
   const cart = useCart();
   const account = useAccount();
+  const { width } = useWindowDimensions();
   const [method, setMethod] = useState<PayMethod>('mtn');
   const [choosingMethod, setChoosingMethod] = useState(false);
   const [choosingPlace, setChoosingPlace] = useState(false);
@@ -132,26 +134,18 @@ export default function Checkout() {
                 <Text style={s.change}>{choosingPlace ? 'Done' : 'Change'}</Text>
               </Pressable>
             </View>
-            {choosingPlace
-              ? places.map((p) => {
-                  const on = account.place?.id === p.id;
-                  return (
-                    <Pressable
-                      key={p.id}
-                      accessibilityRole="radio"
-                      accessibilityState={{ checked: on }}
-                      onPress={() => {
-                        account.saveProfile(account.name, p, account.room, account.note);
-                        setChoosingPlace(false);
-                      }}
-                      style={[s.option, s.divider]}
-                    >
-                      <Text style={[s.optionText, on && { fontFamily: fonts.bold, color: colors.forest }]}>{p.name}</Text>
-                      <Radio on={on} />
-                    </Pressable>
-                  );
-                })
-              : null}
+            {choosingPlace ? (
+              <View style={[s.divider, { padding: 14 }]}>
+                <PlacePicker
+                  value={account.place}
+                  width={width - 40 - 28}
+                  onChange={(p) => {
+                    account.saveProfile(account.name, p, account.room, account.note);
+                    setChoosingPlace(false);
+                  }}
+                />
+              </View>
+            ) : null}
             <View style={[s.row, choosingMethod && s.divider]}>
               <Badge m={chosen} />
               <View style={{ flex: 1 }}>

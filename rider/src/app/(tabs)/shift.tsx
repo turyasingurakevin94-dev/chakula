@@ -57,7 +57,7 @@ export default function Shift() {
 
           <Row time="6:30">
             <Bold>Evening shift · meal plans</Bold>
-            <Body style={s.sub}>9 bags · leave the kitchen 6:15 · Blocks A to C</Body>
+            <Body style={s.sub}>9 bags · leave the kitchen 6:15 · Kiswa hostels and campus</Body>
           </Row>
 
           <Row time="Fri" last>

@@ -1,0 +1,138 @@
+[
+ {
+  "id": "main-gate",
+  "name": "Main Gate",
+  "kind": "gate",
+  "lat": 0.326,
+  "lon": 32.6165,
+  "where": "New Port Bell Road. Riders wait by the guard hut."
+ },
+ {
+  "id": "north-gate",
+  "name": "Jinja Road Gate",
+  "kind": "gate",
+  "lat": 0.33012,
+  "lon": 32.61652,
+  "where": "Back gate towards Jinja Road and Evelyn Hostel."
+ },
+ {
+  "id": "east-gate",
+  "name": "URA Side Gate",
+  "kind": "gate",
+  "lat": 0.32966,
+  "lon": 32.61814,
+  "where": "Lane past the Guest House to URA."
+ },
+ {
+  "id": "main-building",
+  "name": "Main Building",
+  "kind": "campus",
+  "lat": 0.32679,
+  "lon": 32.61658,
+  "where": "Front steps."
+ },
+ {
+  "id": "library",
+  "name": "Digital Library",
+  "kind": "campus",
+  "lat": 0.32748,
+  "lon": 32.61647,
+  "where": "Library entrance."
+ },
+ {
+  "id": "dining",
+  "name": "MUBS Dining",
+  "kind": "campus",
+  "lat": 0.32798,
+  "lon": 32.61726,
+  "where": "By the dining hall door."
+ },
+ {
+  "id": "mukiibi",
+  "name": "Mukiibi Lecture Block",
+  "kind": "campus",
+  "lat": 0.32864,
+  "lon": 32.6179,
+  "where": "Ground floor entrance."
+ },
+ {
+  "id": "block-12",
+  "name": "Lecture Block 12",
+  "kind": "campus",
+  "lat": 0.32998,
+  "lon": 32.61669,
+  "where": "North end of campus."
+ },
+ {
+  "id": "guild",
+  "name": "Guild Office Block",
+  "kind": "campus",
+  "lat": 0.3276,
+  "lon": 32.61845,
+  "where": "Next to Walusansa Block."
+ },
+ {
+  "id": "sports",
+  "name": "Sports Ground",
+  "kind": "campus",
+  "lat": 0.32691,
+  "lon": 32.61845,
+  "where": "Pavilion side of the playground."
+ },
+ {
+  "id": "berlin",
+  "name": "Berlin Hostel",
+  "kind": "hostel",
+  "lat": 0.32907,
+  "lon": 32.61715,
+  "where": "On campus, by Berlin junction."
+ },
+ {
+  "id": "evelyn",
+  "name": "Evelyn Hostel",
+  "kind": "hostel",
+  "lat": 0.33038,
+  "lon": 32.6166,
+  "where": "Just outside the Jinja Road gate."
+ },
+ {
+  "id": "akamwesi",
+  "name": "Akamwesi Hostel",
+  "kind": "hostel",
+  "lat": 0.32347,
+  "lon": 32.61918,
+  "where": "Compound gate, Kiswa side, across New Port Bell Road."
+ },
+ {
+  "id": "kabs",
+  "name": "Kabs Hostel",
+  "kind": "hostel",
+  "lat": 0.32303,
+  "lon": 32.61929,
+  "where": "Kiswa side, off Bunyonyi Drive."
+ },
+ {
+  "id": "valley-courts",
+  "name": "Valley Courts Hostel",
+  "kind": "hostel",
+  "lat": 0.32355,
+  "lon": 32.61989,
+  "where": "Kiswa side."
+ },
+ {
+  "id": "dofre",
+  "name": "Dofre Hostel",
+  "kind": "hostel",
+  "lat": 0.32338,
+  "lon": 32.62015,
+  "where": "Kiswa side."
+ },
+ {
+  "id": "bahesi",
+  "name": "Bahesi Hostel",
+  "kind": "hostel",
+  "lat": 0.32247,
+  "lon": 32.61842,
+  "where": "Kiswa side, Bunyonyi Drive."
+ }
+]

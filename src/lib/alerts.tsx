@@ -138,7 +138,7 @@ function orderAlert(order: Order, stage: Stage, place: { block: string; firstNam
     case 2:
       return { id, channel: 'orders', href: '/tracking', icon: 'check', title: `${rider.name} has your food`, body: `Sealed at ${kitchen}. Show code ${order.code} at the gate.` };
     case 3:
-      return { id, channel: 'orders', href: '/tracking', icon: 'map-pin', title: `${rider.name} is at the ${place.block} gate`, body: `Code ${order.code}. Red helmet, UBF 412K.` };
+      return { id, channel: 'orders', href: '/tracking', icon: 'map-pin', title: `${rider.name} is at ${place.block}`, body: `Code ${order.code}. Red helmet, UBF 412K.` };
     case 4:
       return { id, channel: 'updates', href: '/tracking', icon: 'smile', title: `Enjoy your food${place.firstName ? `, ${place.firstName}` : ''}`, body: `Rate ${kitchen} when you’re ready.` };
     default:

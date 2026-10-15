@@ -232,7 +232,7 @@ export function LiveOrderCard({ order, restaurant, stage, block, onPress }: { or
         : stage === 2
           ? { title: `${rider.name} is riding to ${block}`, detail: `Arriving by ${by} · ${rider.detail.split(' · ')[0]}` }
           : stage === 3
-            ? { title: `${rider.name} is at the ${block} gate`, detail: `Code ${order.code} · ${rider.detail.split(' · ')[0]}` }
+            ? { title: `${rider.name} is at ${block}`, detail: `Code ${order.code} · ${rider.detail.split(' · ')[0]}` }
             : { title: `${rider.name} brought your food`, detail: 'Enjoy it' };
   return (
     <Pressable
