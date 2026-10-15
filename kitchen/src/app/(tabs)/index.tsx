@@ -6,6 +6,7 @@ import { JustIn } from '../../components/justin';
 import { Countdown, Lines, TimeBar } from '../../components/order';
 import { Body, Button, Card, Display, Icon, Label, Segments, Toggle } from '../../components/ui';
 import { clock, cookingQueue, cookNow, shortName, minutesUntil, ordinal, SERVED_EARLIER, useKitchen, type Order } from '../../lib/kitchen';
+import { onServer } from '../../lib/server';
 import { colors, fonts } from '../../lib/theme';
 
 type Tab = 'cooking' | 'ready' | 'done';
@@ -24,10 +25,18 @@ export default function Orders() {
       <ScrollView contentContainerStyle={{ paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
         <View style={s.header}>
           <View style={{ gap: 2 }}>
-            <Pressable accessibilityRole="link" accessibilityLabel="Printer and POS settings" onPress={() => router.push('/setup')} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <View style={[s.dot, { backgroundColor: auto ? '#2E9E5B' : colors.orange }]} />
-              <Label>{auto ? 'Printing itself' : 'You accept each order'}</Label>
-            </Pressable>
+            {onServer ? (
+              // Nothing prints on the server version yet: orders just arrive on the board.
+              <View accessibilityLabel={k.offline ? 'Offline: trying to reach Chakula' : 'Live: new orders arrive by themselves'} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <View style={[s.dot, { backgroundColor: k.offline ? colors.orange : '#2E9E5B' }]} />
+                <Label>{k.offline ? 'Offline · retrying' : 'Live'}</Label>
+              </View>
+            ) : (
+              <Pressable accessibilityRole="link" accessibilityLabel="Printer and POS settings" onPress={() => router.push('/setup')} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <View style={[s.dot, { backgroundColor: auto ? '#2E9E5B' : colors.orange }]} />
+                <Label>{auto ? 'Printing itself' : 'You accept each order'}</Label>
+              </Pressable>
+            )}
             <Display>Orders</Display>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -90,18 +99,18 @@ export default function Orders() {
                 {queue[2] ? <NextRow order={queue[2]} after={queue.slice(3)} now={k.now} /> : null}
               </>
             ) : (
-              <Empty icon="coffee" text="Nothing to cook right now. New orders print and appear here by themselves." />
+              <Empty icon={k.offline ? 'wifi-off' : 'coffee'} text={k.offline ? 'Can’t reach Chakula right now. Orders show here as soon as the connection is back.' : onServer ? 'Nothing to cook right now. New orders appear here by themselves.' : 'Nothing to cook right now. New orders print and appear here by themselves.'} />
             )
           ) : tab === 'ready' ? (
             ready.length ? (
               <>
-                <Label>Waiting for riders · they scan the bag seal</Label>
+                <Label>{onServer ? 'Waiting for riders' : 'Waiting for riders · they scan the bag seal'}</Label>
                 {ready.map((o) => (
                   <ReadyCard key={o.id} order={o} now={k.now} />
                 ))}
               </>
             ) : (
-              <Empty icon="package" text="No bags waiting. Tap Ready on an order when it's packed and sealed." />
+              <Empty icon="package" text={onServer ? "No bags waiting. Tap Ready on an order when it's packed." : "No bags waiting. Tap Ready on an order when it's packed and sealed."} />
             )
           ) : (
             <>
@@ -109,7 +118,7 @@ export default function Orders() {
                 <DoneRow key={o.id} order={o} />
               ))}
               {SERVED_EARLIER ? <Body style={{ color: colors.muted, textAlign: 'center', paddingTop: 6 }}>{SERVED_EARLIER} more served earlier today</Body> : null}
-              {!SERVED_EARLIER && !done.length ? <Empty icon="check-circle" text="Orders riders have picked up today show here." /> : null}
+              {!SERVED_EARLIER && !done.length ? <Empty icon="check-circle" text={onServer ? 'Orders riders have picked up in the last day show here.' : 'Orders riders have picked up today show here.'} /> : null}
             </>
           )}
         </View>
@@ -181,11 +190,16 @@ function ReadyCard({ order: o, now }: { order: Order; now: number }) {
         <Text style={s.orderId}>{o.id}</Text>
         <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
           <Text style={s.student}>{o.student}</Text>
-          <Text style={s.meta}>Ready {o.readyAt ? clock(o.readyAt) : ''} · sealed and on the shelf</Text>
+          <Text style={s.meta}>Ready {o.readyAt ? clock(o.readyAt) : ''} · {onServer ? 'on the shelf' : 'sealed and on the shelf'}</Text>
         </View>
         <View style={{ alignItems: 'flex-end', gap: 2 }}>
-          <Text style={{ fontFamily: fonts.bold, fontSize: 14, color: here ? colors.orangeText : colors.forest }}>{r ? (here ? `${r.name} is here` : `${r.name} in ${Math.max(mins, 1)} min`) : 'Finding a rider'}</Text>
-          <Text style={s.meta}>{here ? 'Scanning the seal' : 'Nothing to do'}</Text>
+          {onServer ? (
+            // The server knows who took the run, not when they reach the counter.
+            <Text style={{ fontFamily: fonts.bold, fontSize: 14, color: colors.forest }}>{r ? `${r.name} is coming` : 'Finding a rider'}</Text>
+          ) : (
+            <Text style={{ fontFamily: fonts.bold, fontSize: 14, color: here ? colors.orangeText : colors.forest }}>{r ? (here ? `${r.name} is here` : `${r.name} in ${Math.max(mins, 1)} min`) : 'Finding a rider'}</Text>
+          )}
+          <Text style={s.meta}>{here && !onServer ? 'Scanning the seal' : 'Nothing to do'}</Text>
         </View>
       </Card>
     </Pressable>
@@ -205,7 +219,7 @@ function DoneRow({ order: o }: { order: Order }) {
   );
 }
 
-function Empty({ icon, text }: { icon: 'coffee' | 'package' | 'check-circle'; text: string }) {
+function Empty({ icon, text }: { icon: 'coffee' | 'package' | 'check-circle' | 'wifi-off'; text: string }) {
   return (
     <Card style={{ alignItems: 'center', gap: 10, paddingVertical: 28 }}>
       <Icon name={icon} size={26} color={colors.sub} />

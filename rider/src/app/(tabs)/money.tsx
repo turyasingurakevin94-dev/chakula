@@ -3,7 +3,8 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { Body, Headline, Italic, Label, Num } from '../../components/ui';
-import { PER_DROP, useRider } from '../../lib/rider';
+import { clockTime, PER_DROP, useRider } from '../../lib/rider';
+import { onServer } from '../../lib/server';
 import { colors, fonts, money } from '../../lib/theme';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -11,8 +12,90 @@ const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const PAST = [24_000, 38_500, 29_000, 33_000, 26_500, 41_000];
 const SCALE = 44_000;
 
-// Money: tonight's pay as a banknote, the week so far and today's tips.
+// Money: tonight's pay as a banknote, the week so far and today's tips. On the server: today's
+// deliveries only, since pay history, tips and payouts aren't on the server yet.
 export default function Money() {
+  return onServer ? <ServerMoney /> : <SampleMoney />;
+}
+
+function ServerMoney() {
+  const { drops, pay, cash, today } = useRider();
+  const delivered = today?.orders ?? [];
+
+  return (
+    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: colors.cream }}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 28 }}>
+        <View style={{ paddingHorizontal: 20, paddingTop: 22, gap: 4 }}>
+          <Label>Money</Label>
+          <Headline>
+            Your <Italic>pay</Italic>
+          </Headline>
+        </View>
+
+        <View style={{ paddingHorizontal: 20, paddingTop: 18 }}>
+          <View style={s.note}>
+            <Svg width={320} height={220} viewBox="0 0 320 220" style={{ position: 'absolute', right: -90, top: -50 }}>
+              {[100, 86, 72, 58, 44].map((r) => (
+                <Circle key={r} cx={200} cy={110} r={r} fill="none" stroke={colors.lineSoft} />
+              ))}
+            </Svg>
+            <View style={{ gap: 2 }}>
+              <Label>Today&apos;s pay · estimate</Label>
+              <Text style={{ fontFamily: fonts.display, fontSize: 42, lineHeight: 46, color: colors.forest }}>{money(pay)}</Text>
+              <Text style={{ fontFamily: fonts.bold, fontSize: 12, letterSpacing: 1.44, color: colors.muted }}>UGANDA SHILLINGS</Text>
+            </View>
+            <View style={{ gap: 6 }}>
+              <Line label={`${drops} ${drops === 1 ? 'drop' : 'drops'} × ${money(PER_DROP)}`} value={money(drops * PER_DROP)} />
+              <Line label="Tips from students" value="None yet" />
+            </View>
+            <View style={{ borderTopWidth: 1, borderTopColor: colors.line, paddingTop: 10 }}>
+              <Body style={{ fontSize: 13, lineHeight: 19, color: colors.muted }}>Counted from today&apos;s deliveries. The Chakula team confirms your payout with you.</Body>
+            </View>
+          </View>
+        </View>
+
+        <View style={{ paddingHorizontal: 20, paddingTop: 22 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', paddingBottom: 4 }}>
+            <Label>Delivered today</Label>
+            <Num size={20}>{drops}</Num>
+          </View>
+          {delivered.length === 0 ? (
+            <Body style={{ paddingVertical: 10, fontSize: 14, lineHeight: 20, color: colors.muted }}>
+              No deliveries yet today. Each one adds UGX {money(PER_DROP)}.
+            </Body>
+          ) : (
+            delivered.map((o, i) => (
+              <View key={o.id} style={[s.tip, i < delivered.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.line }]}>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={{ fontFamily: fonts.bold, fontSize: 14, color: colors.forest }}>
+                    Bag {o.number} · {o.dropPoint}
+                  </Text>
+                  <Text style={{ fontFamily: fonts.regular, fontSize: 13, color: colors.muted }}>
+                    {o.kitchen} · {clockTime(new Date(o.deliveredAt))} · {o.payMethod === 'cash' ? `cash ${money(o.total)} collected` : 'paid in the app'}
+                  </Text>
+                </View>
+                <Num size={17}>+{money(PER_DROP)}</Num>
+              </View>
+            ))
+          )}
+        </View>
+
+        <View style={{ paddingHorizontal: 20, paddingTop: 18, gap: 4 }}>
+          <Label>This week</Label>
+          <Body style={{ fontSize: 14, lineHeight: 20, color: colors.muted }}>Earlier days show here once pay history is on Chakula.</Body>
+        </View>
+
+        <View style={{ paddingHorizontal: 20, paddingTop: 14 }}>
+          <Pressable accessibilityRole="link" onPress={() => router.push('/cash')} style={{ paddingVertical: 6, alignSelf: 'flex-start' }}>
+            <Text style={{ fontFamily: fonts.bold, fontSize: 14, color: colors.forest, textDecorationLine: 'underline' }}>Cash you&apos;re holding: {money(cash)}</Text>
+          </Pressable>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+function SampleMoney() {
   const { drops, tips, tipTotal, pay, cash } = useRider();
   const day = new Date().getDay();
   const week = DAYS.map((_, i) => (i < day ? PAST[i] : i === day ? pay : 0));

@@ -5,6 +5,7 @@ import { Stack, type ErrorBoundaryProps } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Pressable, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { PaySheet } from '../components/pay-sheet';
 import { AccountProvider, useAccount } from '../lib/account';
 import { AlertsProvider } from '../lib/alerts';
 import { CartProvider } from '../lib/cart';
@@ -40,6 +41,7 @@ export default function RootLayout() {
           <AlertsProvider>
             <StatusBar style="dark" />
             <Screens />
+            <PaySheet />
           </AlertsProvider>
         </CartProvider>
       </AccountProvider>
@@ -49,6 +51,8 @@ export default function RootLayout() {
 
 function Screens() {
   const account = useAccount();
+  // On the server, a saved sign-in is checked first, so sign-in doesn't flash before Home.
+  if (account.restoring) return <View style={{ flex: 1, backgroundColor: colors.cream }} />;
   return (
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.cream } }}>
       <Stack.Protected guard={!account.verified}>

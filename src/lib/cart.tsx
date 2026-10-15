@@ -1,6 +1,7 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
 import { unitPrice, type Order, type OrderLine, type PayMethod } from './account';
 import { findRestaurant, student, type MenuItem } from './data';
+import { onServer } from './server';
 
 // The same dish with different extras, pepper or note is a separate line.
 export type CartLine = OrderLine & { key: string };
@@ -12,11 +13,13 @@ function lineKey(itemId: string, o: Options = {}) {
   return [itemId, extras, o.pepper ?? '', (o.note ?? '').trim().toLowerCase()].join('|');
 }
 
-// What a basket of these lines costs, with delivery. Orders paid from the wallet always deliver free.
+// What a basket of these lines costs, with delivery. In the prototype, wallet orders and the first
+// few deliveries are free. The server charges each kitchen's delivery fee whatever the method, so
+// on the server this shows what it will really charge.
 export function priceBasket(restaurantId: string | null, lines: OrderLine[], method?: PayMethod) {
   const subtotal = lines.reduce((n, l) => n + l.quantity * unitPrice(l), 0);
   const deliveryFee = restaurantId ? findRestaurant(restaurantId)?.deliveryFee ?? 0 : 0;
-  const freeDelivery = student.freeDeliveriesLeft > 0 || deliveryFee === 0 || method === 'wallet';
+  const freeDelivery = deliveryFee === 0 || (!onServer && (student.freeDeliveriesLeft > 0 || method === 'wallet'));
   return { subtotal, deliveryFee, freeDelivery, total: subtotal + (freeDelivery ? 0 : deliveryFee) };
 }
 

@@ -22,7 +22,7 @@ export type ServerOrder = {
   subtotal: number;
   deliveryFee: number;
   total: number;
-  payMethod: 'mtn' | 'airtel' | 'cash';
+  payMethod: 'mtn' | 'airtel' | 'cash' | 'wallet';
   paid: boolean;
   cashToCollect: number;
   // Only on the student's own orders.
@@ -32,11 +32,20 @@ export type ServerOrder = {
   times: Record<'placed' | 'paid' | 'ready' | 'riderAssigned' | 'pickedUp' | 'atGate' | 'delivered' | 'cancelled', string | null>;
   cancelReason: string | null;
 };
+// GET /wallet. Amounts are whole shillings: + money in, − an order.
+export type ServerWalletEntry = { id: string; amount: number; kind: 'topup' | 'order' | 'refund'; createdAt: string; orderId: string | null; orderNumber: number | null; topupId: string | null; method: string | null };
+export type ServerWallet = {
+  balance: number;
+  entries: ServerWalletEntry[];
+  pendingTopups: { id: string; amount: number; method: string; createdAt: string }[];
+  limits: { min: number; max: number };
+};
 export type LiveMessage =
   | { type: 'hello'; userId: string; role: string }
   | { type: 'order'; order: ServerOrder }
   | { type: 'run-taken'; orderId: string }
-  | { type: 'rider-location'; orderId: string; lat: number; lng: number; at: string };
+  | { type: 'rider-location'; orderId: string; lat: number; lng: number; at: string }
+  | { type: 'wallet'; balance: number; topup?: { id: string; status: 'succeeded' | 'failed'; amount: number } };
 
 // The server's own words ("Chicken pilau just ran out."), ready to show.
 export class ServerError extends Error {
@@ -47,26 +56,100 @@ export class ServerError extends Error {
   }
 }
 
-// Kept in memory: signing in again after the app restarts. Saving it on the phone needs a
-// secure storage module, which comes with the next APK.
+// The session token, kept on the phone so the student stays signed in. On Android and iOS it goes
+// in expo-secure-store, loaded lazily inside try/catch: APKs built before it was added lack its native
+// code, and OTA updates still run this JavaScript on them, so there it stays in memory only (signing
+// in again after the app restarts). On web it goes in localStorage.
+const TOKEN_KEY = 'chakula.student.token';
+type SecureStore = typeof import('expo-secure-store');
+let secure: SecureStore | null | undefined;
+function loadSecureStore(): SecureStore | null {
+  if (secure !== undefined) return secure;
+  secure = null;
+  if (Platform.OS === 'web') return secure;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    secure = require('expo-secure-store') as SecureStore;
+  } catch {
+    secure = null;
+  }
+  return secure;
+}
+
+function webStorage(): Storage | null {
+  try {
+    return Platform.OS === 'web' && typeof localStorage !== 'undefined' ? localStorage : null;
+  } catch {
+    return null;
+  }
+}
+
+// Saved on the phone; quietly does nothing where it can't (old APKs, private browsing).
+export async function saveItem(key: string, value: string | null) {
+  try {
+    const web = webStorage();
+    if (web) {
+      if (value === null) web.removeItem(key);
+      else web.setItem(key, value);
+      return;
+    }
+    const store = loadSecureStore();
+    if (!store) return;
+    if (value === null) await store.deleteItemAsync(key);
+    else await store.setItemAsync(key, value);
+  } catch {
+    // Not saved: the student signs in again next time, as before.
+  }
+}
+
+export async function readItem(key: string): Promise<string | null> {
+  try {
+    const web = webStorage();
+    if (web) return web.getItem(key);
+    return (await loadSecureStore()?.getItemAsync(key)) ?? null;
+  } catch {
+    return null;
+  }
+}
+
 let token: string | null = null;
 export const getToken = () => token;
 export const setToken = (t: string | null) => {
   token = t;
+  void saveItem(TOKEN_KEY, t);
+};
+
+// The token saved by an earlier session, if any. Also puts it back in memory for api().
+export async function restoreToken(): Promise<string | null> {
+  const saved = await readItem(TOKEN_KEY);
+  if (saved && !token) token = saved;
+  return token;
+}
+
+// Called when the server says the token is no longer good (401), so the app can go back to sign-in.
+let onSignedOut: (() => void) | null = null;
+export const setOnSignedOut = (fn: (() => void) | null) => {
+  onSignedOut = fn;
 };
 
 export async function api<T>(method: 'GET' | 'POST' | 'PATCH', path: string, body?: unknown): Promise<T> {
   let res: Response;
+  // The token this request is sent with; a 401 only signs out if it is still the current one.
+  const sent = token;
   try {
     res = await fetch(`${SERVER_URL}${path}`, {
       method,
-      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      headers: { 'Content-Type': 'application/json', ...(sent ? { Authorization: `Bearer ${sent}` } : {}) },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {
     throw new ServerError(0, 'No connection. Check your data and try again.');
   }
   const json = await res.json().catch(() => ({}));
+  if (res.status === 401 && sent && token === sent && !path.startsWith('/auth/')) {
+    setToken(null);
+    onSignedOut?.();
+  }
   if (!res.ok) throw new ServerError(res.status, json.error ?? 'Something went wrong. Try again.');
   return json as T;
 }

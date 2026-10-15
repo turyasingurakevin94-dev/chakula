@@ -6,6 +6,7 @@ import Svg, { Circle } from 'react-native-svg';
 import { Body, Button, Headline, Icon, Italic, Label, Num } from '../components/ui';
 import { getAlertPermission, openAppSettings, openBatterySettings, requestAlertPermission, runChannelIsLoud, sendAlert, type AlertPermission } from '../lib/notify';
 import { SMS_BACKUP, today, useRider } from '../lib/rider';
+import { onServer } from '../lib/server';
 import { colors, fonts } from '../lib/theme';
 import { versionLabel } from '../lib/updates';
 
@@ -13,7 +14,7 @@ const CHECKS = ['Delivery box clean and dry', 'Helmet and Chakula jacket on', 'F
 
 // Start your shift: the Gold Rider card and a three-tap check, then the alerts check, then online.
 export default function Start() {
-  const { checks, toggleCheck, notify, drops, riderName } = useRider();
+  const { checks, toggleCheck, notify, drops, riderName, user } = useRider();
   const [step, setStep] = useState<1 | 2>(1);
 
   const go = () => {
@@ -47,18 +48,21 @@ export default function Start() {
             </Svg>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <Text style={{ fontFamily: fonts.displayItalic, fontSize: 18, color: colors.forest }}>Chakula</Text>
-              <View style={s.gold}>
-                <Text style={{ fontFamily: fonts.bold, fontSize: 10, letterSpacing: 1.6, color: colors.forest }}>GOLD RIDER</Text>
-              </View>
+              {onServer ? null : (
+                <View style={s.gold}>
+                  <Text style={{ fontFamily: fonts.bold, fontSize: 10, letterSpacing: 1.6, color: colors.forest }}>GOLD RIDER</Text>
+                </View>
+              )}
             </View>
             <View style={{ gap: 2 }}>
-              <Num size={26}>Moses Kato</Num>
-              <Body style={{ fontSize: 13, color: colors.muted }}>Rider 07 · Nakawa campus</Body>
+              <Num size={26}>{onServer ? (user?.name ?? 'Rider') : 'Moses Kato'}</Num>
+              <Body style={{ fontSize: 13, color: colors.muted }}>{onServer ? `Rider · ${user?.phone ?? ''}` : 'Rider 07 · Nakawa campus'}</Body>
             </View>
             <View style={{ flexDirection: 'row', gap: 22 }}>
-              <Stat value="4.9" label="rating" />
-              <Stat value="98%" label="on time" />
-              <Stat value={String(203 + drops)} label="drops" />
+              {/* Ratings, on-time and lifetime drops aren't on the server yet. */}
+              {onServer ? null : <Stat value="4.9" label="rating" />}
+              {onServer ? null : <Stat value="98%" label="on time" />}
+              {onServer ? <Stat value={String(drops)} label={drops === 1 ? 'drop today' : 'drops today'} /> : <Stat value={String(203 + drops)} label="drops" />}
             </View>
           </View>
         </View>
@@ -83,7 +87,7 @@ export default function Start() {
               <Text style={{ flex: 1, fontFamily: fonts.semibold, fontSize: 15, color: colors.forest }}>{c}</Text>
             </Pressable>
           ))}
-          <Body style={{ paddingTop: 8, fontSize: 13, color: colors.muted }}>Phone at 82% and location on. We checked those for you.</Body>
+          {onServer ? null : <Body style={{ paddingTop: 8, fontSize: 13, color: colors.muted }}>Phone at 82% and location on. We checked those for you.</Body>}
         </View>
       </ScrollView>
 
@@ -91,7 +95,7 @@ export default function Start() {
         <Button height={60} size={17} style={{ borderRadius: 20 }} onPress={go}>
           Next: check my alerts
         </Button>
-        <Text style={{ textAlign: 'center', fontFamily: fonts.regular, fontSize: 13, color: colors.muted }}>11:30 to 2:30 · first pickup 11:45 · 14 drops planned</Text>
+        {onServer ? null : <Text style={{ textAlign: 'center', fontFamily: fonts.regular, fontSize: 13, color: colors.muted }}>11:30 to 2:30 · first pickup 11:45 · 14 drops planned</Text>}
         <Text style={{ textAlign: 'center', fontFamily: fonts.regular, fontSize: 11, color: colors.chevron }}>{versionLabel()}</Text>
       </View>
     </SafeAreaView>
@@ -177,8 +181,9 @@ function AlertsCheck() {
           },
         }
       : { title: 'Battery saver is off', detail: 'Alerts arrive on time', state: 'ok' },
-    { title: `SMS backup to ${SMS_BACKUP}`, detail: 'Works when data runs out', state: 'ok' },
   );
+  // The server doesn't text riders yet, so there's no SMS backup to promise there.
+  if (!onServer) rows.push({ title: `SMS backup to ${SMS_BACKUP}`, detail: 'Works when data runs out', state: 'ok' });
   const blocking = rows.filter((r) => r.state === 'fix').length;
 
   const test = async () => {
@@ -205,10 +210,15 @@ function AlertsCheck() {
     router.replace('/');
   };
 
+  // Tips and the shift rota aren't on the server yet, so those switches only show on sample data.
   const prefs = [
     { title: 'Read student notes aloud', detail: 'In riding mode', on: voice, set: setVoice },
-    { title: 'Tips as they come', detail: 'Or all in tonight’s pay', on: tipAlerts, set: setTipAlerts },
-    { title: 'Shift reminder', detail: '30 min before, with your runs', on: shiftReminder, set: setShiftReminder },
+    ...(onServer
+      ? []
+      : [
+          { title: 'Tips as they come', detail: 'Or all in tonight’s pay', on: tipAlerts, set: setTipAlerts },
+          { title: 'Shift reminder', detail: '30 min before, with your runs', on: shiftReminder, set: setShiftReminder },
+        ]),
   ];
 
   return (

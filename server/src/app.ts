@@ -8,10 +8,11 @@ import { HttpError } from './errors.ts';
 import { createLive } from './live.ts';
 import { createNotify } from './notify.ts';
 import { createOrders, placeOrderInput, viewOrder, type OrderEvent } from './orders.ts';
-import { createPayments, type PaymentProvider } from './providers/payments.ts';
+import { createPayments, type PaymentProvider, type PayOutcome } from './providers/payments.ts';
 import { createPush } from './providers/push.ts';
 import { createSms } from './providers/sms.ts';
 import { seed } from './seed.ts';
+import { balanceOf, createWallet, topUpInput, type WalletChange } from './wallet.ts';
 
 type Env = { Variables: { user: User; token: string } };
 
@@ -25,14 +26,26 @@ export async function createServer(config: Config) {
   const live = createLive(auth);
   const notify = createNotify(db, push, sms);
   let payments: PaymentProvider;
+  // The student's app hears about every change to their wallet, with the new balance.
+  const walletChanged = ({ userId, topup }: WalletChange) => {
+    balanceOf(db, userId)
+      .then((balance) => live.wallet(userId, { balance, ...(topup ? { topup } : {}) }))
+      .catch((err) => console.error('[wallet]', err));
+  };
   const orders = createOrders(db, {
     payments: () => payments,
     onEvent: (e: OrderEvent) => {
       live.order(e);
       notify(e).catch((err) => console.error('[notify]', err));
     },
+    onWallet: (userId) => walletChanged({ userId }),
   });
-  payments = createPayments(config, (o) => orders.settle(o));
+  const wallet = createWallet(db, { payments: () => payments, onChange: walletChanged });
+  // A payment is either a wallet top-up or an order's.
+  const settle = async (o: PayOutcome) => {
+    if (!(await wallet.settle(o))) await orders.settle(o);
+  };
+  payments = createPayments(config, settle);
 
   const app = new Hono<Env>();
   // The apps' web previews call from another origin. Phones don't need it.
@@ -147,6 +160,14 @@ export async function createServer(config: Config) {
     return c.json(viewOrder(order, lines, user));
   });
 
+  // ---- Wallet ----
+  app.get('/wallet', signedIn('student'), async (c) => c.json(await wallet.view(c.get('user'))));
+  app.post('/wallet/topups', signedIn('student'), async (c) => {
+    const user = c.get('user');
+    return c.json(await wallet.startTopup(user, await body(c, topUpInput), { returnUrl: `${publicOrigin(c)}/payments/done` }), 201);
+  });
+  app.get('/wallet/topups/:id', signedIn('student'), async (c) => c.json(await wallet.topup(c.get('user'), c.req.param('id')!)));
+
   // ---- Payment provider callbacks ----
   // Flutterwave's page lands here when the student is done. The app's in-app browser closes when it
   // sees the chakula:// address; anywhere else this page just says to go back to the app.
@@ -170,7 +191,7 @@ export async function createServer(config: Config) {
       console.error('[payments] webhook refused:', e instanceof Error ? e.message : e);
       return c.json({ ok: false }, 401);
     }
-    if (outcome) await orders.settle(outcome);
+    if (outcome) await settle(outcome);
     return c.json({ ok: true });
   });
 
@@ -213,6 +234,8 @@ export async function createServer(config: Config) {
     const user = c.get('user');
     return c.json((await orders.forRider(user)).map(({ order, lines }) => viewOrder(order, lines, user)));
   });
+  // Today's deliveries, the drops count and the cash collected, for the Run and Money screens.
+  app.get('/rider/today', signedIn('rider'), async (c) => c.json(await orders.today(c.get('user'))));
   app.post('/rider/orders/:id/take', signedIn('rider'), riderStep(orders.take));
   app.post('/rider/orders/:id/pick-up', signedIn('rider'), riderStep(orders.pickUp));
   app.post('/rider/orders/:id/at-gate', signedIn('rider'), riderStep(orders.atGate));
@@ -244,6 +267,7 @@ export async function createServer(config: Config) {
     push,
     live,
     orders,
+    wallet,
     async close() {
       live.close();
       await db.close();

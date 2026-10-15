@@ -51,7 +51,8 @@ export function createNotify(db: Db, push: Push, sms: Sms) {
           `Chakula: ${rider} is at ${order.drop_name}. Your code is ${order.handover_code}.`);
         break;
       case 'cancelled':
-        if (order.paid_at === null && order.cancel_reason === 'Cancelled by the student') {
+        // Cash and wallet orders the student took back in their first minute: stop the kitchen.
+        if (order.cancel_reason === 'Cancelled by the student') {
           const kitchen = await tokens("u.role = 'kitchen' and u.kitchen_id = $1 and p.app = 'kitchen'", [order.kitchen_id]);
           await push.send(kitchen.map((t) => ({ to: t.token, title: `Order ${order.number} cancelled`, body: 'The student took it back. Don’t cook it.', data, channel: 'bell' })));
         }

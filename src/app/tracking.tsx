@@ -8,7 +8,7 @@ import { DELIVERY_MINUTES, formatClock, minutesLeft, useAccount, useNow, type Or
 import { useAlerts } from '../lib/alerts';
 import { along, dist, findDropPoint, fitView, headingAhead, kitchenAt, route } from '../lib/campus';
 import { findRestaurant } from '../lib/data';
-import { blockName, riderFor, stageOf } from '../lib/stages';
+import { blockName, riderFor, stageOf, stepTimes } from '../lib/stages';
 import { colors, fonts, smallCaps } from '../lib/theme';
 
 const MIN = 60 * 1000;
@@ -17,9 +17,11 @@ export default function Tracking() {
   const account = useAccount();
   // A server order that didn't go through leaves nothing to track.
   const hasOrder = !!(account.activeOrder ?? account.orders[0]);
+  // On the server, opened straight here (a reload, a tapped alert): wait for the orders first.
+  const loaded = account.ordersLoaded;
   useEffect(() => {
-    if (!hasOrder) router.dismissTo('/');
-  }, [hasOrder]);
+    if (!hasOrder && loaded) router.dismissTo('/');
+  }, [hasOrder, loaded]);
   return hasOrder ? <TrackOrder /> : null;
 }
 
@@ -37,21 +39,23 @@ function TrackOrder() {
   const stage = stageOf(order, active, now);
   const live = !!order.serverId;
   const rider = riderFor(order);
-  const minutes = !active ? 0 : live ? Math.max(1, Math.ceil((arriveByTime(order) - now) / MIN)) : minutesLeft(order, now);
+  // Clock times for each step, counted in real minutes from when the kitchen starts. On the server,
+  // steps that happened show when they really did; only the ones ahead are estimates.
+  const { times } = stepTimes(order);
+  const start = order.scheduledFor ? order.scheduledFor - DELIVERY_MINUTES * MIN : order.placedAt;
+  const arriveBy = times[4]!;
+  const minutes = !active ? 0 : live ? Math.max(1, Math.ceil((arriveBy - now) / MIN)) : minutesLeft(order, now);
   const waiting = stage === 0;
   const arrived = stage === 4;
-  // Clock times for each step, counted in real minutes from when the kitchen starts.
-  const start = order.scheduledFor ? order.scheduledFor - DELIVERY_MINUTES * MIN : order.placedAt;
-  const arriveBy = order.scheduledFor ?? order.placedAt + DELIVERY_MINUTES * MIN;
   const block = blockName(account.place?.name);
   const atGate = stage === 3;
   const room = account.room || 'your door';
   const steps = [
-    { label: order.status === 'awaiting_payment' ? 'Approve the MoMo prompt' : 'Order confirmed', time: order.placedAt },
-    { label: stage === 1 ? 'Being cooked' : 'Cooked and packed', time: start + 2 * MIN },
-    { label: 'On the way', time: start + 3 * MIN },
-    { label: `At ${block}`, time: arriveBy - MIN },
-    { label: `At ${room}`, time: arriveBy },
+    { label: order.status === 'awaiting_payment' ? 'Approve the MoMo prompt' : 'Order confirmed', time: times[0]! },
+    { label: stage === 1 ? 'Being cooked' : 'Cooked and packed', time: times[1]! },
+    { label: 'On the way', time: times[2]! },
+    { label: `At ${block}`, time: times[3]! },
+    { label: `At ${room}`, time: times[4]! },
   ];
   // How far along the route the rider dot is.
   // On the server it follows the rider's GPS, or sits on the road until the first fix.
@@ -154,7 +158,7 @@ function TrackOrder() {
                 </View>
                 <View style={{ flex: 1, gap: 1 }}>
                   <Text style={{ fontFamily: fonts.bold, fontSize: 15, color: colors.forest }}>{rider.name} knows you’re coming</Text>
-                  <Text style={{ fontFamily: fonts.regular, fontSize: 12, color: colors.muted }}>He’ll wait at {block}. Nobody will call you.</Text>
+                  <Text style={{ fontFamily: fonts.regular, fontSize: 12, color: colors.muted }}>{live ? `${rider.name} will wait` : 'He’ll wait'} at {block}. Nobody will call you.</Text>
                 </View>
               </View>
             ) : (
@@ -182,7 +186,7 @@ function TrackOrder() {
           </View>
 
           <Text style={{ fontFamily: fonts.regular, fontSize: 12, lineHeight: 17, color: colors.muted }}>
-            We’ll alert you when {live ? 'your rider reaches' : 'Brian reaches'} your gate. If he’s more than 10 minutes late, your next delivery is free.
+            We’ll alert you when {live ? 'your rider reaches' : 'Brian reaches'} your gate. If your rider is more than 10 minutes late, your next delivery is free.
           </Text>
 
           {arrived && !order.rating ? <PrimaryButton floating label="Rate your order" onPress={() => router.push({ pathname: '/rate', params: { id: order.id } })}>Got it? Rate your order</PrimaryButton> : null}
@@ -190,10 +194,6 @@ function TrackOrder() {
       </ScrollView>
     </View>
   );
-}
-
-function arriveByTime(order: { scheduledFor?: number; placedAt: number }) {
-  return order.scheduledFor ?? order.placedAt + DELIVERY_MINUTES * MIN;
 }
 
 // How far along the road the rider is, from their last GPS point: the share of the straight-line

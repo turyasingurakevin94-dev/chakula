@@ -6,7 +6,7 @@ import Svg, { Path } from 'react-native-svg';
 import { CampusMap, mapInk, type MapLine, type MapPin } from '../components/map';
 import { Body, Bold, Icon, Label } from '../components/ui';
 import { along, findDropPoint, fitView, followView, headingAhead, kitchenAt, minutesFor, nextTurn, route, type Route } from '../lib/campus';
-import { KITCHEN, useRider, type Stop } from '../lib/rider';
+import { contactStudent, KITCHEN, kitchenOf, useRider, type Stop } from '../lib/rider';
 import { onServer } from '../lib/server';
 import { colors, fonts, money } from '../lib/theme';
 
@@ -159,7 +159,12 @@ export default function RouteScreen() {
           <View style={[s.progressFill, { width: `${Math.round(moved * 100)}%` }]} />
         </View>
         <View style={{ flexDirection: 'row', gap: 10 }}>
-          <Pressable accessibilityRole="button" accessibilityLabel={`Call ${stop.first}`} onPress={() => notify(`Calling ${stop.first} through Chakula`)} style={s.call}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Call ${stop.first}`}
+            onPress={() => (onServer ? contactStudent(stop, 'call', notify) : notify(`Calling ${stop.first} through Chakula`))}
+            style={s.call}
+          >
             <Icon name="phone" size={22} />
           </Pressable>
           <View style={s.next}>
@@ -168,9 +173,9 @@ export default function RouteScreen() {
             </View>
             <View style={{ flex: 1 }}>
               <Bold size={14} color={colors.forest} style={{ fontFamily: fonts.bold }}>
-                {next ? `Then ${next.place}` : `Then back to ${KITCHEN}`}
+                {next ? `Then ${next.place}` : `Then back to ${onServer ? kitchenOf(run.stops[0]!) : KITCHEN}`}
               </Bold>
-              <Text style={{ fontFamily: fonts.regular, fontSize: 12, color: colors.muted }}>{next ? `${next.cash ? 'Cash' : 'Paid'} · about ${next.eta}` : `Run done · pays UGX ${money(run.pays)}`}</Text>
+              <Text style={{ fontFamily: fonts.regular, fontSize: 12, color: colors.muted }}>{next ? `${next.cash ? 'Cash' : 'Paid'}${next.eta ? ` · about ${next.eta}` : ''}` : `Run done · pays UGX ${money(run.pays)}`}</Text>
             </View>
           </View>
         </View>

@@ -1,9 +1,10 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CountdownRing } from '../components/alerts';
 import { BackButton, Body, Button, Headline, Icon, Label, type IconName } from '../components/ui';
-import { clockTime, KITCHEN, PER_DROP, RIDER, useNow, useRider, WAIT_MS, type Stop } from '../lib/rider';
+import { clockTime, contactStudent, KITCHEN, kitchenOf, PER_DROP, RIDER, useNow, useRider, WAIT_MS, type Stop } from '../lib/rider';
+import { onServer } from '../lib/server';
 import { colors, fonts, money } from '../lib/theme';
 
 // Sample timings for what Chakula does while the rider waits: from arrival, when each step starts
@@ -29,12 +30,27 @@ export default function Help() {
     else router.dismissTo('/route');
   };
 
-  const problems: { icon: IconName; title: string; sub: string; done: string }[] = [
-    { icon: 'map-pin', title: "Can't find the place", sub: "The student's pin, plus a photo of the entrance", done: 'Pin and entrance photo sent to you' },
-    { icon: 'package', title: 'Seal broken or bag damaged', sub: 'One photo; the kitchen remakes it', done: `${KITCHEN} is remaking it. Take one photo of the bag.` },
-    { icon: 'dollar-sign', title: "Student won't pay cash", sub: 'Keep the bag; we sort it out with them', done: 'Keep the bag. Chakula is calling the student.' },
-    { icon: 'tool', title: 'Bike trouble', sub: 'We pass your bags to the nearest rider', done: 'Finding the nearest rider for your bags' },
-  ];
+  // On the server nothing is reported from here yet, so each problem says what the rider can do now.
+  const kitchen = stop ? kitchenOf(stop) : 'the kitchen';
+  const problems: { icon: IconName; title: string; sub: string; done: string; act?: () => void }[] = onServer
+    ? [
+        {
+          icon: 'map-pin',
+          title: "Can't find the place",
+          sub: stop?.phone ? `Call ${stop.first} for directions` : 'Call the student from the handover screen',
+          done: 'Call the student from the handover screen',
+          act: stop?.phone ? () => contactStudent(stop, 'call', notify) : undefined,
+        },
+        { icon: 'package', title: 'Seal broken or bag damaged', sub: 'Show the kitchen before you ride off', done: `Show ${kitchen} the bag. Reporting it in the app comes later.` },
+        { icon: 'dollar-sign', title: "Student won't pay cash", sub: 'Keep the bag; don’t hand it over', done: `Keep the bag and take it back to ${kitchen}.` },
+        { icon: 'tool', title: 'Bike trouble', sub: 'Tell the kitchen so another rider can help', done: `Call ${kitchen} so another rider can take your bags.` },
+      ]
+    : [
+        { icon: 'map-pin', title: "Can't find the place", sub: "The student's pin, plus a photo of the entrance", done: 'Pin and entrance photo sent to you' },
+        { icon: 'package', title: 'Seal broken or bag damaged', sub: 'One photo; the kitchen remakes it', done: `${KITCHEN} is remaking it. Take one photo of the bag.` },
+        { icon: 'dollar-sign', title: "Student won't pay cash", sub: 'Keep the bag; we sort it out with them', done: 'Keep the bag. Chakula is calling the student.' },
+        { icon: 'tool', title: 'Bike trouble', sub: 'We pass your bags to the nearest rider', done: 'Finding the nearest rider for your bags' },
+      ];
 
   const problemList = (
     <View style={{ paddingHorizontal: 20, paddingTop: 22 }}>
@@ -43,7 +59,7 @@ export default function Help() {
         <Pressable
           key={p.title}
           accessibilityRole="button"
-          onPress={() => notify(p.done)}
+          onPress={() => (p.act ? p.act() : notify(p.done))}
           style={({ pressed }) => [s.row, i < problems.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.line }, pressed && { opacity: 0.7 }]}
         >
           <Icon name={p.icon} size={22} />
@@ -57,8 +73,18 @@ export default function Help() {
   );
 
   const accident = (
-    <Button variant="danger" icon="alert-triangle" height={58} size={16} onPress={() => notify('Calling Chakula · stay where you are safe')}>
-      Accident or danger · call Chakula
+    <Button
+      variant="danger"
+      icon="alert-triangle"
+      height={58}
+      size={16}
+      onPress={() =>
+        onServer
+          ? Linking.openURL('tel:999').catch(() => notify('Stay where you are safe and call 999'))
+          : notify('Calling Chakula · stay where you are safe')
+      }
+    >
+      {onServer ? 'Accident or danger · call 999' : 'Accident or danger · call Chakula'}
     </Button>
   );
 
@@ -80,7 +106,7 @@ export default function Help() {
   const mins = Math.floor(left / 60_000);
   const secs = Math.floor((left % 60_000) / 1000);
   const spot = stop.place.split(',')[0];
-  const steps = trail(stop, arrivedAt, elapsed, left);
+  const steps = onServer ? serverTrail(stop, arrivedAt, left) : trail(stop, arrivedAt, elapsed, left);
 
   return (
     <SafeAreaView edges={['top', 'bottom']} style={{ flex: 1, backgroundColor: colors.cream }}>
@@ -100,11 +126,22 @@ export default function Help() {
             <Text style={{ fontFamily: fonts.bold, fontSize: 12, letterSpacing: 1.2, color: colors.muted, marginTop: 2 }}>LEFT TO WAIT</Text>
           </CountdownRing>
           <Headline size={30} style={{ textAlign: 'center' }}>
-            {left > 0 ? `We're getting ${stop.first} for you` : `${stop.first} didn't come`}
+            {left > 0 ? (onServer ? `Waiting for ${stop.first}` : `We're getting ${stop.first} for you`) : `${stop.first} didn't come`}
           </Headline>
           <Body style={{ fontSize: 15, lineHeight: 21, color: colors.body, textAlign: 'center' }}>
-            {left > 0 ? `Stay at ${spot}. You don't need to keep calling.` : `Take the bag back to ${KITCHEN}. You're still paid for this drop.`}
+            {onServer
+              ? left > 0
+                ? `Stay at ${spot}. Chakula told ${stop.first} you're here; give them a call too.`
+                : `Take the bag back to ${kitchenOf(stop)}.`
+              : left > 0
+                ? `Stay at ${spot}. You don't need to keep calling.`
+                : `Take the bag back to ${KITCHEN}. You're still paid for this drop.`}
           </Body>
+          {onServer ? (
+            <Button variant="secondary" icon="phone" height={48} style={{ alignSelf: 'stretch', borderRadius: 16, gap: 8 }} onPress={() => contactStudent(stop, 'call', notify)}>
+              {`Call ${stop.first}`}
+            </Button>
+          ) : null}
         </View>
 
         <View style={{ paddingHorizontal: 20, paddingTop: 20 }}>
@@ -138,10 +175,12 @@ export default function Help() {
       </ScrollView>
 
       <View style={{ paddingHorizontal: 20, paddingBottom: 18, paddingTop: 8, gap: 10 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-          <Icon name="shield" size={18} color={colors.sealed} />
-          <Text style={{ fontFamily: fonts.bold, fontSize: 14, color: colors.forest }}>You&apos;re paid UGX {money(PER_DROP)} either way</Text>
-        </View>
+        {onServer ? null : (
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+            <Icon name="shield" size={18} color={colors.sealed} />
+            <Text style={{ fontFamily: fonts.bold, fontSize: 14, color: colors.forest }}>You&apos;re paid UGX {money(PER_DROP)} either way</Text>
+          </View>
+        )}
         {left > 0 ? (
           <Button height={60} size={17} style={{ borderRadius: 20 }} onPress={() => router.back()}>
             {`${stop.first} is here, enter code`}
@@ -154,6 +193,17 @@ export default function Help() {
       </View>
     </SafeAreaView>
   );
+}
+
+// On the server: what really happened. Arriving told the student (push, or SMS without the app);
+// there's no Chakula call line or saved friend yet.
+function serverTrail(stop: Stop, arrivedAt: number, left: number): Step[] {
+  const at = (ms: number) => clockTime(new Date(arrivedAt + ms));
+  return [
+    { title: `${stop.first} was told you're here`, detail: 'By notification, or SMS without the app', time: at(0), state: 'done' },
+    { title: `Call ${stop.first}`, detail: stop.phone ?? 'Number not on this order', time: left > 0 ? 'now' : '', state: left > 0 ? 'now' : 'done' },
+    { title: 'Return the bag to the kitchen', detail: `Only if nobody comes by ${at(WAIT_MS)}`, time: at(WAIT_MS), state: left === 0 ? 'now' : 'todo' },
+  ];
 }
 
 // What Chakula does while the rider waits. The saved-friend step only shows when the student set one.

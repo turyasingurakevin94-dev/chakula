@@ -1,3 +1,4 @@
+import { requireOptionalNativeModule } from 'expo';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
@@ -22,7 +23,7 @@ export type ServerOrder = {
   subtotal: number;
   deliveryFee: number;
   total: number;
-  payMethod: 'mtn' | 'airtel' | 'cash';
+  payMethod: 'mtn' | 'airtel' | 'cash' | 'wallet';
   paid: boolean;
   cashToCollect: number;
   // Only on the student's own orders.
@@ -47,26 +48,166 @@ export class ServerError extends Error {
   }
 }
 
-// Kept in memory: signing in again after the app restarts. Saving it on the phone needs a
-// secure storage module, which comes with the next APK.
+// The session: the token and who it belongs to. Kept on the phone (expo-secure-store) so the rider
+// stays signed in when the app restarts. APKs built before secure-store was added don't have its
+// native module, and OTA updates still run this code there, so it is loaded lazily and those phones
+// fall back to memory only (signing in each time, as before). The web preview uses localStorage.
+const SESSION_KEY = 'chakula-rider-session';
 let token: string | null = null;
 export const getToken = () => token;
-export const setToken = (t: string | null) => {
+
+type SecureStoreModule = typeof import('expo-secure-store');
+let secureStore: SecureStoreModule | null | undefined;
+function loadSecureStore(): SecureStoreModule | null {
+  if (secureStore !== undefined) return secureStore;
+  secureStore = null;
+  if (Platform.OS === 'web') return secureStore;
+  try {
+    // Check the native side first: the JS package throws on import without it.
+    if (!requireOptionalNativeModule('ExpoSecureStore')) return secureStore;
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    secureStore = require('expo-secure-store') as SecureStoreModule;
+  } catch {
+    secureStore = null;
+  }
+  return secureStore;
+}
+
+function webStorage(): Storage | null {
+  if (Platform.OS !== 'web') return null;
+  try {
+    return typeof localStorage !== 'undefined' ? localStorage : null;
+  } catch {
+    return null;
+  }
+}
+
+type Saved = { token: string; user: ServerUser };
+
+function save(saved: Saved | null) {
+  const value = saved ? JSON.stringify(saved) : null;
+  const web = webStorage();
+  if (web) {
+    try {
+      if (value) web.setItem(SESSION_KEY, value);
+      else web.removeItem(SESSION_KEY);
+    } catch {
+      // Private mode or blocked storage: memory only.
+    }
+    return;
+  }
+  const store = loadSecureStore();
+  if (!store) return;
+  try {
+    (value ? store.setItemAsync(SESSION_KEY, value) : store.deleteItemAsync(SESSION_KEY)).catch(() => {});
+  } catch {
+    // Memory only.
+  }
+}
+
+async function load(): Promise<Saved | null> {
+  let raw: string | null = null;
+  const web = webStorage();
+  if (web) {
+    try {
+      raw = web.getItem(SESSION_KEY);
+    } catch {
+      raw = null;
+    }
+  } else {
+    const store = loadSecureStore();
+    if (store) raw = await withTimeout(store.getItemAsync(SESSION_KEY), 3000).catch(() => null);
+  }
+  if (!raw) return null;
+  try {
+    const saved = JSON.parse(raw) as Saved;
+    return typeof saved?.token === 'string' && saved.user?.id ? saved : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setSession(t: string, user: ServerUser) {
   token = t;
-};
+  save({ token: t, user });
+}
+
+function clearSession() {
+  token = null;
+  save(null);
+}
+
+// Told when the server refuses the token (signed out elsewhere, or it ran out).
+let signedOutHandler: (() => void) | null = null;
+export function whenSignedOut(fn: (() => void) | null) {
+  signedOutHandler = fn;
+}
+
+// On start: the saved session, checked with GET /me. Null when there is none or the server refused
+// it. When the server can't be reached in time the saved rider is used, so a weak signal never
+// keeps the app on a blank screen; the live socket catches up once the signal is back.
+export async function restoreSession(timeoutMs = 6000): Promise<ServerUser | null> {
+  const saved = await load();
+  if (!saved) return null;
+  token = saved.token;
+  try {
+    const user = await withTimeout(api<ServerUser>('GET', '/me'), timeoutMs);
+    if (user.role !== 'rider' && user.role !== 'admin') {
+      clearSession();
+      return null;
+    }
+    setSession(saved.token, user);
+    return user;
+  } catch (e) {
+    if (e instanceof ServerError && (e.status === 401 || e.status === 403)) {
+      clearSession();
+      return null;
+    }
+    return saved.user;
+  }
+}
+
+export async function signOut() {
+  const had = token;
+  clearSession();
+  if (had) await withTimeout(fetch(`${SERVER_URL}/auth/sign-out`, { method: 'POST', headers: { Authorization: `Bearer ${had}` } }), 4000).catch(() => {});
+}
+
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new ServerError(0, 'No connection. Check your data and try again.')), ms);
+    p.then(
+      (v) => {
+        clearTimeout(t);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(t);
+        reject(e);
+      },
+    );
+  });
+}
 
 export async function api<T>(method: 'GET' | 'POST' | 'PATCH', path: string, body?: unknown): Promise<T> {
   let res: Response;
+  // The token this request is sent with; a 401 only signs out if it is still the current one.
+  const sent = token;
   try {
     res = await fetch(`${SERVER_URL}${path}`, {
       method,
-      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      headers: { 'Content-Type': 'application/json', ...(sent ? { Authorization: `Bearer ${sent}` } : {}) },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {
     throw new ServerError(0, 'No connection. Check your data and try again.');
   }
   const json = await res.json().catch(() => ({}));
+  // A refused token: forget it and go back to sign in.
+  if (res.status === 401 && sent && token === sent) {
+    clearSession();
+    signedOutHandler?.();
+  }
   if (!res.ok) throw new ServerError(res.status, json.error ?? 'Something went wrong. Try again.');
   return json as T;
 }
@@ -75,7 +216,7 @@ export const sendCode = (phone: string, app: AppName) => api<{ phone: string; de
 
 export async function verifyCode(phone: string, code: string, app: AppName) {
   const res = await api<{ token: string; user: ServerUser; isNew: boolean }>('POST', '/auth/verify', { phone, code, app });
-  setToken(res.token);
+  setSession(res.token, res.user);
   void registerPush(app);
   return res;
 }

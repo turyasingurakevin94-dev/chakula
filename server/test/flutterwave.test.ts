@@ -112,3 +112,30 @@ test('a pending transaction waits for the next webhook', async () => {
   assert.equal((await webhook(4)).status, 200);
   assert.equal((await call('GET', `/orders/${placed.json.order.id}`, { token })).json.status, 'awaiting_payment');
 });
+
+test('a wallet top-up through Flutterwave credits once, even when the webhook repeats', async () => {
+  const token = await studentToken('0782 777 888');
+  const started = await call('POST', '/wallet/topups', { token, body: { amount: 5000, method: 'mtn' } });
+  assert.equal(started.status, 201, JSON.stringify(started.json));
+  assert.equal(started.json.redirectUrl, 'https://checkout.example/approve');
+  const charge = charges.at(-1)!;
+  assert.deepEqual([charge.tx_ref, charge.network, charge.phone_number, charge.amount, charge.redirect_url], [started.json.id, 'MTN', '0782777888', 5000, 'http://localhost/payments/done']);
+
+  // Pending until the verified webhook.
+  txs.set(5, { id: 5, status: 'pending', amount: 5000, currency: 'UGX', tx_ref: charge.tx_ref });
+  await webhook(5);
+  assert.equal((await call('GET', '/wallet', { token })).json.balance, 0);
+
+  txs.set(5, { id: 5, status: 'successful', amount: 5000, currency: 'UGX', tx_ref: charge.tx_ref });
+  for (let i = 0; i < 3; i++) assert.equal((await webhook(5)).status, 200);
+  const w = await call('GET', '/wallet', { token });
+  assert.equal(w.json.balance, 5000);
+  assert.equal(w.json.entries.length, 1);
+
+  // A short payment credits nothing.
+  const short = await call('POST', '/wallet/topups', { token, body: { amount: 20_000, method: 'airtel' } });
+  txs.set(6, { id: 6, status: 'successful', amount: 2000, currency: 'UGX', tx_ref: short.json.id });
+  await webhook(6);
+  assert.equal((await call('GET', `/wallet/topups/${short.json.id}`, { token })).json.status, 'failed');
+  assert.equal((await call('GET', '/wallet', { token })).json.balance, 5000);
+});

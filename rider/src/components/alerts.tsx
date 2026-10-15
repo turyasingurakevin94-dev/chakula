@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
 import { onAlertTap } from '../lib/notify';
 import { OFFER_MS, pickupOrder, useNow, useRider, type KitchenPickup } from '../lib/rider';
+import { onServer } from '../lib/server';
 import { colors, fonts, money } from '../lib/theme';
 import { Body, Bold, Icon, Italic, Label, Num, TearLine } from './ui';
 
@@ -89,11 +90,17 @@ function OfferScreen({ at }: { at: number }) {
             <View style={{ paddingHorizontal: 20, paddingTop: 18, paddingBottom: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', gap: 12 }}>
               <View style={{ flex: 1, gap: 4 }}>
                 <Label>
-                  Pick up {run.pickupAt} · {run.away}
+                  {onServer ? `Pick up ${run.pickupAt === 'when sealed' ? 'when sealed' : `from ${run.pickupAt}`}` : `Pick up ${run.pickupAt} · ${run.away}`}
                 </Label>
                 <Num size={28}>{kitchens[0].name}</Num>
                 <Body style={{ fontSize: 13, color: colors.body }}>
-                  {kitchens.length > 1 ? `Then ${kitchens.slice(1).map((k) => k.name).join(', ')} · sealed as you arrive` : 'Bags sealed by the time you arrive'}
+                  {onServer
+                    ? run.stops.every((x) => x.status === 'ready')
+                      ? `${run.stops.length === 1 ? 'Bag' : 'Bags'} sealed and waiting`
+                      : 'The kitchen is cooking it now'
+                    : kitchens.length > 1
+                      ? `Then ${kitchens.slice(1).map((k) => k.name).join(', ')} · sealed as you arrive`
+                      : 'Bags sealed by the time you arrive'}
                 </Body>
               </View>
               {run.slot !== undefined ? (
@@ -114,7 +121,7 @@ function OfferScreen({ at }: { at: number }) {
                   {stop.cash > 0 ? (
                     <Text style={{ fontFamily: fonts.semibold, fontSize: 14, color: colors.chipText }}>cash {money(stop.cash)}</Text>
                   ) : (
-                    <Text style={{ fontFamily: fonts.regular, fontSize: 14, color: colors.muted }}>paid · {stop.eta}</Text>
+                    <Text style={{ fontFamily: fonts.regular, fontSize: 14, color: colors.muted }}>{stop.eta ? `paid · ${stop.eta}` : 'paid'}</Text>
                   )}
                 </View>
               ))}

@@ -1,15 +1,28 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Display, FoodImage, PrimaryButton, Stars } from '../components/ui';
 import { DELIVERY_MINUTES, useAccount } from '../lib/account';
 import { findRestaurant } from '../lib/data';
+import { onServer } from '../lib/server';
+import { riderFor } from '../lib/stages';
 import { colors, fonts } from '../lib/theme';
 
 const tips = [0, 500, 1000, 2000];
 
 export default function Rate() {
+  const account = useAccount();
+  const hasOrder = account.orders.length > 0;
+  // On the server, opened straight here (a reload): wait for the orders; with none, go home.
+  const loaded = account.ordersLoaded;
+  useEffect(() => {
+    if (!hasOrder && loaded) router.dismissTo('/');
+  }, [hasOrder, loaded]);
+  return hasOrder ? <RateOrder /> : null;
+}
+
+function RateOrder() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const account = useAccount();
   const order = account.orders.find((o) => o.id === id) ?? account.orders[0]!;
@@ -17,6 +30,13 @@ export default function Rate() {
   const [stars, setStars] = useState(0);
   const [tip, setTip] = useState(0);
   const first = order.lines[0]?.item;
+  // The rider who brought this order: the server's named rider, else "your rider".
+  const rider = riderFor(order).name;
+  const named = rider !== 'your rider';
+  // How long it really took, on the server; the sample orders use the demo's delivery time.
+  const placed = order.times?.placed ? Date.parse(order.times.placed) : NaN;
+  const delivered = order.times?.delivered ? Date.parse(order.times.delivered) : NaN;
+  const tookMinutes = Number.isFinite(placed) && Number.isFinite(delivered) ? Math.max(1, Math.round((delivered - placed) / 60000)) : DELIVERY_MINUTES;
 
   const send = () => {
     if (!stars) return;
@@ -33,7 +53,7 @@ export default function Rate() {
             Enjoy your food, {account.firstName}
           </Display>
           <Text style={s.meta14}>
-            {first?.name ?? 'Your order'} from {restaurant?.name ?? 'the kitchen'} · {DELIVERY_MINUTES} min
+            {first?.name ?? 'Your order'} from {restaurant?.name ?? 'the kitchen'} · {tookMinutes} min
           </Text>
         </View>
 
@@ -42,8 +62,10 @@ export default function Rate() {
           <Stars value={stars} size={40} gap={8} onPick={setStars} />
         </View>
 
+        {/* On the server there are no rider payouts yet, so a tip can't be passed on: none is offered. */}
+        {onServer ? null : (
         <View style={{ gap: 10, marginTop: 26 }}>
-          <Text style={[s.question, { textAlign: 'center' }]}>Tip Brian, your rider?</Text>
+          <Text style={[s.question, { textAlign: 'center' }]}>{named ? `Tip ${rider}, your rider?` : 'Tip your rider?'}</Text>
           <View style={{ flexDirection: 'row', gap: 8 }}>
             {tips.map((t) => {
               const on = t === tip;
@@ -62,8 +84,9 @@ export default function Rate() {
               );
             })}
           </View>
-          <Text style={[s.meta12, { textAlign: 'center' }]}>From your wallet. All of it goes to Brian.</Text>
+          <Text style={[s.meta12, { textAlign: 'center' }]}>From your wallet. All of it goes to {rider}.</Text>
         </View>
+        )}
       </ScrollView>
 
       <View style={{ paddingHorizontal: 16, paddingBottom: 12, gap: 4 }}>

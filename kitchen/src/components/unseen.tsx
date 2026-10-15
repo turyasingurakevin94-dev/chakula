@@ -4,6 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { clock, demoNow, minutesUntil, useKitchen } from '../lib/kitchen';
+import { onServer } from '../lib/server';
 import { colors, fonts } from '../lib/theme';
 import { first, unseen } from './alerts';
 import { Chip, DishPhoto } from './ui';
@@ -31,7 +32,8 @@ export function Unseen() {
   const shownAt = o.inAt + SHOWN_AFTER;
   const ringing = Math.max(0, Math.round((t - shownAt) / 1000));
   const left = minutesUntil(o.dueAt, t);
-  const texted = t >= shownAt + SMS_AFTER;
+  // The owner's text and the pause need the server to send them; it doesn't yet.
+  const texted = !onServer && t >= shownAt + SMS_AFTER;
   const name = first(o);
   const printing = k.settings.printTicket;
 
@@ -46,11 +48,11 @@ export function Unseen() {
               Bell ringing · {Math.floor(ringing / 60)}:{String(ringing % 60).padStart(2, '0')}
             </Text>
           </View>
-          <Text style={{ fontFamily: fonts.semibold, fontSize: 13, color: colors.muted }}>{printing ? 'Printer not answering' : 'Ticket printing is off'}</Text>
+          <Text style={{ fontFamily: fonts.semibold, fontSize: 13, color: colors.muted }}>{onServer ? 'Nobody has opened it' : printing ? 'Printer not answering' : 'Ticket printing is off'}</Text>
         </View>
 
         <View style={{ paddingHorizontal: 20, paddingTop: 18, gap: 6 }}>
-          <Text style={s.kicker}>{printing ? 'Didn’t print' : 'No ticket'} · cook from this screen</Text>
+          <Text style={s.kicker}>{onServer ? 'New order' : printing ? 'Didn’t print' : 'No ticket'} · cook from this screen</Text>
           <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
             <Text style={{ fontFamily: fonts.display, fontSize: 64, lineHeight: 64, color: colors.forest }}>{o.id}</Text>
             <View style={{ alignItems: 'flex-end' }}>
@@ -125,27 +127,31 @@ export function Unseen() {
           accessibilityLabel={`Seen order ${o.id}, we're cooking`}
           onPress={() => {
             k.markSeen(o.id);
-            k.notify(`${name} now sees “Kitchen has your order”`);
+            k.notify(onServer ? `Order ${o.id} seen` : `${name} now sees “Kitchen has your order”`);
           }}
           style={({ pressed }) => [s.seen, { opacity: pressed ? 0.92 : 1 }]}
         >
           <Text style={{ fontFamily: fonts.bold, fontSize: 18, color: colors.cream }}>Seen it, we’re cooking</Text>
         </Pressable>
-        <View style={{ flexDirection: 'row', gap: 10 }}>
-          <Pressable accessibilityRole="button" onPress={() => k.notify(`Sent ${o.id} to the printer again. Still no answer`)} style={s.secondary}>
-            <Text style={s.secondaryText}>Print again</Text>
-          </Pressable>
-          <Pressable accessibilityRole="button" onPress={() => k.notify(`Write ${o.id} on the bag; the rider will check the name`)} style={s.secondary}>
-            <Text style={s.secondaryText}>Bag seal by hand</Text>
-          </Pressable>
-        </View>
+        {onServer ? null : (
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <Pressable accessibilityRole="button" onPress={() => k.notify(`Sent ${o.id} to the printer again. Still no answer`)} style={s.secondary}>
+              <Text style={s.secondaryText}>Print again</Text>
+            </Pressable>
+            <Pressable accessibilityRole="button" onPress={() => k.notify(`Write ${o.id} on the bag; the rider will check the name`)} style={s.secondary}>
+              <Text style={s.secondaryText}>Bag seal by hand</Text>
+            </Pressable>
+          </View>
+        )}
         <View style={{ flexDirection: 'row', gap: 8, alignItems: 'flex-start' }}>
           <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={colors.muted} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ marginTop: 2 }}>
             <Circle cx={12} cy={12} r={9} />
             <Path d="M12 7v5l3 2" />
           </Svg>
           <Text style={{ flex: 1, fontFamily: fonts.regular, fontSize: 13, lineHeight: 19, color: colors.muted }}>
-            {name} sees “Kitchen has your order” only after you tap. {texted ? `We texted the owner at ${clock(shownAt + SMS_AFTER)}.` : `No tap by ${clock(shownAt + SMS_AFTER)}: we text the owner.`} {clock(shownAt + PAUSE_AFTER)}: new orders pause.
+            {onServer
+              ? `The bell keeps ringing until someone taps. Write ${o.id} on the bag so the rider finds it.`
+              : `${name} sees “Kitchen has your order” only after you tap. ${texted ? `We texted the owner at ${clock(shownAt + SMS_AFTER)}.` : `No tap by ${clock(shownAt + SMS_AFTER)}: we text the owner.`} ${clock(shownAt + PAUSE_AFTER)}: new orders pause.`}
           </Text>
         </View>
       </View>

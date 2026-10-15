@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PlacePicker } from '../components/placePicker';
@@ -7,6 +7,7 @@ import { BackHeader, Display, FoodImage, Icon, Label, PrimaryButton, styles as u
 import { formatClock, lineOptions, unitPrice, useAccount, type PayMethod } from '../lib/account';
 import { priceBasket, useCart } from '../lib/cart';
 import { findRestaurant, student } from '../lib/data';
+import { onServer } from '../lib/server';
 import { colors, fonts, formatUGX } from '../lib/theme';
 
 type Method = { id: PayMethod; name: string; detail?: string; badge: string; badgeBg: string; badgeFg: string };
@@ -44,24 +45,39 @@ export default function Checkout() {
   // Null means as soon as possible.
   const [slot, setSlot] = useState<number | null>(null);
   const [now] = useState(Date.now);
-  const slots = deliverySlots(now);
+  // The balance may have changed on another phone or a late top-up.
+  const { refreshWallet } = account;
+  useEffect(() => {
+    if (onServer) refreshWallet();
+  }, [refreshWallet]);
+  // The server has no scheduled orders yet (a later slot would be sent as "now"), so it offers only Now.
+  const slots = onServer ? [] : deliverySlots(now);
   const restaurant = findRestaurant(cart.restaurantId ?? '');
   const minutes = restaurant?.minutes ?? 15;
   const prep = Math.max(0, ...cart.lines.map((l) => l.item.prepMinutes ?? 0));
   const price = priceBasket(cart.restaurantId, cart.lines, method);
   const shortOfFunds = account.balance < price.total;
+  // On the server, the wallet's balance is real (and free delivery isn't a wallet perk there).
+  const walletDetail = onServer
+    ? `Balance ${formatUGX(account.balance)}${shortOfFunds ? ` · ${formatUGX(price.total - account.balance)} short` : ''}`
+    : `Balance ${formatUGX(account.balance)}${shortOfFunds ? ' · not enough' : ' · free delivery'}`;
   const methods: Method[] = [
     { id: 'mtn', name: 'MTN Mobile Money', detail: account.maskedPhone, badge: 'MTN', badgeBg: '#FFCB05', badgeFg: colors.forest },
     { id: 'airtel', name: 'Airtel Money', detail: account.maskedPhone, badge: 'airtel', badgeBg: '#E40000', badgeFg: '#FFFFFF' },
-    { id: 'wallet', name: 'Chakula Wallet', detail: `Balance ${formatUGX(account.balance)}${shortOfFunds ? ' · not enough' : ' · free delivery'}`, badge: 'C', badgeBg: colors.forest, badgeFg: colors.cream },
-    { id: 'card', name: 'Debit or credit card', badge: 'card', badgeBg: colors.tile, badgeFg: colors.forest },
+    { id: 'wallet', name: 'Chakula Wallet', detail: walletDetail, badge: 'C', badgeBg: colors.forest, badgeFg: colors.cream },
+    // The server doesn't take cards yet, so it isn't offered there.
+    ...(onServer ? [] : [{ id: 'card', name: 'Debit or credit card', badge: 'card', badgeBg: colors.tile, badgeFg: colors.forest } as Method]),
     { id: 'cash', name: 'Cash on delivery', badge: 'cash', badgeBg: colors.tile, badgeFg: colors.forest },
   ];
   const chosen = methods.find((m) => m.id === method)!;
-  const blocked = cart.count === 0 || (method === 'wallet' && shortOfFunds);
+  // On the server, a wallet that can't cover it turns the button into the way to top up.
+  const needsTopUp = onServer && method === 'wallet' && shortOfFunds;
+  const blocked = cart.count === 0 || (method === 'wallet' && shortOfFunds && !needsTopUp);
   const when = slot ? formatClock(slot, true) : null;
   const payLabel =
-    method === 'wallet' && shortOfFunds
+    needsTopUp
+      ? `Top up your wallet · ${formatUGX(price.total - account.balance)} short`
+      : method === 'wallet' && shortOfFunds
       ? 'Top up your wallet first'
       : method === 'cash'
         ? when
@@ -69,9 +85,15 @@ export default function Checkout() {
           : `Place order · ${formatUGX(price.total)}`
         : when
           ? `Pay and schedule for ${when}`
-          : `Pay ${formatUGX(price.total)}`;
+          : onServer && method === 'wallet'
+            ? `Pay ${formatUGX(price.total)} from wallet`
+            : `Pay ${formatUGX(price.total)}`;
 
   const pay = () => {
+    if (needsTopUp) {
+      router.push('/wallet');
+      return;
+    }
     if (blocked || !cart.restaurantId) return;
     account.placeOrder({ restaurantId: cart.restaurantId, lines: cart.lines, total: price.total, method, ...(slot ? { scheduledFor: slot } : {}) });
     cart.clear();
@@ -188,7 +210,7 @@ export default function Checkout() {
             <Text style={s.lineLabel}>{price.subtotal.toLocaleString('en-US')}</Text>
           </View>
           <View style={s.line}>
-            <Text style={s.lineLabel}>{method === 'wallet' ? 'Delivery (wallet orders)' : student.freeDeliveriesLeft > 0 ? `Delivery (${student.freeDeliveriesLeft} free left)` : 'Delivery'}</Text>
+            <Text style={s.lineLabel}>{onServer ? 'Delivery' : method === 'wallet' ? 'Delivery (wallet orders)' : student.freeDeliveriesLeft > 0 ? `Delivery (${student.freeDeliveriesLeft} free left)` : 'Delivery'}</Text>
             {price.freeDelivery ? <Text style={{ fontFamily: fonts.bold, fontSize: 14, color: colors.forest }}>Free</Text> : <Text style={s.lineLabel}>{price.deliveryFee.toLocaleString('en-US')}</Text>}
           </View>
           <View style={[s.line, s.total]}>

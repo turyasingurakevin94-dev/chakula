@@ -14,7 +14,8 @@ import { arriveBy, blockName, isLoudStage, rider, riderFor, stageOf, stageStarts
 // phone through `notify`, if the phone can show them. With no backend, order alerts are worked out
 // here from the demo timer.
 
-type Show = (alert: Omit<BannerAlert, 'key'>) => void;
+// `orderKey`: the server order a banner is about, so it can be taken down once that order is done.
+type Show = (alert: Omit<BannerAlert, 'key'> & { orderKey?: string }) => void;
 
 type AlertsState = {
   // 'checking' until the phone answers.
@@ -50,8 +51,8 @@ function openHref(href: string) {
 }
 
 export function AlertsProvider({ children }: { children: ReactNode }) {
-  const { alertsPrimed, primeAlerts, activeOrder } = useAccount();
-  const [banner, setBanner] = useState<BannerAlert | null>(null);
+  const { alertsPrimed, primeAlerts, activeOrder, orders } = useAccount();
+  const [banner, setBanner] = useState<(BannerAlert & { orderKey?: string }) | null>(null);
   const [visible, setVisible] = useState(false);
   const [permission, setPermission] = useState<PermissionState | 'checking'>(() => (notify.available ? 'checking' : 'unavailable'));
 
@@ -60,6 +61,20 @@ export function AlertsProvider({ children }: { children: ReactNode }) {
     setVisible(true);
   }, []);
   const hide = useCallback(() => setVisible(false), []);
+
+  // A banner about a server order ("Moses is at the gate, code 3227") goes once that order is
+  // delivered or cancelled, so it never sits stale over the tracking or rate screens.
+  const orderKey = banner?.orderKey;
+  const stale = !!orderKey && !orders.some((o) => o.serverId === orderKey && !o.delivered);
+  useEffect(() => {
+    if (!stale) return;
+    // It slides away at once (see `visible` below); once it has, it is dropped altogether.
+    const t = setTimeout(() => {
+      setVisible(false);
+      setBanner((b) => (b?.orderKey === orderKey ? null : b));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [orderKey, stale]);
 
   const refresh = useCallback(() => notify.permission().then(setPermission), []);
 
@@ -77,7 +92,7 @@ export function AlertsProvider({ children }: { children: ReactNode }) {
     () =>
       notify.init({
         onForeground: (n) => {
-          if (!n.quiet) show({ title: n.title, body: n.body, icon: toIcon(n.icon), href: n.href });
+          if (!n.quiet) show({ title: n.title, body: n.body, icon: toIcon(n.icon), href: n.href, orderKey: n.orderId });
         },
         onOpen: openHref,
       }),
@@ -116,7 +131,7 @@ export function AlertsProvider({ children }: { children: ReactNode }) {
       <PlanReminders />
       <AlertBanner
         alert={banner}
-        visible={visible}
+        visible={visible && !stale}
         onDone={hide}
         onPress={(a) => {
           setVisible(false);
@@ -194,7 +209,7 @@ function OrderAlerts() {
     const phoneHasIt = scheduled.current.some((s) => s.orderId === order.id && s.stage === stage);
     if (AppState.currentState === 'active') {
       // Open: the loud ones become the banner, with no second sound. The rest just move the live card.
-      if (isLoudStage(stage) && !phoneHasIt) show({ title: alert.title, body: alert.body, icon: alert.icon, href: alert.href });
+      if (isLoudStage(stage) && !phoneHasIt) show({ title: alert.title, body: alert.body, icon: alert.icon, href: alert.href, orderKey: order.serverId });
       return;
     }
     // Server orders: the server's push already rang the phone.

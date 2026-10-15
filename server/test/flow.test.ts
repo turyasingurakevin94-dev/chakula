@@ -7,6 +7,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { WebSocket } from 'ws';
 import { createServer } from '../src/app.ts';
 import type { Config } from '../src/config.ts';
+import { kampalaDay } from '../src/orders.ts';
 import { devLogins } from '../src/seed.ts';
 
 // The whole journey on an in-memory database: sign in, order, MoMo, kitchen, rider, handover.
@@ -139,6 +140,53 @@ test('cash orders go straight to the kitchen, and riders see the cash to collect
   assert.equal(board.json.find((o: any) => o.id === placed.json.order.id).status, 'cancelled');
   // Unpaid MoMo orders that were cancelled never reach the board.
   assert.ok(!board.json.some((o: any) => o.status === 'cancelled' && o.payMethod !== 'cash'));
+});
+
+test("a rider's day: drops, cash collected and the delivered list", async () => {
+  // Kampala is UTC+3: 22:30 UTC is already the next day there.
+  assert.equal(kampalaDay(new Date('2026-03-04T22:30:00Z')).day, '2026-03-05');
+  assert.equal(kampalaDay(new Date('2026-03-04T20:59:00Z')).day, '2026-03-04');
+  assert.equal(kampalaDay(new Date('2026-03-04T22:30:00Z')).start.toISOString(), '2026-03-04T21:00:00.000Z');
+
+  const before = await call('GET', '/rider/today', { token: rider2 });
+  assert.equal(before.status, 200);
+  assert.equal(before.json.drops, 0);
+  assert.equal(before.json.cashCollected, 0);
+  assert.deepEqual(before.json.orders, []);
+
+  const student = await signIn('0772 333 444', 'student');
+  const placed = await call('POST', '/orders', { token: student, body: { ...order('cash'), dropPointId: 'library' } });
+  const id = placed.json.order.id;
+  const code = placed.json.order.handoverCode;
+  await call('POST', `/rider/orders/${id}/take`, { token: rider2 });
+  await call('POST', `/kitchen/orders/${id}/ready`, { token: kitchen });
+  await call('POST', `/rider/orders/${id}/pick-up`, { token: rider2 });
+  // Not delivered yet, so not counted.
+  assert.equal((await call('GET', '/rider/today', { token: rider2 })).json.drops, 0);
+  assert.equal((await call('POST', `/rider/orders/${id}/deliver`, { token: rider2, body: { code } })).json.status, 'delivered');
+
+  const today = await call('GET', '/rider/today', { token: rider2 });
+  assert.equal(today.json.drops, 1);
+  assert.equal(today.json.cashCollected, 23_000);
+  assert.equal(today.json.orders.length, 1);
+  const [d] = today.json.orders;
+  assert.equal(d.id, id);
+  assert.equal(d.number, placed.json.order.number);
+  assert.equal(d.kitchen, 'Nakawa Kitchen');
+  assert.equal(d.payMethod, 'cash');
+  assert.equal(d.total, 23_000);
+  assert.ok(d.dropPoint);
+  assert.ok(Date.now() - new Date(d.deliveredAt).getTime() < 60_000);
+
+  // The other rider's MoMo delivery from the first test counts for them only, with no cash.
+  const other = await call('GET', '/rider/today', { token: rider });
+  assert.ok(other.json.drops >= 1);
+  assert.ok(!other.json.orders.some((o: any) => o.id === id));
+  assert.equal(other.json.cashCollected, 0);
+
+  // Riders only.
+  assert.equal((await call('GET', '/rider/today', { token: student })).status, 403);
+  assert.equal((await call('GET', '/rider/today')).status, 401);
 });
 
 test('sign-in rules', async () => {

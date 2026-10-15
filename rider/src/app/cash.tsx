@@ -3,16 +3,20 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { BackButton, Body, Label, Num } from '../components/ui';
 import { CASH_LIMIT, KITCHEN, useRider } from '../lib/rider';
+import { onServer } from '../lib/server';
 import { colors, fonts, money } from '../lib/theme';
 
 // Cash you're holding: how close to the limit, the hand-in code the kitchen scans, and receipts.
 export default function Cash() {
   const { cash, cashOrders, handIns } = useRider();
   const share = Math.min(1, cash / CASH_LIMIT);
+  // On the server a cash order's "student" is its drop point (riders see no names in the day list).
   const from =
     cashOrders.length === 0
       ? 'No cash orders yet today'
-      : `From ${cashOrders.length} cash order${cashOrders.length > 1 ? 's' : ''} · ${cashOrders.map((c) => `${c.bag} ${c.student}${cashOrders.length === 1 ? `, ${c.at}` : ''}`).join(', ')}`;
+      : onServer
+        ? `From ${cashOrders.length} cash order${cashOrders.length > 1 ? 's' : ''} today · ${cashOrders.map((c) => `bag ${c.bag} at ${c.student}, ${c.at}`).join('; ')}`
+        : `From ${cashOrders.length} cash order${cashOrders.length > 1 ? 's' : ''} · ${cashOrders.map((c) => `${c.bag} ${c.student}${cashOrders.length === 1 ? `, ${c.at}` : ''}`).join(', ')}`;
 
   return (
     <SafeAreaView edges={['top', 'bottom']} style={{ flex: 1, backgroundColor: colors.cream }}>
@@ -27,6 +31,7 @@ export default function Cash() {
             <Text style={{ fontFamily: fonts.display, fontSize: 52, lineHeight: 56, color: colors.forest }}>{money(cash)}</Text>
             <Body style={{ color: colors.body }}>{from}</Body>
           </View>
+          {onServer ? null : (
           <View style={{ gap: 8 }}>
             <View style={{ height: 8, borderRadius: 4, backgroundColor: colors.line, overflow: 'hidden' }}>
               <View style={{ width: `${Math.round(share * 100)}%`, height: 8, borderRadius: 4, backgroundColor: colors.forest }} />
@@ -36,9 +41,21 @@ export default function Cash() {
               <Text style={s.small}>Limit {money(CASH_LIMIT)}</Text>
             </View>
           </View>
-          <Body style={{ fontSize: 13, lineHeight: 19, color: colors.muted }}>At the limit we pause cash orders until you hand in. It keeps you, and the money, safe.</Body>
+          )}
+          {onServer ? null : (
+            <Body style={{ fontSize: 13, lineHeight: 19, color: colors.muted }}>At the limit we pause cash orders until you hand in. It keeps you, and the money, safe.</Body>
+          )}
         </View>
 
+        {onServer ? (
+          <View style={{ paddingHorizontal: 20, paddingTop: 22 }}>
+            <View style={[s.card, { alignItems: 'flex-start', gap: 6 }]}>
+              <Label>Hand it in</Label>
+              <Body style={{ lineHeight: 21 }}>Give the cash to the kitchen when you finish.</Body>
+              <Body style={{ fontSize: 13, lineHeight: 19, color: colors.muted }}>Hand-ins aren&apos;t recorded in the app yet, so this counts all the cash you collected today.</Body>
+            </View>
+          </View>
+        ) : (
         <View style={{ paddingHorizontal: 20, paddingTop: 22 }}>
           <View style={s.card}>
             <Label>Hand in by 10:00 pm</Label>
@@ -51,9 +68,11 @@ export default function Cash() {
             <Body style={{ textAlign: 'center', lineHeight: 21 }}>Give the cash to {KITCHEN}. They scan this code, and you both get a receipt.</Body>
           </View>
         </View>
+        )}
 
         <View style={{ paddingHorizontal: 20, paddingTop: 22 }}>
           <Label style={{ paddingBottom: 4 }}>Handed in</Label>
+          {handIns.length === 0 ? <Body style={{ paddingVertical: 6, fontSize: 14, color: colors.muted }}>No hand-ins recorded in the app yet.</Body> : null}
           {handIns.map((h, i) => (
             <View key={h.receipt} style={[s.row, i < handIns.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.line }]}>
               <View style={{ flex: 1, gap: 2 }}>

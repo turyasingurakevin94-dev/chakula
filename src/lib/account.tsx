@@ -1,14 +1,16 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Alert } from 'react-native';
 import { dropPoints, type DropKind, type Pt } from './campus';
 import { applyServerMenus, findSpecial, type Extra, type MenuItem, type ServerKitchen } from './data';
 import type { PhotoKey } from './photos';
 import { findPlanKind, planMeals, planPrice, type PlanKindId, type PlanPeriod } from './plans';
 import { openPaymentPage } from './payPage';
-import { api, connectLive, getToken, onServer, sendCode, setToken, toCampusMetres, verifyCode, type ServerOrder, type ServerStatus } from './server';
+import { api, connectLive, getToken, onServer, readItem, restoreToken, saveItem, sendCode, setOnSignedOut, setToken, toCampusMetres, verifyCode, type ServerOrder, type ServerStatus, type ServerUser, type ServerWallet, type ServerWalletEntry } from './server';
 
-// Account state. On the Chakula server (EXPO_PUBLIC_API_URL set), sign-in, profile and orders are
-// real; the wallet, meal plans and specials are still kept in memory until the server has them.
+const PROFILE_KEY = 'chakula.student.profile';
+
+// Account state. On the Chakula server (EXPO_PUBLIC_API_URL set), sign-in, profile, orders and the
+// wallet are real; meal plans and specials are still kept in memory until the server has them.
 
 export type Place = { id: string; name: string; detail: string; kind: DropKind };
 
@@ -56,6 +58,8 @@ export type Order = {
   status?: ServerStatus;
   riderName?: string;
   riderAt?: Pt;
+  // When each step really happened, from the server (ISO strings, null until it happens).
+  times?: ServerOrder['times'];
   // The id the app gave it before the server answered, so Undo still finds it.
   localId?: string;
 };
@@ -94,6 +98,10 @@ export const defaultAlertPrefs: AlertPrefs = {
 export type Preorder = { id: string; specialId: string; slot: string };
 
 export type WalletEntry = { id: string; title: string; when: string; amount: number };
+
+// A top-up the student started on the server, until MTN or Airtel says yes or no.
+export type TopupState = 'pending' | 'succeeded' | 'failed';
+export type MomoMethod = 'mtn' | 'airtel';
 
 // Top up more, get more: the bonus credited on top of a top up of at least this amount.
 export const topUpBonuses: { amount: number; bonus: number }[] = [
@@ -173,6 +181,9 @@ type AccountState = {
   room: string;
   note: string;
   ready: boolean;
+  // On the server, while the saved sign-in is being checked at start. Screens wait for it.
+  restoring: boolean;
+  ordersLoaded: boolean;
   initials: string;
   firstName: string;
   maskedPhone: string;
@@ -197,8 +208,18 @@ type AccountState = {
   verify: (code: string) => Promise<string | null>;
   saveProfile: (name: string, place: Place, room: string, note: string) => void;
   signOut: () => void;
-  // Credits the amount plus any bonus, and returns the bonus.
+  // Sample mode: credits the amount plus any bonus, and returns the bonus.
   topUp: (amount: number) => number;
+  // Server mode: asks the student's phone to approve a top-up and opens the MoMo page. Resolves
+  // with the top-up's id once it has started; throws the server's message if it can't.
+  startTopUp: (amount: number, method: MomoMethod) => Promise<string>;
+  // Server mode: where each top-up started on this phone has got to.
+  topups: Record<string, TopupState>;
+  // Server mode: the balance and activity have come back from the server at least once.
+  walletLoaded: boolean;
+  refreshWallet: () => void;
+  // Server mode: asks where one top-up has got to, in case a live message was missed.
+  checkTopUp: (id: string) => void;
   withdraw: (amount: number) => void;
   startPlan: (kindId: PlanKindId, period: PlanPeriod) => void;
   togglePlanPause: () => void;
@@ -228,8 +249,11 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   const [place, setPlace] = useState<Place | null>(null);
   const [room, setRoom] = useState('');
   const [note, setNote] = useState('');
-  const [balance, setBalance] = useState(4500);
-  const [wallet, setWallet] = useState<WalletEntry[]>([{ id: 'w1', title: 'Welcome credit', when: 'When you joined', amount: 4500 }]);
+  // On the server the wallet starts empty and comes from GET /wallet; the welcome credit is the prototype's.
+  const [balance, setBalance] = useState(onServer ? 0 : 4500);
+  const [wallet, setWallet] = useState<WalletEntry[]>(onServer ? [] : [{ id: 'w1', title: 'Welcome credit', when: 'When you joined', amount: 4500 }]);
+  const [walletLoaded, setWalletLoaded] = useState(!onServer);
+  const [topups, setTopups] = useState<Record<string, TopupState>>({});
   const [bonusEarned, setBonusEarned] = useState(0);
   const [plan, setPlan] = useState<MealPlan | null>(null);
   // On the server a new student starts with no orders; the samples are for the prototype.
@@ -240,6 +264,87 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   const [preorders, setPreorders] = useState<Preorder[]>([]);
   const [alertPrefs, setAlertPrefsState] = useState<AlertPrefs>(defaultAlertPrefs);
   const [alertsPrimed, setAlertsPrimed] = useState(false);
+  // On the server, false until the student's orders have come back, so a screen opened straight
+  // to an order (a reload, a tapped notification) waits for it instead of leaving.
+  const [ordersLoaded, setOrdersLoaded] = useState(!onServer);
+  // Only on the server: a saved sign-in is checked before any screen shows.
+  const [restoring, setRestoring] = useState(onServer);
+
+  // The balance and activity from the server. Each answer replaces the last.
+  // Stable, so screens can ask for a refresh when they open.
+  const loadWallet = useCallback(() => {
+    if (!onServer || !getToken()) return;
+    api<ServerWallet>('GET', '/wallet')
+      .then((w) => {
+        setBalance(w.balance);
+        setWallet(w.entries.map(walletEntry));
+        setWalletLoaded(true);
+      })
+      .catch(() => {
+        // Keep what's shown; the next change or visit tries again.
+      });
+  }, []);
+
+  function clearWallet() {
+    setBalance(0);
+    setWallet([]);
+    setWalletLoaded(false);
+    setTopups({});
+  }
+
+  // Fills the account from the server's record of the student.
+  const applyUser = (user: ServerUser) => {
+    setPhone(user.phone.replace(/^\+256/, ''));
+    if (user.name) setName(user.name);
+    const saved = places.find((pl) => pl.id === user.dropPointId);
+    if (saved) setPlace(saved);
+    setVerified(true);
+  };
+
+  // Stay signed in: put back the saved token and ask the server who it belongs to. If the server
+  // can't be reached quickly, show sign-in but keep the token; a late answer still signs them in.
+  useEffect(() => {
+    if (!onServer) return;
+    let done = false;
+    const finish = () => {
+      if (!done) setRestoring(false);
+      done = true;
+    };
+    const timer = setTimeout(finish, 6000);
+    setOnSignedOut(() => {
+      setVerified(false);
+      setPhone(null);
+      setOrders([]);
+      setOrdersLoaded(false);
+      clearWallet();
+    });
+    void (async () => {
+      const token = await restoreToken();
+      if (!token) return finish();
+      const extras = await readItem(PROFILE_KEY);
+      try {
+        const user = await api<ServerUser>('GET', '/me');
+        // Signed in another way meanwhile: leave that alone.
+        if (getToken() !== token) return finish();
+        applyUser(user);
+        try {
+          // Only this student's: another student may have used the phone before.
+          const { room: r, note: n, phone: p } = JSON.parse(extras ?? '{}') as { room?: string; note?: string; phone?: string };
+          if (p === user.phone && r) setRoom(r);
+          if (p === user.phone && n) setNote(n);
+        } catch {
+          // No room or note saved.
+        }
+      } catch {
+        // 401 clears the token in api(); no connection keeps it for next time.
+      }
+      finish();
+    })();
+    return () => {
+      clearTimeout(timer);
+      setOnSignedOut(null);
+    };
+  }, []);
 
   // Real menus, prices and sold out dishes from the kitchens.
   useEffect(() => {
@@ -260,9 +365,19 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     let stop = () => {};
     api<ServerOrder[]>('GET', '/orders')
       .then((list) => setOrders(list.filter((o) => o.status !== 'cancelled').map((o) => fromServer(o))))
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setOrdersLoaded(true));
+    loadWallet();
     stop = connectLive((m) => {
-      if (m.type === 'order') {
+      if (m.type === 'wallet') {
+        setBalance(m.balance);
+        const t = m.topup;
+        if (t) {
+          setTopups((prev) => ({ ...prev, [t.id]: t.status }));
+          if (t.status === 'failed') Alert.alert('Top-up didn’t go through', 'Nothing was charged. Try again when you’re ready.');
+        }
+        loadWallet();
+      } else if (m.type === 'order') {
         const o = m.order;
         if (o.status === 'cancelled' && o.cancelReason?.startsWith('Payment')) Alert.alert('Payment didn’t go through', 'Nothing was charged. Try again when you’re ready.');
         setOrders((prev) => (o.status === 'cancelled' ? prev.filter((p) => p.serverId !== o.id) : prev.map((p) => (p.serverId === o.id ? fromServer(o, p) : p))));
@@ -272,7 +387,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       }
     });
     return () => stop();
-  }, [verified]);
+  }, [verified, loadWallet]);
 
   const value = useMemo<AccountState>(() => {
     const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -285,6 +400,8 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       room,
       note,
       ready: verified && !!place && parts.length > 0,
+      restoring,
+      ordersLoaded,
       initials: parts.slice(0, 2).map((p) => p[0]!.toUpperCase()).join('') || '?',
       firstName: parts[0] ?? '',
       maskedPhone: phone ? `0${phone.slice(0, 3)} ••• ${phone.slice(-3)}` : '',
@@ -317,10 +434,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
         }
         try {
           const { user } = await verifyCode(`+256${phone}`, code, 'student');
-          if (user.name) setName(user.name);
-          const saved = places.find((pl) => pl.id === user.dropPointId);
-          if (saved) setPlace(saved);
-          setVerified(true);
+          applyUser(user);
           return null;
         } catch (e) {
           return e instanceof Error ? e.message : 'That didn’t work. Try again.';
@@ -331,13 +445,20 @@ export function AccountProvider({ children }: { children: ReactNode }) {
         setPlace(pl);
         setRoom(r.trim());
         setNote(nt.trim());
-        if (onServer) api('PATCH', '/me', { name: n.trim(), dropPointId: pl.id }).catch(() => {});
+        if (onServer) {
+          api('PATCH', '/me', { name: n.trim(), dropPointId: pl.id }).catch(() => {});
+          // Room and note aren't on the server; kept on the phone for next time.
+          void saveItem(PROFILE_KEY, JSON.stringify({ phone: `+256${phone}`, room: r.trim(), note: nt.trim() }));
+        }
       },
       signOut: () => {
         if (onServer) {
           api('POST', '/auth/sign-out').catch(() => {});
           setToken(null);
+          void saveItem(PROFILE_KEY, null);
           setOrders([]);
+          setOrdersLoaded(false);
+          clearWallet();
         }
         setPhone(null);
         setVerified(false);
@@ -353,6 +474,25 @@ export function AccountProvider({ children }: { children: ReactNode }) {
           ...w,
         ]);
         return bonus;
+      },
+      startTopUp: async (amount, method) => {
+        const res = await api<{ id: string; redirectUrl?: string }>('POST', '/wallet/topups', { amount, method });
+        setTopups((prev) => (prev[res.id] ? prev : { ...prev, [res.id]: 'pending' }));
+        // Flutterwave's waiting page; the pretend MoMo in dev has none and settles by itself.
+        if (res.redirectUrl) void openPaymentPage(res.redirectUrl, { topupId: res.id });
+        return res.id;
+      },
+      topups,
+      walletLoaded,
+      refreshWallet: loadWallet,
+      checkTopUp: (tid) => {
+        api<{ status: TopupState }>('GET', `/wallet/topups/${tid}`)
+          .then(({ status }) => {
+            if (status === 'pending') return;
+            setTopups((prev) => (prev[tid] === status ? prev : { ...prev, [tid]: status }));
+            loadWallet();
+          })
+          .catch(() => {});
       },
       withdraw: (amount) => {
         const take = Math.min(amount, balance);
@@ -375,7 +515,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
           // Shown straight away; the server's number, code and price replace it when it answers.
           // The server cooks as soon as it's paid; ordering for later comes with its own server step.
           const { scheduledFor: _later, ...now } = o;
-          setOrders((prev) => [{ ...now, id, localId: id, dropPointId: place?.id, code: '····', placedAt: Date.now(), delivered: false, status: o.method === 'cash' ? 'cooking' : 'awaiting_payment' }, ...prev]);
+          setOrders((prev) => [{ ...now, id, localId: id, dropPointId: place?.id, code: '····', placedAt: Date.now(), delivered: false, status: o.method === 'cash' || o.method === 'wallet' ? 'cooking' : 'awaiting_payment' }, ...prev]);
           sendOrder(id, o);
           return id;
         }
@@ -390,10 +530,13 @@ export function AccountProvider({ children }: { children: ReactNode }) {
         const order = orders.find((p) => p.id === id || p.localId === id);
         if (!order) return;
         if (order.serverId) {
-          api('POST', `/orders/${order.serverId}/cancel`).catch((e) => Alert.alert('Couldn’t cancel', e instanceof Error ? e.message : ''));
+          // A wallet order's refund is the server's to make; the balance follows from it.
+          api('POST', `/orders/${order.serverId}/cancel`)
+            .catch((e) => Alert.alert('Couldn’t cancel', e instanceof Error ? e.message : ''))
+            .finally(() => order.method === 'wallet' && loadWallet());
         }
         setOrders((prev) => prev.filter((p) => p !== order));
-        if (order.method === 'wallet') {
+        if (order.method === 'wallet' && !onServer) {
           setBalance((b) => b + order.total);
           setWallet((w) => w.filter((e) => e.id !== `o${id}`));
         }
@@ -404,16 +547,20 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       primeAlerts: () => setAlertsPrimed(true),
       rateOrder: (id, rating) => {
         setOrders((prev) => prev.map((p) => (p.id === id ? { ...p, rating } : p)));
-        // Prototype: tips come out of the wallet. Later the student picks how to pay it.
-        if (rating.tip > 0) {
+        // Prototype: tips come out of the wallet. On the server there are no rider payouts yet, so
+        // the wallet is never touched for a tip (the rating screen doesn't offer one there).
+        if (rating.tip > 0 && !onServer) {
           setBalance((b) => b - rating.tip);
-          setWallet((w) => [{ id: `tip${id}`, title: `Tip for Brian, #${id}`, when: 'Just now', amount: -rating.tip }, ...w]);
+          // The sample rider is Brian; a server order names its real rider.
+          const rated = orders.find((p) => p.id === id);
+          const riderName = rated?.serverId ? (rated.riderName ?? 'your rider') : 'Brian';
+          setWallet((w) => [{ id: `tip${id}`, title: `Tip for ${riderName}, #${id}`, when: 'Just now', amount: -rating.tip }, ...w]);
         }
       },
       preorder: (sid, slot) => setPreorders((prev) => [{ id: `p${Date.now()}`, specialId: sid, slot }, ...prev]),
       cancelPreorder: (id) => setPreorders((prev) => prev.filter((p) => p.id !== id)),
     };
-  }, [phone, verified, name, place, room, note, balance, wallet, bonusEarned, plan, orders, preorders, alertPrefs, alertsPrimed, devCode, menuVersion]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [phone, verified, name, place, room, note, balance, wallet, walletLoaded, topups, bonusEarned, plan, orders, preorders, alertPrefs, alertsPrimed, devCode, menuVersion, restoring, ordersLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Places an order on the server and swaps the stand-in for the real one.
   function sendOrder(localId: string, o: Omit<Order, 'id' | 'placedAt' | 'delivered' | 'code'>) {
@@ -427,8 +574,9 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     api<{ order: ServerOrder; payment: { redirectUrl?: string } | null }>('POST', '/orders', body)
       .then(({ order, payment }) => {
         setOrders((prev) => prev.map((p) => (p.localId === localId ? fromServer(order, p) : p)));
+        if (order.payMethod === 'wallet') loadWallet();
         // Flutterwave's page that waits with the student while they approve on their phone.
-        if (payment?.redirectUrl) void openPaymentPage(payment.redirectUrl);
+        if (payment?.redirectUrl) void openPaymentPage(payment.redirectUrl, { orderId: order.id });
       })
       .catch((e) => {
         setOrders((prev) => prev.filter((p) => p.localId !== localId));
@@ -472,7 +620,16 @@ function fromServer(o: ServerOrder, prev?: Order): Order {
     code: o.handoverCode ?? prev?.code ?? '····',
     riderName: o.rider?.name ?? undefined,
     riderAt: o.status === 'picked_up' || o.status === 'at_gate' ? prev?.riderAt : undefined,
+    times: o.times,
   };
+}
+
+// A line of wallet activity as the Activity list shows it.
+function walletEntry(e: ServerWalletEntry): WalletEntry {
+  const at = Date.parse(e.createdAt);
+  const network = e.method === 'airtel' ? 'Airtel' : 'MTN';
+  const title = e.kind === 'topup' ? `Top-up from ${network}` : e.kind === 'refund' ? `Refund for order #${e.orderNumber ?? ''}` : `Order #${e.orderNumber ?? ''}`;
+  return { id: e.id, title, when: Number.isFinite(at) ? `${formatWhen(at)}, ${formatClock(at, true)}` : '', amount: e.amount };
 }
 
 // Re-renders the caller every second, for countdowns.

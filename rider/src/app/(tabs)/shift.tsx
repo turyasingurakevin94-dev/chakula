@@ -4,10 +4,79 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Body, Bold, Headline, Italic, Label, Num } from '../../components/ui';
 import { clockTime, KITCHEN, today, useRider } from '../../lib/rider';
+import { onServer } from '../../lib/server';
 import { colors, fonts, money } from '../../lib/theme';
 
-// Shift: today's drops as a timeline, from the lunch rush to Friday's special.
+// Shift: today's drops as a timeline, from the lunch rush to Friday's special. On the server: the
+// real deliveries today and the run in hand; there's no rota on the server yet.
 export default function Shift() {
+  return onServer ? <ServerShift /> : <SampleShift />;
+}
+
+function ServerShift() {
+  const { run, today: day, user, signOut } = useRider();
+  const delivered = [...(day?.orders ?? [])].reverse();
+  const rows = delivered.length + (run ? 1 : 0);
+
+  return (
+    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: colors.cream }}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 28 }}>
+        <View style={{ paddingHorizontal: 20, paddingTop: 22, gap: 4 }}>
+          <Label>{today()}</Label>
+          <Headline>
+            Today&apos;s <Italic>drops</Italic>
+          </Headline>
+        </View>
+
+        <View style={{ paddingHorizontal: 20, paddingTop: 22 }}>
+          {rows === 0 ? (
+            <Body style={{ fontSize: 14, lineHeight: 20, color: colors.muted }}>No drops yet today. We&apos;ll ring you when a run comes in.</Body>
+          ) : null}
+          {delivered.map((o, i) => (
+            <Row key={o.id} time={clockTime(new Date(o.deliveredAt))} timeColor={colors.muted} lineDone last={!run && i === delivered.length - 1}>
+              <Bold color={colors.muted}>
+                Bag {o.number} · {o.dropPoint}
+              </Bold>
+              <Body style={s.sub}>
+                Delivered · from {o.kitchen} · {o.payMethod === 'cash' ? `cash ${money(o.total)}` : 'paid in the app'}
+              </Body>
+            </Row>
+          ))}
+          {run ? (
+            <Row time="Now" timeColor={colors.orangeText} last>
+              <Pressable accessibilityRole="button" onPress={() => router.navigate('/')} style={s.now}>
+                <Bold>{run.title}</Bold>
+                <Body style={s.sub}>
+                  {run.stops.length === 1 ? '1 bag' : `${run.stops.length} bags`} · pays {money(run.pays)}
+                </Body>
+              </Pressable>
+            </Row>
+          ) : null}
+        </View>
+
+        <View style={{ paddingHorizontal: 20, paddingTop: 22, gap: 4 }}>
+          <Label>Shifts</Label>
+          <Body style={{ fontSize: 14, lineHeight: 20, color: colors.muted }}>Your shift times and planned runs show here once the rota is on Chakula.</Body>
+        </View>
+
+        <View style={{ paddingHorizontal: 20, paddingTop: 26 }}>
+          <Label style={{ paddingBottom: 4 }}>Signed in</Label>
+          <View style={s.reminder}>
+            <View style={{ flex: 1, gap: 2 }}>
+              <Bold size={14}>{user?.name ?? 'Rider'}</Bold>
+              <Body style={s.sub}>{user?.phone ?? ''}</Body>
+            </View>
+            <Pressable accessibilityRole="button" onPress={signOut} hitSlop={6}>
+              <Text style={{ fontFamily: fonts.bold, fontSize: 13, color: colors.forest, textDecorationLine: 'underline' }}>Sign out</Text>
+            </Pressable>
+          </View>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+function SampleShift() {
   const { run, nextRun, reminders, previewReminder } = useRider();
 
   return (

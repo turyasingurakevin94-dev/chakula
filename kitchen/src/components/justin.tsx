@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Line, Path } from 'react-native-svg';
 import { clock, cookingQueue, demoNow, minutesUntil, ordinal, useKitchen, type Order } from '../lib/kitchen';
+import { onServer } from '../lib/server';
 import { colors, fonts } from '../lib/theme';
 import { first } from './alerts';
 import { Chip, DishPhoto } from './ui';
@@ -75,7 +76,7 @@ function Card({ order: o, t }: { order: Order; t: number }) {
             </View>
             <Text style={s.kicker}>
               Just in · {clock(o.inAt)}
-              {ok ? '' : ' · needs a tap'}
+              {onServer ? (o.seenAt ? '' : ' · needs a tap') : ok ? '' : ' · needs a tap'}
             </Text>
           </View>
           <Text style={{ fontFamily: fonts.bold, fontSize: 12, color: colors.segmentText }}>{ordinal(rank)} in line</Text>
@@ -112,47 +113,70 @@ function Card({ order: o, t }: { order: Order; t: number }) {
         </View>
       </Pressable>
 
-      <View style={s.dashed}>
-        <Svg width="100%" height={2} style={{ marginBottom: 4 }}>
-          <Line x1={0} y1={1} x2="100%" y2={1} stroke={colors.border} strokeWidth={1.5} strokeDasharray="5 4" />
-        </Svg>
-        <Text style={s.caps}>{ok ? 'Confirmed by itself, no tap needed' : printing ? 'Printer not answering · tap the order' : 'Ticket printing is off · tap the order'}</Text>
-        <View style={{ flexDirection: 'row', gap: 6 }}>
-          {checks.map((c) => (
-            <View key={c.title} style={[s.check, c.done ? { backgroundColor: sage } : c.warn ? { backgroundColor: colors.chipBg } : { backgroundColor: colors.segment }]} accessibilityLabel={`${c.title}${c.done ? ', done' : ''}`}>
-              {c.done ? (
-                <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={colors.forest} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round">
-                  <Path d="M5 12.5l4.5 4.5L19 7.5" />
-                </Svg>
-              ) : (
-                <View style={{ width: 16, height: 16, borderRadius: 8, borderWidth: 1.5, borderColor: c.warn ? colors.chipText : colors.chevron, borderStyle: c.warn ? 'solid' : 'dashed' }} />
-              )}
-              <Text style={{ fontFamily: fonts.bold, fontSize: 12, color: c.warn ? colors.chipText : colors.forest }} numberOfLines={1}>
-                {c.title}
-              </Text>
-              <Text style={{ fontFamily: fonts.regular, fontSize: 11, color: colors.segmentText }} numberOfLines={1}>
-                {c.sub}
-              </Text>
-            </View>
-          ))}
+      {onServer ? (
+        // Nothing prints on the server version yet, so no printer checks: just "has anyone seen it".
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          {o.seenAt ? null : (
+            <Pressable accessibilityRole="button" accessibilityLabel={`Seen order ${o.id}`} onPress={() => k.markSeen(o.id)} style={[s.button, { backgroundColor: colors.forest, borderColor: colors.forest }]}>
+              <Text style={[s.buttonText, { color: colors.cream }]}>Seen it</Text>
+            </Pressable>
+          )}
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
+              k.markSeen(o.id);
+              router.push(`/order/${o.id}`);
+            }}
+            style={s.button}
+          >
+            <Text style={s.buttonText}>Open order</Text>
+          </Pressable>
         </View>
-      </View>
+      ) : (
+        <>
+          <View style={s.dashed}>
+            <Svg width="100%" height={2} style={{ marginBottom: 4 }}>
+              <Line x1={0} y1={1} x2="100%" y2={1} stroke={colors.border} strokeWidth={1.5} strokeDasharray="5 4" />
+            </Svg>
+            <Text style={s.caps}>{ok ? 'Confirmed by itself, no tap needed' : printing ? 'Printer not answering · tap the order' : 'Ticket printing is off · tap the order'}</Text>
+            <View style={{ flexDirection: 'row', gap: 6 }}>
+              {checks.map((c) => (
+                <View key={c.title} style={[s.check, c.done ? { backgroundColor: sage } : c.warn ? { backgroundColor: colors.chipBg } : { backgroundColor: colors.segment }]} accessibilityLabel={`${c.title}${c.done ? ', done' : ''}`}>
+                  {c.done ? (
+                    <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={colors.forest} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round">
+                      <Path d="M5 12.5l4.5 4.5L19 7.5" />
+                    </Svg>
+                  ) : (
+                    <View style={{ width: 16, height: 16, borderRadius: 8, borderWidth: 1.5, borderColor: c.warn ? colors.chipText : colors.chevron, borderStyle: c.warn ? 'solid' : 'dashed' }} />
+                  )}
+                  <Text style={{ fontFamily: fonts.bold, fontSize: 12, color: c.warn ? colors.chipText : colors.forest }} numberOfLines={1}>
+                    {c.title}
+                  </Text>
+                  <Text style={{ fontFamily: fonts.regular, fontSize: 11, color: colors.segmentText }} numberOfLines={1}>
+                    {c.sub}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </View>
 
-      <View style={{ flexDirection: 'row', gap: 8 }}>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => {
-            k.markSeen(o.id);
-            router.push(`/order/${o.id}`);
-          }}
-          style={s.button}
-        >
-          <Text style={s.buttonText}>Something ran out</Text>
-        </Pressable>
-        <Pressable accessibilityRole="button" onPress={() => k.notify(ok ? `Ticket for ${o.id} printed again` : `Sent ${o.id} to the printer again. Still no answer`)} style={s.button}>
-          <Text style={s.buttonText}>Print again</Text>
-        </Pressable>
-      </View>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                k.markSeen(o.id);
+                router.push(`/order/${o.id}`);
+              }}
+              style={s.button}
+            >
+              <Text style={s.buttonText}>Something ran out</Text>
+            </Pressable>
+            <Pressable accessibilityRole="button" onPress={() => k.notify(ok ? `Ticket for ${o.id} printed again` : `Sent ${o.id} to the printer again. Still no answer`)} style={s.button}>
+              <Text style={s.buttonText}>Print again</Text>
+            </Pressable>
+          </View>
+        </>
+      )}
     </View>
   );
 }

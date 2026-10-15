@@ -29,7 +29,7 @@ export default function Home() {
   const now = useNow();
   const [category, setCategory] = useState<string | null>(null);
   // The order placed from "Your usual", while it can still be undone.
-  const [justOrdered, setJustOrdered] = useState<{ id: string; summary: string } | null>(null);
+  const [justOrdered, setJustOrdered] = useState<{ id: string; summary: string; method: PayMethod } | null>(null);
   const special = specials[0]!;
   const quick = quickDishes();
   const popular = popularDishes(category ?? undefined);
@@ -63,7 +63,7 @@ export default function Home() {
   const orderUsual = () => {
     if (!usual || justOrdered) return;
     const id = account.placeOrder({ restaurantId: usual.restaurantId, lines: usualLines, total: usualTotal, method: usualMethod });
-    setJustOrdered({ id, summary: `${dishNames(usualLines)} · ${formatUGX(usualTotal)}` });
+    setJustOrdered({ id, summary: `${dishNames(usualLines)} · ${formatUGX(usualTotal)}`, method: usualMethod });
   };
 
   const undo = () => {
@@ -139,7 +139,7 @@ export default function Home() {
             total={usualTotal}
             now={now}
             busy={!!justOrdered}
-            paysWith={paysWith[usualMethod]}
+            paysWith={paysWith[justOrdered?.method ?? usualMethod]}
             undoSeconds={UNDO_SECONDS}
             onOrder={orderUsual}
             onChange={changeUsual}

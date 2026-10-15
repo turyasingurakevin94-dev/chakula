@@ -7,6 +7,7 @@ import { BackHeader, Label } from '../components/ui';
 import { DEVICES, isLocked, ROWS, type Cell, type Device, type RowKey } from '../lib/alerts';
 import { useKitchen } from '../lib/kitchen';
 import { notifyStatus, ring, setupNotifications, type NotifyStatus } from '../lib/notify';
+import { onServer } from '../lib/server';
 import { colors, fonts } from '../lib/theme';
 
 const lockedBg = '#7C9A88';
@@ -74,25 +75,50 @@ export default function Alerts() {
           <Text style={[s.meta, { flex: 1, fontSize: 12, lineHeight: 17 }]}>Always on: these keep orders from being missed.</Text>
         </View>
 
-        <View style={{ gap: 10, paddingTop: 4 }}>
-          <Label>See them now</Label>
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <Pressable accessibilityRole="button" onPress={() => setPreview('morning')} style={s.try}>
-              <Text style={s.tryText}>Morning prep list</Text>
-            </Pressable>
-            <Pressable accessibilityRole="button" onPress={() => setPreview('payout')} style={s.try}>
-              <Text style={s.tryText}>Tonight’s payout</Text>
-            </Pressable>
-          </View>
+        {onServer ? (
           <Text style={[s.meta, { paddingHorizontal: 4, fontSize: 12, lineHeight: 17 }]}>
             {status === 'native'
-              ? 'This phone rings on the lock screen. The prep list comes at 8:00 am and the payout at 9:30 pm.'
+              ? 'This phone rings on the lock screen.'
               : status === 'denied'
                 ? 'Notifications are off for Chakula Kitchen in this phone’s settings, so alerts only show while the app is open.'
-                : 'This version shows alerts inside the app only. Install the latest Kitchen app to hear them on the lock screen.'}{' '}
-            The owner’s phone and texts start once Chakula’s servers are connected.
+                : 'This version shows alerts inside the app only, while it’s open.'}
           </Text>
-        </View>
+        ) : (
+          <View style={{ gap: 10, paddingTop: 4 }}>
+            <Label>See them now</Label>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <Pressable accessibilityRole="button" onPress={() => setPreview('morning')} style={s.try}>
+                <Text style={s.tryText}>Morning prep list</Text>
+              </Pressable>
+              <Pressable accessibilityRole="button" onPress={() => setPreview('payout')} style={s.try}>
+                <Text style={s.tryText}>Tonight’s payout</Text>
+              </Pressable>
+            </View>
+            <Text style={[s.meta, { paddingHorizontal: 4, fontSize: 12, lineHeight: 17 }]}>
+              {status === 'native'
+                ? 'This phone rings on the lock screen. The prep list comes at 8:00 am and the payout at 9:30 pm.'
+                : status === 'denied'
+                  ? 'Notifications are off for Chakula Kitchen in this phone’s settings, so alerts only show while the app is open.'
+                  : 'This version shows alerts inside the app only. Install the latest Kitchen app to hear them on the lock screen.'}{' '}
+              The owner’s phone and texts start once Chakula’s servers are connected.
+            </Text>
+          </View>
+        )}
+
+        {onServer && k.user ? (
+          <View style={{ gap: 10, paddingTop: 10 }}>
+            <Label>Counter account</Label>
+            <View style={[s.bell, { shadowOpacity: 0 }]}>
+              <View style={{ flex: 1, gap: 1 }}>
+                <Text style={{ fontFamily: fonts.bold, fontSize: 15, color: colors.forest }}>{k.kitchenName}</Text>
+                <Text style={s.meta}>Signed in as {k.user.phone}</Text>
+              </View>
+              <Pressable accessibilityRole="button" accessibilityLabel="Sign out of this counter" onPress={k.signOut} style={s.play}>
+                <Text style={{ fontFamily: fonts.bold, fontSize: 14, color: colors.forest }}>Sign out</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
       </ScrollView>
       {preview ? <Reminder kind={preview} onClose={() => setPreview(null)} /> : null}
     </SafeAreaView>

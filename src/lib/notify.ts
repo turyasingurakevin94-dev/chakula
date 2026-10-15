@@ -45,7 +45,8 @@ export type Alert = {
 
 export type AlertHandlers = {
   // A notification arrived while the app is open. It is shown as the in-app banner, not by the system.
-  onForeground: (alert: { title: string; body: string; href?: string; icon?: string; quiet: boolean }) => void;
+  // orderId: set on the server's pushes, for the order they are about.
+  onForeground: (alert: { title: string; body: string; href?: string; icon?: string; quiet: boolean; orderId?: string }) => void;
   // The student tapped a notification.
   onOpen: (href: string) => void;
 };
@@ -117,9 +118,9 @@ export const notify = {
       N.setNotificationHandler({
         handleNotification: async (n) => {
           const c = n.request.content;
-          const data = (c.data ?? {}) as { href?: unknown; icon?: unknown; quiet?: unknown };
+          const data = (c.data ?? {}) as { href?: unknown; icon?: unknown; quiet?: unknown; orderId?: unknown };
           const text = (v: unknown) => (typeof v === 'string' && v ? v : undefined);
-          handlers.onForeground({ title: c.title ?? '', body: c.body ?? '', href: text(data.href), icon: text(data.icon), quiet: data.quiet === true });
+          handlers.onForeground({ title: c.title ?? '', body: c.body ?? '', href: text(data.href), icon: text(data.icon), quiet: data.quiet === true, orderId: text(data.orderId) });
           // The banner inside the app takes its place, with no second sound.
           return { shouldShowBanner: false, shouldShowList: false, shouldPlaySound: false, shouldSetBadge: false };
         },

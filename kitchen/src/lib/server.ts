@@ -1,3 +1,4 @@
+import { requireOptionalNativeModule } from 'expo';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
@@ -22,7 +23,7 @@ export type ServerOrder = {
   subtotal: number;
   deliveryFee: number;
   total: number;
-  payMethod: 'mtn' | 'airtel' | 'cash';
+  payMethod: 'mtn' | 'airtel' | 'cash' | 'wallet';
   paid: boolean;
   cashToCollect: number;
   // Only on the student's own orders.
@@ -47,24 +48,129 @@ export class ServerError extends Error {
   }
 }
 
-// Kept in memory: signing in again after the app restarts. Saving it on the phone needs a
-// secure storage module, which comes with the next APK.
 let token: string | null = null;
 export const getToken = () => token;
 export const setToken = (t: string | null) => {
   token = t;
 };
 
-export async function api<T>(method: 'GET' | 'POST' | 'PATCH', path: string, body?: unknown): Promise<T> {
+// ---- Staying signed in ----
+// The sign-in is saved on the phone (expo-secure-store; localStorage on the web), so the counter
+// opens straight onto the board. The APK that is already installed was built without the secure
+// store's native code and gets this JavaScript over the air, so the module is only required after
+// checking its native half exists, inside try/catch. Without it the sign-in stays in memory only,
+// as before, and the counter signs in again after a restart.
+
+const SAVED_KEY = 'chakula.kitchen.session';
+type SecureStore = typeof import('expo-secure-store');
+let secure: SecureStore | null | undefined;
+
+function secureStore(): SecureStore | null {
+  if (secure !== undefined) return secure;
+  secure = null;
+  if (Platform.OS === 'web') return secure;
+  try {
+    if (!requireOptionalNativeModule('ExpoSecureStore')) return secure;
+    // A lazy require on purpose: an import would load the package on builds without its native code.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    secure = require('expo-secure-store') as SecureStore;
+  } catch {
+    secure = null;
+  }
+  return secure;
+}
+
+function webStorage(): Storage | null {
+  if (Platform.OS !== 'web') return null;
+  try {
+    return typeof localStorage === 'undefined' ? null : localStorage;
+  } catch {
+    return null;
+  }
+}
+
+// Never let a slow or stuck store hold the app on a blank screen.
+function within<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return new Promise((resolve) => {
+    const t = setTimeout(() => resolve(fallback), ms);
+    p.then(
+      (v) => {
+        clearTimeout(t);
+        resolve(v);
+      },
+      () => {
+        clearTimeout(t);
+        resolve(fallback);
+      },
+    );
+  });
+}
+
+export type SavedSession = { token: string; user: ServerUser | null };
+
+async function readSaved(): Promise<string | null> {
+  const web = webStorage();
+  if (web) {
+    try {
+      return web.getItem(SAVED_KEY);
+    } catch {
+      return null;
+    }
+  }
+  const store = secureStore();
+  if (!store) return null;
+  return within(store.getItemAsync(SAVED_KEY), 3000, null);
+}
+
+export async function loadSession(): Promise<SavedSession | null> {
+  try {
+    const raw = await readSaved();
+    if (!raw) return null;
+    const saved = JSON.parse(raw) as Partial<SavedSession>;
+    if (typeof saved.token !== 'string' || !saved.token) return null;
+    return { token: saved.token, user: saved.user && typeof saved.user === 'object' ? saved.user : null };
+  } catch {
+    return null;
+  }
+}
+
+export async function saveSession(session: SavedSession | null) {
+  const raw = session ? JSON.stringify(session) : null;
+  const web = webStorage();
+  if (web) {
+    try {
+      if (raw) web.setItem(SAVED_KEY, raw);
+      else web.removeItem(SAVED_KEY);
+    } catch {
+      // Private mode or storage blocked: memory only.
+    }
+    return;
+  }
+  const store = secureStore();
+  if (!store) return;
+  try {
+    if (raw) await store.setItemAsync(SAVED_KEY, raw);
+    else await store.deleteItemAsync(SAVED_KEY);
+  } catch {
+    // Memory only.
+  }
+}
+
+export async function api<T>(method: 'GET' | 'POST' | 'PATCH', path: string, body?: unknown, timeoutMs = 20_000): Promise<T> {
   let res: Response;
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), timeoutMs);
   try {
     res = await fetch(`${SERVER_URL}${path}`, {
       method,
       headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       body: body === undefined ? undefined : JSON.stringify(body),
+      signal: abort.signal,
     });
   } catch {
     throw new ServerError(0, 'No connection. Check your data and try again.');
+  } finally {
+    clearTimeout(timer);
   }
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw new ServerError(res.status, json.error ?? 'Something went wrong. Try again.');

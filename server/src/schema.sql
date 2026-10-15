@@ -154,5 +154,40 @@ create table if not exists rider_locations (
   at timestamptz not null default now()
 );
 
+-- ---- Wallet ----
+-- Students top up with MTN or Airtel and pay for orders from the balance. Every change of money is
+-- one row in wallet_entries; the balance is their sum, so it can always be explained line by line.
+
+-- Wallet orders are paid when placed.
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'orders_pay_method_wallet') then
+    alter table orders drop constraint if exists orders_pay_method_check;
+    alter table orders add constraint orders_pay_method_wallet check (pay_method in ('mtn', 'airtel', 'cash', 'wallet'));
+  end if;
+end $$;
+
+-- A top-up is a payment with no order: wallet_user_id says whose wallet it fills.
+alter table payments alter column order_id drop not null;
+alter table payments add column if not exists wallet_user_id text references users(id);
+create index if not exists payments_wallet_user on payments (wallet_user_id, created_at desc) where wallet_user_id is not null;
+
+create table if not exists wallet_entries (
+  id text primary key,
+  user_id text not null references users(id),
+  -- Whole shillings: + money in (top-up, refund), - money out (an order).
+  amount integer not null check (amount <> 0),
+  kind text not null check (kind in ('topup', 'order', 'refund')),
+  order_id text references orders(id),
+  payment_id text references payments(id),
+  created_at timestamptz not null default now(),
+  -- Each top-up credits once, and each order is charged and refunded at most once,
+  -- however many times a webhook or a tap repeats.
+  unique (payment_id),
+  unique (order_id, kind),
+  check ((kind = 'topup') = (payment_id is not null)),
+  check ((kind in ('order', 'refund')) = (order_id is not null))
+);
+create index if not exists wallet_entries_user on wallet_entries (user_id, created_at desc);
+
 -- Early production orders stored extras as a JSON string ("[]") instead of an array; unwrap them.
 update order_lines set extras = (extras #>> '{}')::jsonb where jsonb_typeof(extras) = 'string';

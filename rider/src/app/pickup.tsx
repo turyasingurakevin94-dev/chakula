@@ -45,7 +45,7 @@ export default function Pickup() {
     busy.current = false;
     if (!bag || !run) return;
     if (scanned.length + 1 === run.stops.length) {
-      notify(`All ${run.stops.length} bags on · students told you're on the way`);
+      notify(run.stops.length === 1 ? `Bag on · ${run.stops[0]!.first} told you're on the way` : `All ${run.stops.length} bags on · students told you're on the way`);
       router.replace('/route');
     }
   };
@@ -105,7 +105,9 @@ export default function Pickup() {
               ) : null}
               <Animated.View style={[s.scanLine, { transform: [{ translateY: line.interpolate({ inputRange: [0, 1], outputRange: [-60, 60] }) }] }]} />
             </View>
-            <Text style={s.hint}>Hold over the round sticker. It scans by itself.</Text>
+            <Text style={s.hint}>
+              {waiting?.stop.status === 'cooking' ? `Bag ${waiting.stop.bag} is still cooking. It scans once the kitchen seals it.` : 'Hold over the round sticker. It scans by itself.'}
+            </Text>
           </Pressable>
         </View>
 
@@ -120,9 +122,10 @@ export default function Pickup() {
             const done = scanned.includes(stop.bag);
             const now = waiting?.stop.bag === stop.bag;
             const first = number === 1;
-            const load = i === 0 ? 'load first, bottom of the box' : i === bags.length - 1 ? 'load last, on top' : `load ${ordinal(i + 1)}`;
+            const load = bags.length === 1 ? 'only bag' : i === 0 ? 'load first, bottom of the box' : i === bags.length - 1 ? 'load last, on top' : `load ${ordinal(i + 1)}`;
             const from = kitchenOf(stop) === KITCHEN ? '' : ` · from ${kitchenOf(stop)} ${spotOf(stop)}`;
-            const sub = (done ? `Seal intact · ${load}` : `${first ? 'First stop' : i === 0 ? 'Last stop' : `Stop ${number}`} · ${load}`) + from;
+            const where = bags.length === 1 ? 'One stop' : first ? 'First stop' : i === 0 ? 'Last stop' : `Stop ${number}`;
+            const sub = (done ? `Seal intact · ${load}` : stop.status === 'cooking' ? `${where} · still cooking` : `${where} · ${load}`) + from;
             return (
               <View key={stop.bag} style={[s.bag, now && s.bagNow]}>
                 {done ? (
@@ -142,7 +145,9 @@ export default function Pickup() {
               </View>
             );
           })}
-          <Body style={{ fontSize: 13, lineHeight: 19, color: colors.body }}>The last scan starts your route and tells {run.stops.length === 2 ? 'both students' : 'every student'} you&apos;re on the way.</Body>
+          <Body style={{ fontSize: 13, lineHeight: 19, color: colors.body }}>
+            The last scan starts your route and tells {run.stops.length === 1 ? run.stops[0]!.first : run.stops.length === 2 ? 'both students' : 'every student'} you&apos;re on the way.
+          </Body>
         </View>
       </ScrollView>
 
