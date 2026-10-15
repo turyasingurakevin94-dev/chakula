@@ -5,6 +5,12 @@ name: Build Rider app
 
 on:
   workflow_dispatch:
+    inputs:
+      where:
+        description: Where to build. "github" is free; "expo" uses the Expo plan's monthly Android builds.
+        type: choice
+        options: [github, expo]
+        default: github
   pull_request:
     paths:
       - rider/eas.json
@@ -14,6 +20,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # To attach the APK built on GitHub to a release, so it downloads on a phone without signing in.
+    permissions:
+      contents: write
     defaults:
       run:
         working-directory: rider
@@ -53,7 +62,30 @@ jobs:
             if (!c.updates || !c.updates.url) { console.error("::error::app.json has no updates.url"); process.exit(1); }
           '
 
-      - name: Build APK
+      # Free: builds on this GitHub runner with the same signing key Expo keeps for the app, so it
+      # installs over the current APK. Pull requests build here too, as a check.
+      - uses: actions/setup-java@v4
+        if: inputs.where != 'expo'
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Build APK on GitHub
+        if: inputs.where != 'expo'
+        run: eas build --platform android --profile preview --non-interactive --local --output "$GITHUB_WORKSPACE/chakula-rider.apk"
+
+      - name: Publish APK
+        if: inputs.where != 'expo' && github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="rider-apk-${{ github.run_number }}"
+          gh release create "$tag" "$GITHUB_WORKSPACE/chakula-rider.apk" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title "Rider app (build ${{ github.run_number }})" --notes "Install on Android: open this page on the phone and tap chakula-rider.apk."
+          url="https://github.com/$GITHUB_REPOSITORY/releases/download/$tag/chakula-rider.apk"
+          printf '## Rider app ready\n\n- Direct APK download: %s\n' "$url" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Build APK on Expo
+        if: inputs.where == 'expo'
         run: |
           eas build --platform android --profile preview --non-interactive --json > build.json
           cat build.json
