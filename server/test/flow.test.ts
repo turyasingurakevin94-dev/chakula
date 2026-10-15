@@ -14,6 +14,7 @@ import { devLogins } from '../src/seed.ts';
 const config: Config = {
   port: 0, databaseUrl: '', dataDir: '', sms: 'log', payments: 'dev', push: 'log', seed: true,
   africasTalking: { username: '', apiKey: '', senderId: '' }, devPayMs: 30,
+  flutterwave: { secretKey: '', webhookHash: '', email: '', api: '' },
 };
 
 let server: Awaited<ReturnType<typeof createServer>>;

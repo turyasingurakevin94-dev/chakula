@@ -197,20 +197,23 @@ export function createOrders(db: Db, deps: { payments: () => PaymentProvider; on
         }
       });
 
-      let payment: { id: string; status: 'pending' } | null = null;
+      let payment: { id: string; status: 'pending'; redirectUrl?: string } | null = null;
       if (!cash) {
         const paymentId = randomUUID();
         const provider = deps.payments();
+        let redirectUrl: string | undefined;
         await db.query("insert into payments (id, order_id, provider, method, phone, amount, status) values ($1,$2,$3,$4,$5,$6,'pending')", [paymentId, id, provider.name, input.payMethod, payPhone, total]);
         const [{ number }] = (await db.query<{ number: number }>('select number from orders where id = $1', [id])) as [{ number: number }];
         try {
-          const { providerRef } = await provider.start({ paymentId, amount: total, phone: payPhone, method: input.payMethod as 'mtn' | 'airtel', reference: `Chakula ${number}` });
-          await db.query('update payments set provider_ref = $2 where id = $1', [paymentId, providerRef]);
+          const started = await provider.start({ paymentId, amount: total, phone: payPhone, method: input.payMethod as 'mtn' | 'airtel', reference: `Chakula ${number}`, name: student.name ?? undefined });
+          await db.query('update payments set provider_ref = $2 where id = $1', [paymentId, started.providerRef]);
+          redirectUrl = started.redirectUrl;
         } catch (e) {
+          console.error('[payments] start failed', e);
           await settle({ paymentId, status: 'failed', failure: 'Couldn’t reach mobile money' });
-          throw e;
+          throw new HttpError(502, 'Mobile money didn’t answer. Nothing was charged; try again.');
         }
-        payment = { id: paymentId, status: 'pending' };
+        payment = { id: paymentId, status: 'pending', ...(redirectUrl ? { redirectUrl } : {}) };
       }
       const found = await loadOne(id);
       deps.onEvent({ ...found, change: found.order.status });

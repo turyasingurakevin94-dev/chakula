@@ -59,6 +59,7 @@ All bodies are JSON. Signed-in calls send `Authorization: Bearer <token>`.
 | Kitchen | `PATCH /kitchen` `{open}`, `PATCH /kitchen/dishes/:id` `{soldOut}`, `PATCH /kitchen/dishes/:id/extras/:id` `{soldOut}` | Open or close, sold out |
 | Rider | `GET /rider/runs`, `POST /rider/orders/:id/take`, `/pick-up`, `/at-gate`, `/deliver` `{code}` | Run offers and steps |
 | Rider | `POST /rider/location` `{lat, lng}` | Every few seconds while riding |
+| Flutterwave | `POST /payments/flutterwave/webhook` | Payment outcome; checked before use |
 | Apps | `GET /live?token=` (WebSocket) | Pushes `order`, `run-taken` and `rider-location` messages |
 
 ## Code map
@@ -67,6 +68,16 @@ All bodies are JSON. Signed-in calls send `Authorization: Bearer <token>`.
 - `src/notify.ts` who hears what; `src/live.ts` WebSocket updates
 - `src/providers/` SMS (console or Africa's Talking), push (console or Expo), payments (dev for now)
 - `src/schema.sql` tables; `src/seed.ts` sample data; `src/db.ts` PGlite or Postgres
+
+## Payments (Flutterwave)
+
+`PAYMENT_PROVIDER=flutterwave` charges MTN and Airtel MoMo through Flutterwave
+(`/v3/charges?type=mobile_money_uganda`). The student's app opens Flutterwave's waiting page while
+they approve on their phone. Flutterwave then calls `POST /payments/flutterwave/webhook`; the
+server checks the `verif-hash` header, re-reads the transaction from Flutterwave and only cooks
+the order if the status, amount, currency and reference all match. Needs `FLW_SECRET_KEY`,
+`FLW_WEBHOOK_HASH` and `FLW_EMAIL` (see `.env.example`), and the webhook URL plus the same secret
+hash set in the Flutterwave dashboard. Use the test keys first: test payments approve themselves.
 
 ## Using it from the apps
 
@@ -81,8 +92,8 @@ Use `--clear` whenever the address changes, or Metro may keep the old one.
 
 ## Not built yet
 
-Real MTN and Airtel payments (waiting on the provider and business accounts), card and wallet,
-refunds, ordering for later, offering a run to one rider at a time, SMS backup when a push isn't
+Card and wallet, refunds (a short or late payment is logged for a manual refund), cancelling
+MoMo orders nobody approved, ordering for later, offering a run to one rider at a time, SMS backup when a push isn't
 seen in 60 seconds, meal plans, ratings and tips, rider pay, an admin screen, staying signed in
 after the app restarts (needs secure storage in a new APK), and phone GPS for riders (needs
 expo-location in a new APK).

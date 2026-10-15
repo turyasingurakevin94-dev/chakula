@@ -147,6 +147,23 @@ export async function createServer(config: Config) {
     return c.json(viewOrder(order, lines, user));
   });
 
+  // ---- Payment provider callbacks ----
+  app.post('/payments/:provider/webhook', async (c) => {
+    if (c.req.param('provider') !== payments.name || !payments.webhook) throw new HttpError(404, 'Not found.');
+    let outcome;
+    try {
+      outcome = await payments.webhook(c.req.raw.headers, await c.req.json(), async (paymentId) => {
+        const [p] = await db.query<{ amount: number }>('select amount from payments where id = $1 and provider = $2', [paymentId, payments.name]);
+        return p ?? null;
+      });
+    } catch (e) {
+      console.error('[payments] webhook refused:', e instanceof Error ? e.message : e);
+      return c.json({ ok: false }, 401);
+    }
+    if (outcome) await orders.settle(outcome);
+    return c.json({ ok: true });
+  });
+
   // ---- Kitchens ----
   app.get('/kitchen/orders', signedIn('kitchen'), async (c) => {
     const user = c.get('user');

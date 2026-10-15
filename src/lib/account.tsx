@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Alert } from 'react-native';
+import { Alert, Linking } from 'react-native';
 import { dropPoints, type DropKind, type Pt } from './campus';
 import { applyServerMenus, findSpecial, type Extra, type MenuItem, type ServerKitchen } from './data';
 import type { PhotoKey } from './photos';
@@ -423,8 +423,12 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       note: [room, note].filter(Boolean).join(' · ') || undefined,
       lines: o.lines.map((l) => ({ dishId: l.item.id, quantity: l.quantity, extraIds: (l.extras ?? []).map((e) => e.id), pepper: l.pepper, note: l.note || undefined })),
     };
-    api<{ order: ServerOrder }>('POST', '/orders', body)
-      .then(({ order }) => setOrders((prev) => prev.map((p) => (p.localId === localId ? fromServer(order, p) : p))))
+    api<{ order: ServerOrder; payment: { redirectUrl?: string } | null }>('POST', '/orders', body)
+      .then(({ order, payment }) => {
+        setOrders((prev) => prev.map((p) => (p.localId === localId ? fromServer(order, p) : p)));
+        // Flutterwave's page that waits with the student while they approve on their phone.
+        if (payment?.redirectUrl) Linking.openURL(payment.redirectUrl).catch(() => {});
+      })
       .catch((e) => {
         setOrders((prev) => prev.filter((p) => p.localId !== localId));
         Alert.alert('Order not placed', e instanceof Error ? e.message : 'Try again.');
