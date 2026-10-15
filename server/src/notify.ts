@@ -1,5 +1,5 @@
 import type { Db } from './db.ts';
-import type { OrderEvent } from './orders.ts';
+import { RETURNED, type OrderEvent } from './orders.ts';
 import type { Push, PushMessage } from './providers/push.ts';
 import type { Sms } from './providers/sms.ts';
 
@@ -58,6 +58,13 @@ export function createNotify(db: Db, push: Push, sms: Sms) {
         if (order.cancel_reason === 'Cancelled by the student') {
           const kitchen = await tokens("u.role = 'kitchen' and u.kitchen_id = $1 and p.app = 'kitchen'", [order.kitchen_id]);
           await push.send(kitchen.map((t) => ({ to: t.token, title: `Order ${order.number} cancelled`, body: 'The student took it back. Don’t cook it.', data, channel: 'bell' })));
+        }
+        if (order.cancel_reason === RETURNED) {
+          const kitchen = await tokens("u.role = 'kitchen' and u.kitchen_id = $1 and p.app = 'kitchen'", [order.kitchen_id]);
+          await push.send(kitchen.map((t) => ({ to: t.token, title: `Bag ${order.number} is coming back`, body: `${rider} couldn’t hand it over at ${order.drop_name}.`, data, channel: 'bell' })));
+          const refund = order.pay_method === 'wallet' ? ' Your money is back in your wallet.' : order.pay_method === 'cash' ? '' : ' Chakula will refund your MoMo.';
+          await toStudent(order.student_id, order.student_phone, 'Your order went back to the kitchen', `${rider} couldn’t reach you at ${order.drop_name}.${refund}`, data,
+            `Chakula: ${rider} couldn't reach you at ${order.drop_name}, so order ${order.number} went back to the kitchen.${refund}`);
         }
         if (order.cancel_reason?.startsWith('Payment')) await toStudent(order.student_id, order.student_phone, 'Payment didn’t go through', 'Nothing was charged. Try again when you’re ready.', data);
         break;

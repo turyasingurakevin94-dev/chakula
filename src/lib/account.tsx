@@ -383,6 +383,9 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       } else if (m.type === 'order') {
         const o = m.order;
         if (o.status === 'cancelled' && o.cancelReason?.startsWith('Payment')) Alert.alert('Payment didn’t go through', 'Nothing was charged. Try again when you’re ready.');
+        if (o.status === 'cancelled' && o.cancelReason === 'Returned to the kitchen') {
+          Alert.alert('Your order went back to the kitchen', `${o.rider?.name ?? 'Your rider'} couldn’t reach you at ${o.dropPoint.name}.${o.payMethod === 'wallet' ? ' Your money is back in your wallet.' : o.payMethod === 'cash' ? '' : ' Chakula will refund your MoMo.'}`);
+        }
         setOrders((prev) => (o.status === 'cancelled' ? prev.filter((p) => p.serverId !== o.id) : prev.map((p) => (p.serverId === o.id ? fromServer(o, p) : p))));
       } else if (m.type === 'rider-location') {
         const at = toCampusMetres(m.lat, m.lng);

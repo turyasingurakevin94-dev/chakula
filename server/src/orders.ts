@@ -14,6 +14,7 @@ import { lockedBalance, orderEntry, ugx } from './wallet.ts';
 
 export type Status = 'awaiting_payment' | 'cooking' | 'ready' | 'picked_up' | 'at_gate' | 'delivered' | 'cancelled';
 const CANCEL_MS = 60_000;
+export const RETURNED = 'Returned to the kitchen';
 const ACTIVE: Status[] = ['awaiting_payment', 'cooking', 'ready', 'picked_up', 'at_gate'];
 // While the student may call their rider: from taking the run to the handover.
 const RIDER_REACHABLE: Status[] = ['cooking', 'ready', 'picked_up', 'at_gate'];
@@ -324,6 +325,20 @@ export function createOrders(db: Db, deps: { payments: () => PaymentProvider; on
       const { order } = await mine(rider, id);
       if (order.rider_id !== rider.id) throw new HttpError(403, 'This isn’t your run.');
       return move(id, ['picked_up'], 'at_gate', 'at_gate_at = now()');
+    },
+
+    // The student never came (or the bag can't be handed over): the rider takes it back to the
+    // kitchen and the order ends. Wallet orders are refunded to the wallet straight away; a MoMo
+    // refund is logged for the team until refunds are automatic.
+    async returnBag(rider: User, id: string) {
+      const { order } = await mine(rider, id);
+      if (order.rider_id !== rider.id) throw new HttpError(403, 'This isn’t your run.');
+      const moved = await move(id, ['picked_up', 'at_gate'], 'cancelled', `cancelled_at = now(), cancel_reason = '${RETURNED}'`, [], {
+        then: order.pay_method === 'wallet' ? async (t) => void (await orderEntry(t, order.student_id, id, 'refund', order.total)) : undefined,
+      });
+      if (order.pay_method === 'wallet') deps.onWallet?.(order.student_id);
+      if (order.pay_method === 'mtn' || order.pay_method === 'airtel') console.error(`[payments] order ${order.number} was returned to the kitchen. MoMo refund of ${order.total} needed.`);
+      return moved;
     },
 
     async deliver(rider: User, id: string, code: string) {

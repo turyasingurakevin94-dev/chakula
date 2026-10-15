@@ -3,13 +3,18 @@ import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Defs, Path, RadialGradient, Rect, Stop as GradientStop } from 'react-native-svg';
-import { BackButton, Body, Bold, Icon, Label, Num, RoundButton } from '../components/ui';
+import { Scanner } from '../components/scanner';
+import { BackButton, Body, Bold, Button, Icon, Label, Num, RoundButton } from '../components/ui';
+import { loadCamera, parseBagCode } from '../lib/camera';
 import { KITCHEN, kitchenOf, ordinal, pickupOrder, spotOf, useRider } from '../lib/rider';
 import { onServer } from '../lib/server';
 import { colors, fonts } from '../lib/theme';
 
-// How long the sample scanner takes to "read" each seal. There is no camera yet.
+// How long the sample scanner takes to "read" each seal.
 const SCAN_MS = 2200;
+// On the server, with an APK that has the camera: a real QR scanner. Without it (older APKs),
+// the rider confirms each bag with a button.
+const hasCamera = onServer && !!loadCamera();
 
 // Pick up: scan each bag's seal at the kitchen hatch. The last scan starts the route.
 export default function Pickup() {
@@ -38,10 +43,10 @@ export default function Pickup() {
 
   // On the server each scan picks the bag up there; one at a time.
   const busy = useRef(false);
-  const scan = async () => {
+  const scan = async (orderId?: string) => {
     if (busy.current) return;
     busy.current = true;
-    const bag = onServer ? await pickUp() : scanNext();
+    const bag = onServer ? await pickUp(orderId) : scanNext();
     busy.current = false;
     if (!bag || !run) return;
     if (scanned.length + 1 === run.stops.length) {
@@ -50,10 +55,21 @@ export default function Pickup() {
     }
   };
 
+  // A code the camera read: one of this run's bags, not yet on the bike.
+  const onCode = (data: string) => {
+    const id = parseBagCode(data);
+    const stop = id ? run?.stops.find((x) => x.id === id) : undefined;
+    if (!id) return notify('That isn’t a Chakula bag code');
+    if (!stop) return notify('That bag isn’t on your run. Check the number with the kitchen.');
+    if (scanned.includes(stop.bag)) return;
+    if (stop.status === 'cooking') return notify(`Bag ${stop.bag} is still cooking. Ask the kitchen to tap Ready.`);
+    void scan(id);
+  };
+
   // The sample scanner reads the next seal by itself after a moment. A bag still cooking waits for
-  // the kitchen's Ready tap.
+  // the kitchen's Ready tap. On the server nothing is picked up until the rider scans or confirms.
   useEffect(() => {
-    if (!waiting || waiting.stop.status === 'cooking') return;
+    if (onServer || !waiting || waiting.stop.status === 'cooking') return;
     const t = setTimeout(scan, SCAN_MS);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -77,7 +93,8 @@ export default function Pickup() {
 
       <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
         <View style={{ paddingHorizontal: 20, paddingTop: 16 }}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Scan the seal" onPress={scan} style={s.viewfinder}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Scan the seal" disabled={onServer} onPress={() => void scan()} style={s.viewfinder}>
+            {hasCamera ? <Scanner torch={torch} onCode={onCode} /> : (
             <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
               <Defs>
                 <RadialGradient id="vf" cx="50%" cy="45%" rx="60%" ry="60%">
@@ -87,12 +104,13 @@ export default function Pickup() {
               </Defs>
               <Rect width="100%" height="100%" fill="url(#vf)" />
             </Svg>
+            )}
             <View style={s.frame}>
               <View style={[s.corner, { left: 0, top: 0, borderLeftWidth: 3, borderTopWidth: 3, borderTopLeftRadius: 14 }]} />
               <View style={[s.corner, { right: 0, top: 0, borderRightWidth: 3, borderTopWidth: 3, borderTopRightRadius: 14 }]} />
               <View style={[s.corner, { left: 0, bottom: 0, borderLeftWidth: 3, borderBottomWidth: 3, borderBottomLeftRadius: 14 }]} />
               <View style={[s.corner, { right: 0, bottom: 0, borderRightWidth: 3, borderBottomWidth: 3, borderBottomRightRadius: 14 }]} />
-              {waiting ? (
+              {waiting && !hasCamera ? (
                 <View style={s.sticker}>
                   <Svg width={64} height={64} viewBox="0 0 7 7">
                     <Path fill="#111" d="M0 0h3v3H0zM4 0h3v3H4zM0 4h3v3H0zM4 4h1v1H4zM6 4h1v1H6zM5 5h1v1H5zM4 6h1v1H4zM6 6h1v1H6z" />
@@ -106,9 +124,21 @@ export default function Pickup() {
               <Animated.View style={[s.scanLine, { transform: [{ translateY: line.interpolate({ inputRange: [0, 1], outputRange: [-60, 60] }) }] }]} />
             </View>
             <Text style={s.hint}>
-              {waiting?.stop.status === 'cooking' ? `Bag ${waiting.stop.bag} is still cooking. It scans once the kitchen seals it.` : 'Hold over the round sticker. It scans by itself.'}
+              {waiting?.stop.status === 'cooking'
+                ? `Bag ${waiting.stop.bag} is still cooking. It scans once the kitchen seals it.`
+                : hasCamera
+                  ? 'Point at the bag’s QR on the kitchen screen.'
+                  : onServer
+                    ? 'Check the bag number, then confirm below.'
+                    : 'Hold over the round sticker. It scans by itself.'}
             </Text>
           </Pressable>
+          {/* On the server: the way to pick up without a camera, and the fallback when a code won't scan. */}
+          {onServer && waiting && waiting.stop.status !== 'cooking' ? (
+            <Button variant={hasCamera ? 'secondary' : 'primary'} icon="check" style={{ marginTop: 12 }} onPress={() => void scan(waiting.stop.id)}>
+              {hasCamera ? `Can’t scan? Confirm bag ${waiting.stop.bag}` : `Bag ${waiting.stop.bag} is on my bike`}
+            </Button>
+          ) : null}
         </View>
 
         <View style={{ paddingHorizontal: 20, paddingTop: 20, gap: 10 }}>
@@ -141,7 +171,7 @@ export default function Pickup() {
                   </Bold>
                   <Body style={{ fontSize: 13, lineHeight: 18, color: colors.muted }}>{sub}</Body>
                 </View>
-                {now ? <Bold size={13} color={colors.orangeText}>Scanning</Bold> : null}
+                {now ? <Bold size={13} color={colors.orangeText}>{onServer && !hasCamera ? 'Next' : 'Scanning'}</Bold> : null}
               </View>
             );
           })}

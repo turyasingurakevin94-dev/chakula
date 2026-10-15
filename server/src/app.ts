@@ -239,6 +239,7 @@ export async function createServer(config: Config) {
   app.post('/rider/orders/:id/take', signedIn('rider'), riderStep(orders.take));
   app.post('/rider/orders/:id/pick-up', signedIn('rider'), riderStep(orders.pickUp));
   app.post('/rider/orders/:id/at-gate', signedIn('rider'), riderStep(orders.atGate));
+  app.post('/rider/orders/:id/return', signedIn('rider'), riderStep(orders.returnBag));
   app.post('/rider/orders/:id/deliver', signedIn('rider'), async (c) => {
     const user = c.get('user');
     const { code } = await body(c, z.object({ code: z.string().regex(/^\s*\d{4}\s*$/) }));

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Bike, Note } from '../../components/order';
+import { QrCode, bagCode } from '../../components/qr';
 import { BackHeader, Body, Chip, DishPhoto, Icon } from '../../components/ui';
 import { clock, minutesUntil, useKitchen, type Status } from '../../lib/kitchen';
 import { onServer } from '../../lib/server';
@@ -144,6 +145,14 @@ export default function OrderScreen() {
           ) : null}
         </View>
 
+        {onServer && o.status === 'ready' && o.serverId ? (
+          <View style={[s.card, s.qr]}>
+            <QrCode value={bagCode(o.serverId)} size={200} />
+            <Text style={[s.rowTitle, { fontSize: 16 }]}>The rider scans this for bag {o.id}</Text>
+            <Text style={[s.meta, { textAlign: 'center' }]}>Show this screen at the counter when they come. Their app marks the bag picked up.</Text>
+          </View>
+        ) : null}
+
         <View style={[s.card, { paddingHorizontal: 16, paddingVertical: 6 }]}>
           {onServer ? (
             <View style={[s.row, (o.rider || o.status === 'ready') && { borderBottomWidth: 1, borderBottomColor: colors.lineSoft }]}>
@@ -193,7 +202,7 @@ export default function OrderScreen() {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={s.rowTitle}>{o.status === 'picked' || o.status === 'delivered' ? `${o.rider.name} picked it up${o.pickedAt ? ` at ${clock(o.pickedAt)}` : ''}` : `${o.rider.name} is coming for it`}</Text>
-                <Text style={s.meta}>{o.status === 'delivered' ? `Delivered at ${o.deliveredAt ? clock(o.deliveredAt) : ''}` : o.status === 'picked' ? 'On the way to the student.' : 'Hand them the bag when they get to the counter.'}</Text>
+                <Text style={s.meta}>{o.status === 'delivered' ? `Delivered at ${o.deliveredAt ? clock(o.deliveredAt) : ''}` : o.status === 'picked' ? 'On the way to the student.' : 'Show them the QR above, then hand them the bag.'}</Text>
               </View>
             </View>
           ) : o.rider ? (
@@ -242,6 +251,7 @@ const s = StyleSheet.create({
   swapState: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.chipBg, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 },
   swap: { height: 44, borderRadius: 12, borderWidth: 1, borderColor: colors.toggleOff, alignItems: 'center', justifyContent: 'center' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 },
+  qr: { alignItems: 'center', gap: 8, paddingVertical: 20, paddingHorizontal: 16 },
   iconWell: { width: 36, height: 36, borderRadius: 10, backgroundColor: colors.lineSoft, alignItems: 'center', justifyContent: 'center' },
   rowTitle: { fontFamily: fonts.bold, fontSize: 14, color: colors.forest },
   meta: { fontFamily: fonts.regular, fontSize: 13, color: colors.muted },
