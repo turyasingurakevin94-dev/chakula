@@ -11,6 +11,7 @@ on:
     # "Build Rider app" run instead.
     paths:
       - rider/src/**
+      - .github/workflows/rider-update.yml
   workflow_dispatch:
 
 concurrency:
@@ -55,4 +56,7 @@ jobs:
         run: eas init --non-interactive --force
 
       - name: Publish update
+        # The apps talk to the live Chakula server. Remove this to go back to sample data.
+        env:
+          EXPO_PUBLIC_API_URL: https://chakula-production.up.railway.app
         run: eas update --branch ${{ github.ref_name }} --message "${{ github.sha }}" --platform all --non-interactive
