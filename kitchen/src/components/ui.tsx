@@ -151,7 +151,7 @@ export function Chip({ children, size = 13, roomy }: { children: string; size?: 
 export function DishPhoto({ name, size = 40, radius = 10, style }: { name: string; size?: number; radius?: number; style?: StyleProp<ViewStyle> }) {
   const src = photoFor(name);
   return (
-    <View style={[{ width: size, height: size, borderRadius: radius, overflow: 'hidden', backgroundColor: colors.food, alignItems: 'center', justifyContent: 'center' }, style]}>
+    <View style={[{ width: size, height: size, borderRadius: radius, overflow: 'hidden', backgroundColor: colors.lineSoft, alignItems: 'center', justifyContent: 'center' }, style]}>
       {src ? (
         <Image source={src} style={{ width: '100%', height: '100%' }} resizeMode="cover" accessibilityIgnoresInvertColors />
       ) : (

@@ -84,7 +84,7 @@ export default function OrderScreen() {
         <View style={[s.card, { padding: 16, gap: 12 }]}>
           {o.items.map((i) => (
             <View key={i.name} style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-              <DishPhoto name={i.name} size={48} radius={12} />
+              <DishPhoto name={i.name} size={56} radius={14} />
               <View style={{ flex: 1, gap: 6 }}>
                 <Text style={s.item}>
                   {i.qty}× {i.name}

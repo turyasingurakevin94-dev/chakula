@@ -3,7 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import type { ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Chip } from '../components/ui';
+import { Chip, DishPhoto } from '../components/ui';
 import { clock, cookingQueue, cookNow, minutesUntil, nextDrop, ordinal, SERVED_EARLIER, useKitchen, type Order } from '../lib/kitchen';
 import { colors, fonts } from '../lib/theme';
 
@@ -89,10 +89,13 @@ export default function Counter() {
           <View style={s.cookNow}>
             <Text style={s.cookLabel}>Cook now</Text>
             {totals.map((t) => (
-              <Text key={t.name} style={{ fontFamily: fonts.regular, fontSize: 15, color: P.text }}>
-                <Text style={{ fontFamily: fonts.display, fontSize: 22 }}>{t.qty}</Text> {t.name}
-                {t.extras.length ? <Text style={{ color: P.accent }}> · {t.extras.join(', ')}</Text> : null}
-              </Text>
+              <View key={t.name} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <DishPhoto name={t.name} size={30} radius={15} />
+                <Text style={{ fontFamily: fonts.regular, fontSize: 15, color: P.text }}>
+                  <Text style={{ fontFamily: fonts.display, fontSize: 22 }}>{t.qty}</Text> {t.name}
+                  {t.extras.length ? <Text style={{ color: P.accent }}> · {t.extras.join(', ')}</Text> : null}
+                </Text>
+              </View>
             ))}
           </View>
         ) : null}
@@ -187,6 +190,7 @@ function CookCard({ order: o, rank, now, onReady }: { order: Order; rank: number
           {o.items.map((i, n) => (
             <View key={i.name} style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
               {n > 0 ? <Text style={s.item}>·</Text> : null}
+              <DishPhoto name={i.name} size={26} radius={8} />
               <Text style={s.item}>
                 {i.qty}× {i.name}
               </Text>
