@@ -1,4 +1,5 @@
 import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 
 // Talks to the Chakula server (server/ in this repo). It is off until the app is built or
 // started with EXPO_PUBLIC_API_URL set, e.g. EXPO_PUBLIC_API_URL=http://192.168.1.20:4000, so
@@ -113,6 +114,10 @@ export function connectLive(onMessage: (m: LiveMessage) => void) {
 // Sends this phone's Expo push token, so the server can ring it. Older APKs without the
 // notifications module, or a refused permission, just skip it.
 export async function registerPush(app: AppName) {
+  // Android push tokens come from Firebase, and these APKs have no Firebase set up
+  // (google-services.json). Asking anyway closes the app on some phones, so Android skips it
+  // until Firebase is added; the in-app live updates and local alerts still work.
+  if (Platform.OS !== 'ios') return;
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const N = require('expo-notifications') as typeof import('expo-notifications');
