@@ -10,6 +10,25 @@ const RELOAD_WINDOW_MS = 4000;
 // How long the app must have been in the background for a return to count.
 const AWAY_MS = 15000;
 
+// Set while the app opens a system dialog of its own (the "Allow notifications" prompt). Coming back
+// from one never counts as a return, however long the student took to answer.
+let holds = 0;
+let releasedAt = 0;
+// The return can be reported just after the dialog's answer, so it is ignored for a moment longer.
+const RELEASE_GRACE_MS = 3000;
+
+export async function whileDialogOpen<T>(run: () => Promise<T>): Promise<T> {
+  holds += 1;
+  try {
+    return await run();
+  } finally {
+    holds -= 1;
+    releasedAt = Date.now();
+  }
+}
+
+const inDialog = () => holds > 0 || Date.now() - releasedAt < RELEASE_GRACE_MS;
+
 export function useApplyUpdates() {
   useEffect(() => {
     if (__DEV__ || !Updates.isEnabled) return;
@@ -48,9 +67,9 @@ export function useApplyUpdates() {
     let leftAt = 0;
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'background' && last !== 'background') leftAt = Date.now();
-      // System dialogs (like the "Allow notifications" prompt) briefly send the app to the background.
+      // System dialogs (like the "Allow notifications" prompt) send the app to the background.
       // Restarting then would wipe what the student is doing, so only count a real trip away.
-      if (state === 'active' && last === 'background' && Date.now() - leftAt >= AWAY_MS) check(true);
+      if (state === 'active' && last === 'background' && !inDialog() && Date.now() - leftAt >= AWAY_MS) check(true);
       last = state;
     });
     return () => sub.remove();
