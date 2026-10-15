@@ -92,7 +92,7 @@ export default function Checkout() {
               const options = lineOptions(l);
               return (
                 <View key={l.key} style={[s.row, i < cart.lines.length - 1 && s.divider]}>
-                  <FoodImage tint={l.item.tint} size={22} style={s.thumb} />
+                  <FoodImage tint={l.item.tint} photo={l.item.photo} size={22} style={s.thumb} />
                   <View style={{ flex: 1, gap: 2 }}>
                     <Text style={s.strong}>{l.item.name}</Text>
                     <Text style={s.meta}>

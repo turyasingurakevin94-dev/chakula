@@ -38,7 +38,7 @@ export default function RestaurantScreen() {
     <View style={{ flex: 1, backgroundColor: colors.cream }}>
       <ScrollView contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
         <View style={{ height: 290 + insets.top, backgroundColor: colors.forest }}>
-          <FoodImage tint={restaurant.tint} size={96} style={[StyleSheet.absoluteFill, { paddingTop: insets.top, paddingBottom: 110 }]} />
+          <FoodImage tint={restaurant.tint} photo={restaurant.photo} size={96} style={[StyleSheet.absoluteFill, { paddingTop: insets.top, paddingBottom: 110 }]} />
           <Scrim id="menu-hero" />
           <View style={s.heroText}>
             <Text style={[smallCaps, { color: colors.peachText }]}>
@@ -89,7 +89,7 @@ export default function RestaurantScreen() {
                 <Text style={{ fontFamily: fonts.bold, fontSize: 15, color: colors.ink, marginTop: 2 }}>{formatUGX(item.price)}</Text>
               </View>
               <View>
-                <FoodImage tint={item.tint} size={40} style={{ width: 104, height: 104, borderRadius: 18, opacity: closed ? 0.6 : 1 }} />
+                <FoodImage tint={item.tint} photo={item.photo} size={40} style={{ width: 104, height: 104, borderRadius: 18, opacity: closed ? 0.6 : 1 }} />
                 {closed ? null : (
                   <Stepper
                     name={item.name}

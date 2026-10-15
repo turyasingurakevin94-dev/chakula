@@ -37,7 +37,7 @@ export default function Orders() {
               if (!sp) return null;
               return (
                 <View key={p.id} style={[ui.card, s.card, { flexDirection: 'row', alignItems: 'center', gap: 12 }]}>
-                  <FoodImage tint={sp.tint} size={26} style={s.thumb} />
+                  <FoodImage tint={sp.tint} photo={sp.photo} size={26} style={s.thumb} />
                   <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
                     <Text style={{ fontFamily: fonts.bold, fontSize: 12, letterSpacing: 0.7, textTransform: 'uppercase', color: colors.orangeText }}>
                       {sp.day} · {p.slot}
@@ -63,7 +63,7 @@ export default function Orders() {
             return (
               <View key={o.id} style={[ui.card, s.card]}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                  <FoodImage tint={o.lines[0]?.item.tint ?? r?.tint ?? colors.peach} size={26} style={s.thumb} />
+                  <FoodImage tint={o.lines[0]?.item.tint ?? r?.tint ?? colors.peach} photo={o.lines[0]?.item.photo ?? r?.photo} size={26} style={s.thumb} />
                   <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
                     <Text style={s.strong} numberOfLines={1}>
                       {r?.name ?? 'Order'}
@@ -118,7 +118,7 @@ function ActiveOrder({ order, minutes, waiting }: { order: Order; minutes: numbe
   return (
     <View style={{ paddingHorizontal: 20, paddingTop: 16 }}>
       <Pressable accessibilityRole="button" accessibilityLabel="Track your order" onPress={() => router.push('/tracking')} style={({ pressed }) => [s.active, { opacity: pressed ? 0.94 : 1 }]}>
-        <FoodImage tint={order.lines[0]?.item.tint ?? colors.sand} size={26} style={{ width: 64, height: 64, borderRadius: 16 }} />
+        <FoodImage tint={order.lines[0]?.item.tint ?? colors.sand} photo={order.lines[0]?.item.photo} size={26} style={{ width: 64, height: 64, borderRadius: 16 }} />
         <View style={{ flex: 1, gap: 6 }}>
           <Text style={{ fontFamily: fonts.regular, fontSize: 13, color: colors.mint }} numberOfLines={1}>
             {r?.name} · {status}

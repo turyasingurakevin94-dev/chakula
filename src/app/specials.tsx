@@ -27,7 +27,7 @@ export default function Specials() {
       <ScrollView contentContainerStyle={{ paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
 
         <View style={s.hero}>
-          <FoodImage tint={special.tint} size={72} style={s.heroTop}>
+          <FoodImage tint={special.tint} photo={special.photo} size={72} style={s.heroTop}>
             <Text style={[s.badge, s.day]}>This {special.day}</Text>
             <Text style={[s.badge, s.left]}>
               {left} of {special.capacity} left
@@ -80,7 +80,7 @@ export default function Specials() {
           <Label>Coming up</Label>
           {others.map((x) => (
             <Pressable key={x.id} accessibilityRole="button" accessibilityLabel={`${x.name}, ${x.day}`} onPress={() => pick(x.id)} style={({ pressed }) => [ui.card, s.row, { opacity: pressed ? 0.92 : 1 }]}>
-              <FoodImage tint={x.tint} size={30} style={s.thumb} />
+              <FoodImage tint={x.tint} photo={x.photo} size={30} style={s.thumb} />
               <View style={{ flex: 1, gap: 2 }}>
                 <Text style={{ fontFamily: fonts.bold, fontSize: 12, letterSpacing: 0.5, textTransform: 'uppercase', color: colors.orangeText }}>{x.day}</Text>
                 <Text style={{ fontFamily: fonts.bold, fontSize: 15, color: colors.forest }}>{x.name}</Text>

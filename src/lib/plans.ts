@@ -1,3 +1,4 @@
+import type { PhotoKey } from './photos';
 import { colors } from './theme';
 
 // Meal plans: pay once, then pick a dish for each meal from any kitchen. Prototype catalogue; prices
@@ -17,12 +18,13 @@ export type PlanKind = {
   // What the plan pays for each meal; dearer dishes cost the difference.
   perMeal: number;
   tint: string;
+  photo: PhotoKey;
 };
 
 export const planKinds: PlanKind[] = [
-  { id: 'lunch-supper', name: 'Lunch and supper', detail: 'Mon to Fri', meals: ['lunch', 'supper'], mealsPerMonth: 44, perMeal: 7000, tint: colors.sand },
-  { id: 'all-day', name: 'All day', detail: '3 meals · Mon to Sat', meals: ['breakfast', 'lunch', 'supper'], mealsPerMonth: 78, perMeal: 6200, tint: colors.sage },
-  { id: 'breakfast', name: 'Breakfast', detail: 'Rolex or katogo with tea · Mon to Fri', meals: ['breakfast'], mealsPerMonth: 22, perMeal: 4500, tint: colors.peach },
+  { id: 'lunch-supper', name: 'Lunch and supper', detail: 'Mon to Fri', meals: ['lunch', 'supper'], mealsPerMonth: 44, perMeal: 7000, tint: colors.sand, photo: 'pilau' },
+  { id: 'all-day', name: 'All day', detail: '3 meals · Mon to Sat', meals: ['breakfast', 'lunch', 'supper'], mealsPerMonth: 78, perMeal: 6200, tint: colors.sage, photo: 'spread' },
+  { id: 'breakfast', name: 'Breakfast', detail: 'Rolex or katogo with tea · Mon to Fri', meals: ['breakfast'], mealsPerMonth: 22, perMeal: 4500, tint: colors.peach, photo: 'rolex' },
 ];
 
 export const periods: { id: PlanPeriod; label: string; saving?: string; per: string }[] = [
@@ -56,20 +58,20 @@ export const mealTimes: Record<PlanMeal, { closes: [number, number]; cooks: [num
   supper: { closes: [15, 0], cooks: [17, 0], door: [19, 0] },
 };
 
-export type PlanDish = { id: string; restaurantId: string; kitchen: string; name: string; price: number; minutes: number; tint: string; meal: PlanMeal };
+export type PlanDish = { id: string; restaurantId: string; kitchen: string; name: string; price: number; minutes: number; tint: string; photo: PhotoKey; meal: PlanMeal };
 
 // Kitchens' plan menus. A dish at or under the plan's per-meal amount is covered.
 export const planDishes: PlanDish[] = [
-  { id: 'pilau', restaurantId: 'nakawa-kitchen', kitchen: 'Nakawa Kitchen', name: 'Chicken pilau', price: 7000, minutes: 12, tint: colors.sand, meal: 'supper' },
-  { id: 'chips-chicken', restaurantId: 'mama-jos', kitchen: 'Mama Jo’s', name: 'Chips & chicken', price: 7000, minutes: 10, tint: colors.sand, meal: 'supper' },
-  { id: 'bowl', restaurantId: 'green-bowl', kitchen: 'Green Bowl', name: 'Power bowl', price: 6500, minutes: 15, tint: colors.sage, meal: 'supper' },
-  { id: 'katogo', restaurantId: 'nakawa-kitchen', kitchen: 'Nakawa Kitchen', name: 'Katogo', price: 6000, minutes: 12, tint: colors.sand, meal: 'supper' },
-  { id: 'chips-sausage', restaurantId: 'mama-jos', kitchen: 'Mama Jo’s', name: 'Chips and sausage', price: 6000, minutes: 10, tint: colors.peach, meal: 'supper' },
-  { id: 'luwombo', restaurantId: 'nakawa-kitchen', kitchen: 'Nakawa Kitchen', name: 'Beef luwombo', price: 8500, minutes: 12, tint: colors.sage, meal: 'supper' },
-  { id: 'muchomo', restaurantId: 'night-grill', kitchen: 'Night Grill', name: 'Goat muchomo', price: 10000, minutes: 20, tint: colors.sand, meal: 'supper' },
-  { id: 'rolex-classic', restaurantId: 'rolex-corner', kitchen: 'Rolex Corner', name: 'Rolex and tea', price: 4500, minutes: 8, tint: colors.peach, meal: 'breakfast' },
-  { id: 'rolex-special', restaurantId: 'rolex-corner', kitchen: 'Rolex Corner', name: 'Special rolex', price: 6000, minutes: 8, tint: colors.sand, meal: 'breakfast' },
-  { id: 'katogo-tea', restaurantId: 'nakawa-kitchen', kitchen: 'Nakawa Kitchen', name: 'Katogo with tea', price: 4500, minutes: 12, tint: colors.sage, meal: 'breakfast' },
+  { id: 'pilau', restaurantId: 'nakawa-kitchen', kitchen: 'Nakawa Kitchen', name: 'Chicken pilau', price: 7000, minutes: 12, tint: colors.sand, photo: 'pilau', meal: 'supper' },
+  { id: 'chips-chicken', restaurantId: 'mama-jos', kitchen: 'Mama Jo’s', name: 'Chips & chicken', price: 7000, minutes: 10, tint: colors.sand, photo: 'chips-chicken', meal: 'supper' },
+  { id: 'bowl', restaurantId: 'green-bowl', kitchen: 'Green Bowl', name: 'Power bowl', price: 6500, minutes: 15, tint: colors.sage, photo: 'bowl', meal: 'supper' },
+  { id: 'katogo', restaurantId: 'nakawa-kitchen', kitchen: 'Nakawa Kitchen', name: 'Katogo', price: 6000, minutes: 12, tint: colors.sand, photo: 'katogo', meal: 'supper' },
+  { id: 'chips-sausage', restaurantId: 'mama-jos', kitchen: 'Mama Jo’s', name: 'Chips and sausage', price: 6000, minutes: 10, tint: colors.peach, photo: 'chips-sausage', meal: 'supper' },
+  { id: 'luwombo', restaurantId: 'nakawa-kitchen', kitchen: 'Nakawa Kitchen', name: 'Beef luwombo', price: 8500, minutes: 12, tint: colors.sage, photo: 'luwombo', meal: 'supper' },
+  { id: 'muchomo', restaurantId: 'night-grill', kitchen: 'Night Grill', name: 'Goat muchomo', price: 10000, minutes: 20, tint: colors.sand, photo: 'muchomo', meal: 'supper' },
+  { id: 'rolex-classic', restaurantId: 'rolex-corner', kitchen: 'Rolex Corner', name: 'Rolex and tea', price: 4500, minutes: 8, tint: colors.peach, photo: 'rolex', meal: 'breakfast' },
+  { id: 'rolex-special', restaurantId: 'rolex-corner', kitchen: 'Rolex Corner', name: 'Special rolex', price: 6000, minutes: 8, tint: colors.sand, photo: 'rolex-special', meal: 'breakfast' },
+  { id: 'katogo-tea', restaurantId: 'nakawa-kitchen', kitchen: 'Nakawa Kitchen', name: 'Katogo with tea', price: 4500, minutes: 12, tint: colors.sage, photo: 'katogo', meal: 'breakfast' },
 ];
 
 // Breakfast plans pick from breakfast dishes; lunch and supper share the main menu.

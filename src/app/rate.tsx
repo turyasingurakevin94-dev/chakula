@@ -28,7 +28,7 @@ export default function Rate() {
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.cream }}>
       <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
         <View style={{ alignItems: 'center', paddingTop: 28, gap: 10 }}>
-          <FoodImage tint={first?.tint ?? colors.sand} size={64} style={{ width: 150, height: 150, borderRadius: 75 }} />
+          <FoodImage tint={first?.tint ?? colors.sand} photo={first?.photo} size={64} style={{ width: 150, height: 150, borderRadius: 75 }} />
           <Display size={28} style={{ marginTop: 8, textAlign: 'center' }}>
             Enjoy your food, {account.firstName}
           </Display>

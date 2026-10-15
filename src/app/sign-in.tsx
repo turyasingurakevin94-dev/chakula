@@ -25,7 +25,7 @@ export default function SignIn() {
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.cream }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={{ flexGrow: 1, paddingBottom: Math.max(insets.bottom, 16) + 16 }} keyboardShouldPersistTaps="handled" bounces={false}>
         <View style={[s.hero, { paddingTop: insets.top }]}>
-          <FoodImage tint={colors.food} size={190} style={[StyleSheet.absoluteFill, { bottom: 70 }]} />
+          <FoodImage tint={colors.food} photo="rice-pan" size={190} style={[StyleSheet.absoluteFill, { bottom: 70 }]} />
           <View style={StyleSheet.absoluteFill} pointerEvents="none">
             <Svg width="100%" height="100%" preserveAspectRatio="none" viewBox="0 0 10 10">
               <Defs>

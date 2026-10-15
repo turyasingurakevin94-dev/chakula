@@ -58,7 +58,7 @@ export default function Kitchens() {
               onPress={() => router.push(`/restaurant/${r.id}`)}
               style={({ pressed }) => [{ gap: 10, opacity: pressed ? 0.92 : 1 }]}
             >
-              <FoodImage tint={closed ? colors.track : r.tint} size={56} style={[s.image, closed && { opacity: 0.6 }]}>
+              <FoodImage tint={closed ? colors.track : r.tint} photo={r.photo} size={56} style={[s.image, closed && { opacity: 0.6 }]}>
                 {r.id === popular && !closed ? <Text style={s.badge}>Popular</Text> : null}
               </FoodImage>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: 12 }}>

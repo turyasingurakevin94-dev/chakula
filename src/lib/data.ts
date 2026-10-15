@@ -1,3 +1,4 @@
+import type { PhotoKey } from './photos';
 import { colors } from './theme';
 
 // Sample content for the prototype. Real restaurants, prices and photos come from the vendor app later.
@@ -10,6 +11,7 @@ export type MenuItem = {
   price: number;
   category: string;
   tint: string;
+  photo?: PhotoKey;
   extras?: Extra[];
   // Offer a pepper level (none, mild, hot) on the dish sheet.
   pepper?: boolean;
@@ -34,6 +36,7 @@ export type Restaurant = {
   distance: string;
   deliveryFee: number;
   tint: string;
+  photo?: PhotoKey;
   // Set while the kitchen is closed, e.g. "6:00 pm".
   opensAt?: string;
   categories: string[];
@@ -52,13 +55,14 @@ export const restaurants: Restaurant[] = [
     distance: '400 m',
     deliveryFee: 0,
     tint: colors.peach,
+    photo: 'spread',
     categories: ['Popular', 'Mains', 'Rolex', 'Drinks'],
     menu: [
-      { id: 'pilau', name: 'Chicken pilau', description: 'Spiced rice, tender chicken, kachumbari on the side', price: 9000, category: 'Popular', tint: colors.sand, prepMinutes: 15, pepper: true, extras: [{ id: 'avocado', name: 'Avocado', price: 1000 }, { id: 'extra-chicken', name: 'Extra chicken', price: 3000 }] },
-      { id: 'luwombo', name: 'Beef luwombo', description: 'Slow-steamed in banana leaves, with matooke', price: 12000, category: 'Popular', tint: colors.sage, prepMinutes: 15 },
-      { id: 'rolex', name: 'Special rolex', description: 'Two eggs, cabbage, tomato, rolled in fresh chapati', price: 5000, category: 'Rolex', tint: colors.peach, prepMinutes: 5, pepper: true, extras: rolexExtras },
-      { id: 'katogo', name: 'Katogo', description: 'Matooke and offals in a rich stew', price: 7000, category: 'Mains', tint: colors.sand, prepMinutes: 5 },
-      { id: 'passion', name: 'Passion juice', description: 'Freshly blended, no added sugar', price: 3000, category: 'Drinks', tint: colors.peach, prepMinutes: 2 },
+      { id: 'pilau', name: 'Chicken pilau', description: 'Spiced rice, tender chicken, kachumbari on the side', price: 9000, category: 'Popular', tint: colors.sand, photo: 'pilau', prepMinutes: 15, pepper: true, extras: [{ id: 'avocado', name: 'Avocado', price: 1000 }, { id: 'extra-chicken', name: 'Extra chicken', price: 3000 }] },
+      { id: 'luwombo', name: 'Beef luwombo', description: 'Slow-steamed in banana leaves, with matooke', price: 12000, category: 'Popular', tint: colors.sage, photo: 'luwombo', prepMinutes: 15 },
+      { id: 'rolex', name: 'Special rolex', description: 'Two eggs, cabbage, tomato, rolled in fresh chapati', price: 5000, category: 'Rolex', tint: colors.peach, photo: 'rolex', prepMinutes: 5, pepper: true, extras: rolexExtras },
+      { id: 'katogo', name: 'Katogo', description: 'Matooke and offals in a rich stew', price: 7000, category: 'Mains', tint: colors.sand, photo: 'katogo', prepMinutes: 5 },
+      { id: 'passion', name: 'Passion juice', description: 'Freshly blended, no added sugar', price: 3000, category: 'Drinks', tint: colors.peach, photo: 'passion', prepMinutes: 2 },
     ],
   },
   {
@@ -72,11 +76,12 @@ export const restaurants: Restaurant[] = [
     distance: '250 m',
     deliveryFee: 1000,
     tint: colors.sand,
+    photo: 'chapati',
     categories: ['Popular', 'Rolex', 'Drinks'],
     menu: [
-      { id: 'rolex-classic', name: 'Classic rolex', description: 'One egg, cabbage, tomato', price: 3000, category: 'Popular', tint: colors.peach, prepMinutes: 4, pepper: true, extras: rolexExtras },
-      { id: 'rolex-special', name: 'Special rolex', description: 'Two eggs, sausage, veggies', price: 6000, category: 'Rolex', tint: colors.sand, prepMinutes: 5, pepper: true, extras: rolexExtras.filter((e) => e.id !== 'sausage') },
-      { id: 'tea', name: 'African tea', description: 'Spiced milk tea', price: 1500, category: 'Drinks', tint: colors.sage, prepMinutes: 2 },
+      { id: 'rolex-classic', name: 'Classic rolex', description: 'One egg, cabbage, tomato', price: 3000, category: 'Popular', tint: colors.peach, photo: 'rolex', prepMinutes: 4, pepper: true, extras: rolexExtras },
+      { id: 'rolex-special', name: 'Special rolex', description: 'Two eggs, sausage, veggies', price: 6000, category: 'Rolex', tint: colors.sand, photo: 'rolex-special', prepMinutes: 5, pepper: true, extras: rolexExtras.filter((e) => e.id !== 'sausage') },
+      { id: 'tea', name: 'African tea', description: 'Spiced milk tea', price: 1500, category: 'Drinks', tint: colors.sage, photo: 'tea', prepMinutes: 2 },
     ],
   },
   {
@@ -90,10 +95,11 @@ export const restaurants: Restaurant[] = [
     distance: '600 m',
     deliveryFee: 1500,
     tint: colors.sage,
+    photo: 'bowl-chicken',
     categories: ['Popular', 'Drinks'],
     menu: [
-      { id: 'bowl', name: 'Chicken power bowl', description: 'Grilled chicken, rice, avocado, greens', price: 14000, category: 'Popular', tint: colors.sage, prepMinutes: 10, extras: [{ id: 'egg', name: 'Boiled egg', price: 1000 }, { id: 'extra-chicken', name: 'Extra chicken', price: 4000 }] },
-      { id: 'mango', name: 'Mango smoothie', description: 'Mango, banana, yoghurt', price: 5000, category: 'Drinks', tint: colors.sand, prepMinutes: 3 },
+      { id: 'bowl', name: 'Chicken power bowl', description: 'Grilled chicken, rice, avocado, greens', price: 14000, category: 'Popular', tint: colors.sage, photo: 'bowl', prepMinutes: 10, extras: [{ id: 'egg', name: 'Boiled egg', price: 1000 }, { id: 'extra-chicken', name: 'Extra chicken', price: 4000 }] },
+      { id: 'mango', name: 'Mango smoothie', description: 'Mango, banana, yoghurt', price: 5000, category: 'Drinks', tint: colors.sand, photo: 'mango', prepMinutes: 3 },
     ],
   },
   {
@@ -107,11 +113,12 @@ export const restaurants: Restaurant[] = [
     distance: '900 m',
     deliveryFee: 1000,
     tint: colors.sand,
+    photo: 'chicken-basket',
     categories: ['Popular', 'Drinks'],
     menu: [
-      { id: 'chips-chicken', name: 'Chips and quarter chicken', description: 'Crispy chips, fried chicken, kachumbari', price: 12000, category: 'Popular', tint: colors.sand, prepMinutes: 12, pepper: true },
-      { id: 'chips-sausage', name: 'Chips and sausage', description: 'Two beef sausages on crispy chips', price: 7000, category: 'Popular', tint: colors.peach, prepMinutes: 8, pepper: true },
-      { id: 'soda', name: 'Soda', description: '500 ml, cold', price: 2000, category: 'Drinks', tint: colors.sage, prepMinutes: 1 },
+      { id: 'chips-chicken', name: 'Chips and quarter chicken', description: 'Crispy chips, fried chicken, kachumbari', price: 12000, category: 'Popular', tint: colors.sand, photo: 'chips-chicken', prepMinutes: 12, pepper: true },
+      { id: 'chips-sausage', name: 'Chips and sausage', description: 'Two beef sausages on crispy chips', price: 7000, category: 'Popular', tint: colors.peach, photo: 'chips-sausage', prepMinutes: 8, pepper: true },
+      { id: 'soda', name: 'Soda', description: '500 ml, cold', price: 2000, category: 'Drinks', tint: colors.sage, photo: 'soda', prepMinutes: 1 },
     ],
   },
   {
@@ -125,9 +132,10 @@ export const restaurants: Restaurant[] = [
     distance: '1.1 km',
     deliveryFee: 1500,
     tint: colors.track,
+    photo: 'skewers',
     opensAt: '6:00 pm',
     categories: ['Popular'],
-    menu: [{ id: 'muchomo', name: 'Goat muchomo', description: 'Grilled goat skewers with gonja', price: 10000, category: 'Popular', tint: colors.sand, prepMinutes: 20 }],
+    menu: [{ id: 'muchomo', name: 'Goat muchomo', description: 'Grilled goat skewers with gonja', price: 10000, category: 'Popular', tint: colors.sand, photo: 'muchomo', prepMinutes: 20 }],
   },
 ];
 
@@ -143,22 +151,23 @@ export type Special = {
   portions: number;
   capacity: number;
   tint: string;
+  photo?: PhotoKey;
 };
 
 // Weekly dishes from cooks beyond campus, ordered ahead.
 export const specials: Special[] = [
-  { id: 'luwombo', day: 'Sunday', name: 'Chicken luwombo', vendor: 'Mama Rose’s, Ntinda', description: 'Steamed in banana leaves, with matooke and rice', price: 15000, slots: ['12:00 pm', '1:00 pm', '6:30 pm'], portions: 12, capacity: 40, tint: colors.peach },
-  { id: 'pizza', day: 'Friday', name: 'Pizza night', vendor: 'Pizza Point, Kololo', description: 'Medium pizza, chicken tikka or margherita', price: 18000, slots: ['7:00 pm', '8:00 pm'], portions: 25, capacity: 30, tint: colors.sand },
-  { id: 'tilapia', day: 'Saturday', name: 'Whole tilapia & chips', vendor: 'Ggaba Fish Spot', description: 'Fried whole tilapia, chips, kachumbari', price: 20000, slots: ['1:00 pm', '7:00 pm'], portions: 18, capacity: 20, tint: colors.sage },
+  { id: 'luwombo', day: 'Sunday', name: 'Chicken luwombo', vendor: 'Mama Rose’s, Ntinda', description: 'Steamed in banana leaves, with matooke and rice', price: 15000, slots: ['12:00 pm', '1:00 pm', '6:30 pm'], portions: 12, capacity: 40, tint: colors.peach, photo: 'chicken-luwombo' },
+  { id: 'pizza', day: 'Friday', name: 'Pizza night', vendor: 'Pizza Point, Kololo', description: 'Medium pizza, chicken tikka or margherita', price: 18000, slots: ['7:00 pm', '8:00 pm'], portions: 25, capacity: 30, tint: colors.sand, photo: 'pizza' },
+  { id: 'tilapia', day: 'Saturday', name: 'Whole tilapia & chips', vendor: 'Ggaba Fish Spot', description: 'Fried whole tilapia, chips, kachumbari', price: 20000, slots: ['1:00 pm', '7:00 pm'], portions: 18, capacity: 20, tint: colors.sage, photo: 'tilapia' },
 ];
 
 // Photo chips on Home. Each one narrows "Popular tonight".
-export const foodCategories: { id: string; label: string; tint: string; test: (r: Restaurant, m: MenuItem) => boolean }[] = [
-  { id: 'rolex', label: 'Rolex', tint: colors.peach, test: (_r, m) => m.id.startsWith('rolex') },
-  { id: 'local', label: 'Local', tint: colors.sand, test: (r) => r.id === 'nakawa-kitchen' },
-  { id: 'chicken', label: 'Chicken', tint: colors.sand, test: (_r, m) => /chicken/i.test(m.name) },
-  { id: 'juice', label: 'Juice', tint: colors.peach, test: (_r, m) => m.category === 'Drinks' },
-  { id: 'bowls', label: 'Bowls', tint: colors.sage, test: (r) => r.id === 'green-bowl' },
+export const foodCategories: { id: string; label: string; tint: string; photo?: PhotoKey; test: (r: Restaurant, m: MenuItem) => boolean }[] = [
+  { id: 'rolex', label: 'Rolex', tint: colors.peach, photo: 'rolex', test: (_r, m) => m.id.startsWith('rolex') },
+  { id: 'local', label: 'Local', tint: colors.sand, photo: 'katogo', test: (r) => r.id === 'nakawa-kitchen' },
+  { id: 'chicken', label: 'Chicken', tint: colors.sand, photo: 'chips-chicken', test: (_r, m) => /chicken/i.test(m.name) },
+  { id: 'juice', label: 'Juice', tint: colors.peach, photo: 'passion', test: (_r, m) => m.category === 'Drinks' },
+  { id: 'bowls', label: 'Bowls', tint: colors.sage, photo: 'bowl', test: (r) => r.id === 'green-bowl' },
 ];
 
 // Main dishes from open kitchens, most liked kitchens first. Drinks only show under the Juice chip.
