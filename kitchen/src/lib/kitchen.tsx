@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { defaultHears, type Device, type Hears, type RowKey } from './alerts';
 
 // Everything here is sample data held in memory, like the student app. Times are set relative to
 // when the app opens, so the board always looks like a lunch rush in progress.
@@ -34,6 +35,14 @@ export type Order = {
   rider?: { name: string; arrivesAt: number };
   posSale?: number;
   tag?: string;
+  // Arrived while the app was open (not part of the sample board it opens with).
+  live?: boolean;
+  // The kitchen ticket came out of the printer.
+  printed?: boolean;
+  // Someone has seen it: the printed ticket counts, or a tap on it.
+  seenAt?: number;
+  // "Something ran out": the student is choosing a swap, then has chosen.
+  swap?: { item: string; askedAt: number; chose?: string };
 };
 
 export type Settings = {
@@ -139,6 +148,14 @@ const ARRIVALS: Omit<Order, 'inAt' | 'dueAt' | 'status'>[] = [
   { id: '4827', student: 'Lydia A.', place: 'Library', paid: 'Airtel Money', items: [{ qty: 1, name: 'Chicken pilau', price: 9000 }] },
 ];
 
+// The demo printer doesn't answer for this one, so it shows the "Didn't print" alarm a minute in.
+// (The canvas uses 4827; 4825 is the second arrival, about three minutes after opening.)
+const PRINT_FAILS = new Set(['4825']);
+
+// What a student picks when the kitchen runs out of something.
+const SWAPS: Record<string, string> = { 'Chicken pilau': 'Katogo', Katogo: 'Chicken pilau', 'Special rolex': 'Katogo', 'Passion juice': 'Soda', Soda: 'Passion juice' };
+const SWAP_ANSWER = 20_000;
+
 const DISHES: Dish[] = [
   { id: 'pilau', name: 'Chicken pilau', section: 'Popular', price: 9000, minutes: 15, extras: 2, hasPhoto: true, soldOut: false },
   { id: 'luwombo', name: 'Beef luwombo', section: 'Popular', price: 12000, minutes: 25, extras: 0, hasPhoto: true, soldOut: true, backTomorrow: true },
@@ -162,6 +179,10 @@ type Kitchen = {
   dishes: Dish[];
   extras: Extra[];
   toast: string | null;
+  hears: Hears;
+  setHears: (key: RowKey, device: Device, value: boolean) => void;
+  markSeen: (id: string) => void;
+  askSwap: (id: string, item: string) => void;
   setSetting: (key: keyof Settings, value: boolean) => void;
   markReady: (id: string) => void;
   addTime: (id: string) => void;
@@ -182,6 +203,7 @@ export function KitchenProvider({ children }: { children: ReactNode }) {
   const [dishes, setDishes] = useState(DISHES);
   const [extras, setExtras] = useState(EXTRAS);
   const [toast, setToast] = useState<string | null>(null);
+  const [hears, setHearsState] = useState<Hears>(defaultHears);
   const arrived = useRef(0);
   const nextSale = useRef(1095);
   const settingsRef = useRef(settings);
@@ -208,6 +230,7 @@ export function KitchenProvider({ children }: { children: ReactNode }) {
           // The rider scans the bag seal when they arrive, so the kitchen never taps "Picked up".
           if (o.status === 'ready' && o.rider && t >= o.rider.arrivesAt + 2 * MIN) return { ...o, status: 'picked', pickedAt: t };
           if (o.status === 'picked' && o.pickedAt && t >= o.pickedAt + 6 * MIN) return { ...o, status: 'delivered', deliveredAt: t };
+          if (o.swap && !o.swap.chose && t >= o.swap.askedAt + SWAP_ANSWER) return { ...o, swap: { ...o.swap, chose: SWAPS[o.swap.item] ?? 'Katogo' } };
           return o;
         }),
       );
@@ -221,6 +244,7 @@ export function KitchenProvider({ children }: { children: ReactNode }) {
       const next = ARRIVALS[arrived.current++];
       const t = demoNow();
       const auto = settingsRef.current.autoAccept;
+      const printed = auto && settingsRef.current.printTicket && !PRINT_FAILS.has(next.id);
       const order: Order = {
         ...next,
         inAt: t,
@@ -228,9 +252,13 @@ export function KitchenProvider({ children }: { children: ReactNode }) {
         status: auto ? 'cooking' : 'incoming',
         acceptBy: auto ? undefined : t + 2 * MIN,
         posSale: auto && settingsRef.current.addToPOS ? nextSale.current++ : undefined,
+        live: true,
+        printed,
+        // The printed ticket is the confirmation. No print means someone has to tap it.
+        seenAt: printed ? t : undefined,
       };
+      // The bell, the Just in card and the counter toast announce it (see components/alerts.tsx).
       setOrders((list) => [...list, order]);
-      if (auto) setToast(`New order ${order.id} accepted${settingsRef.current.printTicket ? ' and printed' : ''}`);
     };
     const first = setTimeout(arrive, 25_000);
     const every = setInterval(arrive, 90_000);
@@ -251,6 +279,13 @@ export function KitchenProvider({ children }: { children: ReactNode }) {
       extras,
       toast,
       notify,
+      hears,
+      setHears: (key, device, v) => setHearsState((h) => ({ ...h, [key]: { ...h[key], [device]: v } })),
+      markSeen: (id) => {
+        const t = demoNow();
+        update(id, (o) => (o.seenAt ? o : { ...o, seenAt: t }));
+      },
+      askSwap: (id, item) => update(id, (o) => ({ ...o, swap: { item, askedAt: demoNow() } })),
       setSetting: (key, v) => setSettings((s) => ({ ...s, [key]: v })),
       markReady: (id) => {
         const t = demoNow();
@@ -259,13 +294,13 @@ export function KitchenProvider({ children }: { children: ReactNode }) {
       addTime: (id) => update(id, (o) => ({ ...o, dueAt: o.dueAt + 5 * MIN })),
       accept: (id, minutes) => {
         const t = demoNow();
-        update(id, (o) => ({ ...o, status: 'cooking', inAt: t, dueAt: t + minutes * MIN, acceptBy: undefined, posSale: settingsRef.current.addToPOS ? nextSale.current++ : undefined }));
+        update(id, (o) => ({ ...o, status: 'cooking', inAt: t, dueAt: t + minutes * MIN, acceptBy: undefined, seenAt: t, printed: settingsRef.current.printTicket, posSale: settingsRef.current.addToPOS ? nextSale.current++ : undefined }));
       },
       decline: (id) => update(id, (o) => ({ ...o, status: 'declined' })),
       toggleDish: (id) => setDishes((list) => list.map((d) => (d.id === id ? { ...d, soldOut: !d.soldOut, backTomorrow: false } : d))),
       toggleExtra: (id) => setExtras((list) => list.map((e) => (e.id === id ? { ...e, soldOut: !e.soldOut } : e))),
     }),
-    [now, orders, settings, dishes, extras, toast, notify, update],
+    [now, orders, settings, dishes, extras, toast, notify, update, hears],
   );
 
   return <KitchenContext.Provider value={value}>{children}</KitchenContext.Provider>;
@@ -275,6 +310,21 @@ export function useKitchen() {
   const k = useContext(KitchenContext);
   if (!k) throw new Error('useKitchen must be used inside KitchenProvider');
   return k;
+}
+
+// Riders reaching the hatch within `within` ms, each with the bags they collect.
+export function ridersDue(orders: Order[], now: number, within = 2 * MIN) {
+  const runs = new Map<string, { name: string; arrivesAt: number; orders: Order[] }>();
+  for (const o of orders) {
+    if (!o.rider || (o.status !== 'cooking' && o.status !== 'ready')) continue;
+    const left = o.rider.arrivesAt - now;
+    if (left <= 0 || left > within) continue;
+    const key = `${o.rider.name}-${o.rider.arrivesAt}`;
+    const run = runs.get(key) ?? { name: o.rider.name, arrivesAt: o.rider.arrivesAt, orders: [] };
+    run.orders.push(o);
+    runs.set(key, run);
+  }
+  return [...runs.entries()].map(([key, r]) => ({ key, ...r, unready: r.orders.filter((o) => o.status !== 'ready') })).sort((a, b) => a.arrivesAt - b.arrivesAt);
 }
 
 // Cooking orders in the order to cook them: first in, first out.

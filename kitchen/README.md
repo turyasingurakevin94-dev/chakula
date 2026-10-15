@@ -13,8 +13,11 @@ The app partner kitchens use behind the counter. It is a separate Expo app from 
 - **Money**: tonight's payout, the verified MoMo account and past payouts.
 - **Printer and POS**: auto-accept, ticket, seal and POS switches.
 - **Counter display**: four lanes for a wall tablet. Works best in landscape.
+- **Alerts**: the kitchen bell for each new order (a "Just in" card on Orders), a full-screen "Didn't print" ticket that rings until someone taps "Seen it", a rider-arriving banner and orange late tickets on the counter display, and an 8:00 am prep list and 9:30 pm payout reminder. Set who hears what from the bell on Orders or Printer and POS.
 
-All orders, riders, printing and money are sample data in `src/lib/kitchen.tsx`. New orders arrive 25 seconds after opening and then every 90 seconds. Nothing is connected to a backend, printer or POS yet.
+All orders, riders, printing and money are sample data in `src/lib/kitchen.tsx`. New orders arrive 25 seconds after opening and then every 90 seconds. Nothing is connected to a backend, printer or POS yet. In the demo, order 4825 (the second to arrive) never prints, so its "Didn't print" alarm shows about three minutes after opening.
+
+Lock-screen alerts use `expo-notifications`, which only works in an APK built after it was added. Older APKs that get this code as an update show every alert inside the app instead. All of it goes through `src/lib/notify.ts`; nothing else may import `expo-notifications`.
 
 ## Run it
 

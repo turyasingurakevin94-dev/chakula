@@ -1,22 +1,25 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Svg, { Circle } from 'react-native-svg';
+import { CountdownRing } from '../components/alerts';
 import { BackButton, Body, Button, Headline, Icon, Label, type IconName } from '../components/ui';
-import { KITCHEN, useNow, useRider, WAIT_MS } from '../lib/rider';
-import { colors, fonts } from '../lib/theme';
+import { clockTime, KITCHEN, PER_DROP, RIDER, useNow, useRider, WAIT_MS, type Stop } from '../lib/rider';
+import { colors, fonts, money } from '../lib/theme';
+
+// Sample timings for what Chakula does while the rider waits: from arrival, when each step starts
+// and when it's done. There is no backend yet, so these only play out on screen.
+const TRAIL = { push: [0, 0], call: [10_000, 20_000], sms: [30_000, 45_000], friend: [50_000, 130_000] } as const;
+
+type StepState = 'done' | 'now' | 'todo';
+type Step = { title: string; detail: string; time: string; state: StepState };
 
 // Something wrong: wait for a student who isn't answering, or report a problem. From the handover
-// it opens on the wait timer; from pickup it only lists the problems.
+// it opens on the wait ring and what Chakula is doing; from pickup it only lists the problems.
 export default function Help() {
   const { from } = useLocalSearchParams<{ from?: string }>();
   const { stop, arrivedAt, completeStop, run, stopIndex, notify } = useRider();
   const now = useNow(1000);
-  const waiting = from !== 'pickup' && stop && arrivedAt !== null;
-
-  const left = waiting ? Math.max(0, arrivedAt + WAIT_MS - now) : 0;
-  const mins = Math.floor(left / 60_000);
-  const secs = Math.floor((left % 60_000) / 1000);
+  const waiting = from !== 'pickup' && stop && run && arrivedAt !== null;
 
   const giveBack = () => {
     if (!run) return;
@@ -33,84 +36,153 @@ export default function Help() {
     { icon: 'tool', title: 'Bike trouble', sub: 'We pass your bags to the nearest rider', done: 'Finding the nearest rider for your bags' },
   ];
 
+  const problemList = (
+    <View style={{ paddingHorizontal: 20, paddingTop: 22 }}>
+      <Label style={{ paddingBottom: 6 }}>{waiting ? 'Something else' : 'What happened?'}</Label>
+      {problems.map((p, i) => (
+        <Pressable
+          key={p.title}
+          accessibilityRole="button"
+          onPress={() => notify(p.done)}
+          style={({ pressed }) => [s.row, i < problems.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.line }, pressed && { opacity: 0.7 }]}
+        >
+          <Icon name={p.icon} size={22} />
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={{ fontFamily: fonts.bold, fontSize: 15, color: colors.forest }}>{p.title}</Text>
+            <Text style={{ fontFamily: fonts.regular, fontSize: 13, color: colors.muted }}>{p.sub}</Text>
+          </View>
+        </Pressable>
+      ))}
+    </View>
+  );
+
+  const accident = (
+    <Button variant="danger" icon="alert-triangle" height={58} size={16} onPress={() => notify('Calling Chakula · stay where you are safe')}>
+      Accident or danger · call Chakula
+    </Button>
+  );
+
+  if (!waiting) {
+    return (
+      <SafeAreaView edges={['top', 'bottom']} style={{ flex: 1, backgroundColor: colors.cream }}>
+        <View style={s.header}>
+          <BackButton label="Back" />
+          <Headline size={28}>We&apos;ve got you.</Headline>
+        </View>
+        <ScrollView contentContainerStyle={{ paddingBottom: 20 }}>{problemList}</ScrollView>
+        <View style={{ paddingHorizontal: 20, paddingBottom: 26, paddingTop: 8 }}>{accident}</View>
+      </SafeAreaView>
+    );
+  }
+
+  const elapsed = Math.max(0, now - arrivedAt);
+  const left = Math.max(0, WAIT_MS - elapsed);
+  const mins = Math.floor(left / 60_000);
+  const secs = Math.floor((left % 60_000) / 1000);
+  const spot = stop.place.split(',')[0];
+  const steps = trail(stop, arrivedAt, elapsed, left);
+
   return (
     <SafeAreaView edges={['top', 'bottom']} style={{ flex: 1, backgroundColor: colors.cream }}>
       <View style={s.header}>
-        <BackButton label="Back" />
-        <Headline size={28}>We&apos;ve got you.</Headline>
+        <BackButton label="Back to the handover" />
+        <Label style={{ flex: 1 }}>
+          Stop {stopIndex + 1} of {run.stops.length} · {spot}
+        </Label>
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: 20 }}>
-        {waiting ? (
-          <View style={{ paddingHorizontal: 20, paddingTop: 20 }}>
-            <View style={s.card}>
-              <Label>{stop.first} isn&apos;t answering</Label>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 18 }}>
-                <View style={{ width: 96, height: 96, alignItems: 'center', justifyContent: 'center' }}>
-                  <Svg width={96} height={96} style={StyleSheet.absoluteFill}>
-                    <Circle cx={48} cy={48} r={45} stroke={colors.line} strokeWidth={6} fill="none" />
-                    <Circle
-                      cx={48}
-                      cy={48}
-                      r={45}
-                      stroke={colors.forest}
-                      strokeWidth={6}
-                      fill="none"
-                      strokeDasharray={`${2 * Math.PI * 45}`}
-                      strokeDashoffset={2 * Math.PI * 45 * (1 - left / WAIT_MS)}
-                      transform="rotate(-90 48 48)"
-                    />
-                  </Svg>
-                  <Text style={{ fontFamily: fonts.display, fontSize: 28, lineHeight: 30, color: colors.forest }}>
-                    {mins}:{String(secs).padStart(2, '0')}
-                  </Text>
-                  <Text style={{ fontFamily: fonts.bold, fontSize: 10, letterSpacing: 1, color: colors.muted }}>LEFT</Text>
-                </View>
-                <Body style={{ flex: 1, fontSize: 15, lineHeight: 22 }}>
-                  Wait at {stop.place.split(',')[0]}. Chakula has called {stop.first} twice and sent a message.
-                </Body>
-              </View>
-              <View style={{ borderTopWidth: 1, borderTopColor: colors.line, paddingTop: 12 }}>
-                <Body style={{ fontSize: 13, lineHeight: 19, color: colors.body }}>
-                  If {stop.first} hasn&apos;t come when the timer ends, take the bag back to {KITCHEN}.{' '}
-                  <Text style={{ fontFamily: fonts.bold, color: colors.forest }}>You&apos;re still paid for this drop.</Text>
-                </Body>
-              </View>
-              {left === 0 ? (
-                <Button icon="corner-up-left" onPress={giveBack}>
-                  Take the bag back
-                </Button>
-              ) : null}
-            </View>
-          </View>
-        ) : null}
-
-        <View style={{ paddingHorizontal: 20, paddingTop: 22 }}>
-          <Label style={{ paddingBottom: 6 }}>{waiting ? 'Something else' : 'What happened?'}</Label>
-          {problems.map((p, i) => (
-            <Pressable
-              key={p.title}
-              accessibilityRole="button"
-              onPress={() => notify(p.done)}
-              style={({ pressed }) => [s.row, i < problems.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.line }, pressed && { opacity: 0.7 }]}
-            >
-              <Icon name={p.icon} size={22} />
-              <View style={{ flex: 1, gap: 2 }}>
-                <Text style={{ fontFamily: fonts.bold, fontSize: 15, color: colors.forest }}>{p.title}</Text>
-                <Text style={{ fontFamily: fonts.regular, fontSize: 13, color: colors.muted }}>{p.sub}</Text>
-              </View>
-            </Pressable>
-          ))}
+        <View style={{ paddingHorizontal: 20, paddingTop: 26, alignItems: 'center', gap: 10 }}>
+          <CountdownRing size={168} stroke={10} share={left / WAIT_MS} track={colors.line} fill={colors.forest}>
+            <Text style={{ fontFamily: fonts.display, fontSize: 48, lineHeight: 52, color: colors.forest }}>
+              {mins}:{String(secs).padStart(2, '0')}
+            </Text>
+            <Text style={{ fontFamily: fonts.bold, fontSize: 12, letterSpacing: 1.2, color: colors.muted, marginTop: 2 }}>LEFT TO WAIT</Text>
+          </CountdownRing>
+          <Headline size={30} style={{ textAlign: 'center' }}>
+            {left > 0 ? `We're getting ${stop.first} for you` : `${stop.first} didn't come`}
+          </Headline>
+          <Body style={{ fontSize: 15, lineHeight: 21, color: colors.body, textAlign: 'center' }}>
+            {left > 0 ? `Stay at ${spot}. You don't need to keep calling.` : `Take the bag back to ${KITCHEN}. You're still paid for this drop.`}
+          </Body>
         </View>
+
+        <View style={{ paddingHorizontal: 20, paddingTop: 20 }}>
+          <View style={s.card}>
+            {steps.map((st, i) => (
+              <View key={st.title} style={[s.step, i < steps.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.lineSoft }]}>
+                <View
+                  style={[
+                    s.dot,
+                    st.state === 'done'
+                      ? { backgroundColor: colors.forest }
+                      : st.state === 'now'
+                        ? { borderWidth: 2, borderColor: colors.orange, backgroundColor: colors.chipBg }
+                        : { borderWidth: 1.5, borderColor: colors.toggleOff },
+                  ]}
+                >
+                  {st.state === 'done' ? <Icon name="check" size={14} color={colors.cream} /> : null}
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: fonts.bold, fontSize: 15, color: colors.forest }}>{st.title}</Text>
+                  <Text style={{ fontFamily: fonts.regular, fontSize: 12, color: colors.muted }}>{st.detail}</Text>
+                </View>
+                <Text style={{ fontFamily: fonts.semibold, fontSize: 12, color: st.state === 'now' ? colors.orangeText : colors.muted }}>{st.time}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+
+        {problemList}
+        <View style={{ paddingHorizontal: 20, paddingTop: 14 }}>{accident}</View>
       </ScrollView>
 
-      <View style={{ paddingHorizontal: 20, paddingBottom: 26, paddingTop: 8 }}>
-        <Button variant="danger" icon="alert-triangle" height={58} size={16} onPress={() => notify('Calling Chakula · stay where you are safe')}>
-          Accident or danger · call Chakula
-        </Button>
+      <View style={{ paddingHorizontal: 20, paddingBottom: 18, paddingTop: 8, gap: 10 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+          <Icon name="shield" size={18} color={colors.sealed} />
+          <Text style={{ fontFamily: fonts.bold, fontSize: 14, color: colors.forest }}>You&apos;re paid UGX {money(PER_DROP)} either way</Text>
+        </View>
+        {left > 0 ? (
+          <Button height={60} size={17} style={{ borderRadius: 20 }} onPress={() => router.back()}>
+            {`${stop.first} is here, enter code`}
+          </Button>
+        ) : (
+          <Button height={60} size={17} icon="corner-up-left" style={{ borderRadius: 20 }} onPress={giveBack}>
+            Return the bag to the kitchen
+          </Button>
+        )}
       </View>
     </SafeAreaView>
   );
+}
+
+// What Chakula does while the rider waits. The saved-friend step only shows when the student set one.
+function trail(stop: Stop, arrivedAt: number, elapsed: number, left: number): Step[] {
+  const state = ([start, end]: readonly [number, number]): StepState => (elapsed >= end ? 'done' : elapsed >= start ? 'now' : 'todo');
+  const at = (ms: number) => clockTime(new Date(arrivedAt + ms));
+  const call = state(TRAIL.call);
+  const sms = state(TRAIL.sms);
+  const steps: Step[] = [
+    { title: `Push sent to ${stop.first}`, detail: `"${RIDER} is at ${stop.place.split(',')[0]}"`, time: at(0), state: 'done' },
+    { title: call === 'done' ? `Chakula called ${stop.first}` : `Calling ${stop.first}`, detail: call === 'done' ? 'No answer' : 'From the Chakula line', time: call === 'now' ? 'now' : at(TRAIL.call[1]), state: call },
+    { title: 'SMS sent', detail: 'Works without data', time: sms === 'now' ? 'now' : at(TRAIL.sms[1]), state: sms },
+  ];
+  if (stop.friend) {
+    const f = state(TRAIL.friend);
+    steps.push({
+      title: f === 'done' ? `Called ${stop.first}'s saved friend` : `Calling ${stop.first}'s saved friend`,
+      detail: `${stop.friend.name}, ${stop.friend.place}${f === 'done' ? ' · no answer' : ''}`,
+      time: f === 'now' ? 'now' : at(TRAIL.friend[1]),
+      state: f,
+    });
+  }
+  steps.push({
+    title: 'Return the bag to the kitchen',
+    detail: `Only if nobody comes by ${at(WAIT_MS)}`,
+    time: at(WAIT_MS),
+    state: left === 0 ? 'now' : 'todo',
+  });
+  return steps;
 }
 
 const s = StyleSheet.create({
@@ -119,14 +191,16 @@ const s = StyleSheet.create({
     backgroundColor: colors.card,
     borderWidth: 1,
     borderColor: colors.line,
-    borderRadius: 24,
-    padding: 20,
-    gap: 14,
+    borderRadius: 22,
+    paddingVertical: 6,
+    paddingHorizontal: 16,
     shadowColor: colors.forest,
-    shadowOpacity: 0.08,
-    shadowRadius: 14,
+    shadowOpacity: 0.07,
+    shadowRadius: 13,
     shadowOffset: { width: 0, height: 10 },
     elevation: 3,
   },
+  step: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
+  dot: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   row: { height: 64, flexDirection: 'row', alignItems: 'center', gap: 14 },
 });

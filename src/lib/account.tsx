@@ -44,6 +44,41 @@ export type Order = {
   method?: PayMethod;
   // Set when the student picked a delivery time instead of as soon as possible.
   scheduledFor?: number;
+  // Said to the rider at the gate, so the food reaches the right person.
+  code: string;
+  // When the student tapped "I'm coming down" at the gate.
+  comingDownAt?: number;
+};
+
+// A 4 digit handover code, never starting with 0 so it reads as a number.
+export function newHandoverCode() {
+  return String(1000 + Math.floor(Math.random() * 9000));
+}
+
+// What the student wants to hear about. Order updates are always on.
+export type AlertPrefs = {
+  // Text the handover code if the push isn't seen.
+  sms: boolean;
+  planReminders: boolean;
+  // No reminders from 10 pm to 7 am. Orders still come through.
+  quietHours: boolean;
+  celebrations: boolean;
+  fridaySpecial: boolean;
+  // Call a friend if the student misses the rider at the gate.
+  callFriend: boolean;
+  friendName: string;
+  friendPhone: string;
+};
+
+export const defaultAlertPrefs: AlertPrefs = {
+  sms: true,
+  planReminders: true,
+  quietHours: true,
+  celebrations: true,
+  fridaySpecial: false,
+  callFriend: false,
+  friendName: '',
+  friendPhone: '',
 };
 
 export type Preorder = { id: string; specialId: string; slot: string };
@@ -86,6 +121,10 @@ function deliveryStart(order: Order) {
   return order.scheduledFor ? order.scheduledFor - DELIVERY_MINUTES * DEMO_MINUTE_MS : order.placedAt;
 }
 
+export function deliveryStartsAt(order: Order) {
+  return deliveryStart(order);
+}
+
 export function isWaiting(order: Order, now: number) {
   return now < deliveryStart(order);
 }
@@ -108,11 +147,11 @@ function sampleOrders(): Order[] {
   const rolexAndTea = () => [{ item: item('rolex-classic', 'Classic rolex', 3000, '#FFE4D6', 'rolex'), quantity: 2 }, { item: item('tea', 'African tea', 1500, '#E3EBDD', 'tea'), quantity: 1 }];
   const pilauAndJuice = () => [{ item: item('pilau', 'Chicken pilau', 9000, '#F4E7C5', 'pilau'), quantity: 1 }, { item: item('passion', 'Passion juice', 3000, '#FFE4D6', 'passion'), quantity: 1 }];
   return [
-    { id: '2041', restaurantId: 'rolex-corner', placedAt: at(1, 8, 10), delivered: true, total: 7500, method: 'mtn', lines: rolexAndTea() },
-    { id: '2037', restaurantId: 'nakawa-kitchen', placedAt: at(2, 19, 30), delivered: true, rating: rated(5), total: 12000, method: 'mtn', lines: pilauAndJuice() },
-    { id: '2033', restaurantId: 'green-bowl', placedAt: at(2, 13, 15), delivered: true, rating: rated(4), total: 19000, method: 'mtn', lines: [{ item: item('bowl', 'Chicken power bowl', 14000, '#E3EBDD', 'bowl'), quantity: 1 }, { item: item('mango', 'Mango smoothie', 5000, '#F4E7C5', 'mango'), quantity: 1 }] },
-    { id: '2026', restaurantId: 'rolex-corner', placedAt: at(3, 7, 50), delivered: true, rating: rated(5), total: 7500, method: 'mtn', lines: rolexAndTea() },
-    { id: '2019', restaurantId: 'nakawa-kitchen', placedAt: at(5, 20, 5), delivered: true, rating: rated(5), total: 12000, method: 'mtn', lines: pilauAndJuice() },
+    { id: '2041', code: '5208', restaurantId: 'rolex-corner', placedAt: at(1, 8, 10), delivered: true, total: 7500, method: 'mtn', lines: rolexAndTea() },
+    { id: '2037', code: '3961', restaurantId: 'nakawa-kitchen', placedAt: at(2, 19, 30), delivered: true, rating: rated(5), total: 12000, method: 'mtn', lines: pilauAndJuice() },
+    { id: '2033', code: '8147', restaurantId: 'green-bowl', placedAt: at(2, 13, 15), delivered: true, rating: rated(4), total: 19000, method: 'mtn', lines: [{ item: item('bowl', 'Chicken power bowl', 14000, '#E3EBDD', 'bowl'), quantity: 1 }, { item: item('mango', 'Mango smoothie', 5000, '#F4E7C5', 'mango'), quantity: 1 }] },
+    { id: '2026', code: '2730', restaurantId: 'rolex-corner', placedAt: at(3, 7, 50), delivered: true, rating: rated(5), total: 7500, method: 'mtn', lines: rolexAndTea() },
+    { id: '2019', code: '6493', restaurantId: 'nakawa-kitchen', placedAt: at(5, 20, 5), delivered: true, rating: rated(5), total: 12000, method: 'mtn', lines: pilauAndJuice() },
   ];
 }
 
@@ -136,6 +175,9 @@ type AccountState = {
   orders: Order[];
   activeOrder: Order | null;
   preorders: Preorder[];
+  alertPrefs: AlertPrefs;
+  // The "turn on alerts" screen has been shown, or wasn't needed.
+  alertsPrimed: boolean;
   portionsLeft: (specialId: string) => number;
   startSignIn: (phone: string) => void;
   verify: () => void;
@@ -150,10 +192,14 @@ type AccountState = {
   skipMeal: (day: string) => void;
   unskipMeal: (day: string) => void;
   // Returns the new order's id. Wallet orders are charged straight away.
-  placeOrder: (order: Omit<Order, 'id' | 'placedAt' | 'delivered'>) => string;
+  placeOrder: (order: Omit<Order, 'id' | 'placedAt' | 'delivered' | 'code'>) => string;
   // Takes back an order placed by mistake and refunds a wallet charge.
   cancelOrder: (id: string) => void;
   markDelivered: (id: string) => void;
+  // "I'm coming down": tells the rider at the gate the student has seen the alert.
+  comingDown: (id: string) => void;
+  setAlertPrefs: (change: Partial<AlertPrefs>) => void;
+  primeAlerts: () => void;
   rateOrder: (id: string, rating: Rating) => void;
   preorder: (specialId: string, slot: string) => void;
   cancelPreorder: (id: string) => void;
@@ -174,6 +220,8 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   const [plan, setPlan] = useState<MealPlan | null>(null);
   const [orders, setOrders] = useState<Order[]>(sampleOrders);
   const [preorders, setPreorders] = useState<Preorder[]>([]);
+  const [alertPrefs, setAlertPrefsState] = useState<AlertPrefs>(defaultAlertPrefs);
+  const [alertsPrimed, setAlertsPrimed] = useState(false);
 
   const value = useMemo<AccountState>(() => {
     const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -197,6 +245,8 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       orders,
       activeOrder,
       preorders,
+      alertPrefs,
+      alertsPrimed,
       portionsLeft: (sid) => Math.max(0, (findSpecial(sid)?.portions ?? 0) - preorders.filter((p) => p.specialId === sid).length),
       startSignIn: (p) => {
         setPhone(p);
@@ -242,7 +292,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       unskipMeal: (day) => setPlan((p) => (p && p.skipped.includes(day) ? { ...p, skipped: p.skipped.filter((d) => d !== day), carried: p.carried - 1 } : p)),
       placeOrder: (o) => {
         const id = String(Math.max(2047, ...orders.map((p) => Number(p.id))) + 1);
-        setOrders((prev) => [{ ...o, id, placedAt: Date.now(), delivered: false }, ...prev.map((p) => ({ ...p, delivered: true }))]);
+        setOrders((prev) => [{ ...o, id, code: newHandoverCode(), placedAt: Date.now(), delivered: false }, ...prev.map((p) => ({ ...p, delivered: true }))]);
         if (o.method === 'wallet') {
           setBalance((b) => b - o.total);
           setWallet((w) => [{ id: `o${id}`, title: `Order #${id}`, when: 'Just now', amount: -o.total }, ...w]);
@@ -258,7 +308,10 @@ export function AccountProvider({ children }: { children: ReactNode }) {
           setWallet((w) => w.filter((e) => e.id !== `o${id}`));
         }
       },
-      markDelivered: (id) => setOrders((prev) => prev.map((p) => (p.id === id ? { ...p, delivered: true } : p))),
+      markDelivered: (id) => setOrders((prev) => (prev.some((p) => p.id === id && !p.delivered) ? prev.map((p) => (p.id === id ? { ...p, delivered: true } : p)) : prev)),
+      comingDown: (id) => setOrders((prev) => prev.map((p) => (p.id === id && !p.comingDownAt ? { ...p, comingDownAt: Date.now() } : p))),
+      setAlertPrefs: (change) => setAlertPrefsState((p) => ({ ...p, ...change })),
+      primeAlerts: () => setAlertsPrimed(true),
       rateOrder: (id, rating) => {
         setOrders((prev) => prev.map((p) => (p.id === id ? { ...p, rating } : p)));
         // Prototype: tips come out of the wallet. Later the student picks how to pay it.
@@ -270,7 +323,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       preorder: (sid, slot) => setPreorders((prev) => [{ id: `p${Date.now()}`, specialId: sid, slot }, ...prev]),
       cancelPreorder: (id) => setPreorders((prev) => prev.filter((p) => p.id !== id)),
     };
-  }, [phone, verified, name, place, room, note, balance, wallet, bonusEarned, plan, orders, preorders]);
+  }, [phone, verified, name, place, room, note, balance, wallet, bonusEarned, plan, orders, preorders, alertPrefs, alertsPrimed]);
 
   return <AccountContext.Provider value={value}>{children}</AccountContext.Provider>;
 }

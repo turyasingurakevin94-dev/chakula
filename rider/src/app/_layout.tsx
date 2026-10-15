@@ -5,6 +5,7 @@ import { Stack, type ErrorBoundaryProps } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Pressable, Text, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { AlertBanner, AlertTaps, RunOffer } from '../components/alerts';
 import { Icon } from '../components/ui';
 import { RiderProvider, useRider } from '../lib/rider';
 import { colors, fonts } from '../lib/theme';
@@ -44,6 +45,9 @@ export default function RootLayout() {
           <Stack.Screen name="help" />
           <Stack.Screen name="cash" />
         </Stack>
+        <RunOffer />
+        <AlertBanner />
+        <AlertTaps />
         <Toast />
         {updateReady ? <UpdateBar /> : null}
       </RiderProvider>

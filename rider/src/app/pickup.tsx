@@ -4,7 +4,7 @@ import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Defs, Path, RadialGradient, Rect, Stop as GradientStop } from 'react-native-svg';
 import { BackButton, Body, Bold, Icon, Label, Num, RoundButton } from '../components/ui';
-import { KITCHEN, ordinal, useRider } from '../lib/rider';
+import { KITCHEN, kitchenOf, ordinal, spotOf, useRider } from '../lib/rider';
 import { colors, fonts } from '../lib/theme';
 
 // How long the sample scanner takes to "read" each seal. There is no camera yet.
@@ -113,7 +113,8 @@ export default function Pickup() {
             const now = waiting?.stop.bag === stop.bag;
             const first = number === 1;
             const load = i === 0 ? 'load first, bottom of the box' : i === bags.length - 1 ? 'load last, on top' : `load ${ordinal(i + 1)}`;
-            const sub = done ? `Seal intact · ${load}` : `${first ? 'First stop' : i === 0 ? 'Last stop' : `Stop ${number}`} · ${load}`;
+            const from = kitchenOf(stop) === KITCHEN ? '' : ` · from ${kitchenOf(stop)} ${spotOf(stop)}`;
+            const sub = (done ? `Seal intact · ${load}` : `${first ? 'First stop' : i === 0 ? 'Last stop' : `Stop ${number}`} · ${load}`) + from;
             return (
               <View key={stop.bag} style={[s.bag, now && s.bagNow]}>
                 {done ? (
