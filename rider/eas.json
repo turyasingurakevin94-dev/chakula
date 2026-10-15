@@ -9,6 +9,9 @@
       "channel": "main",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://chakula-production.up.railway.app"
       }
     }
   }

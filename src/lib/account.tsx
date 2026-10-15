@@ -57,6 +57,8 @@ export type Order = {
   dropPointId?: string;
   status?: ServerStatus;
   riderName?: string;
+  // Server orders: the rider's number while they have the food, for Call and Text.
+  riderPhone?: string;
   riderAt?: Pt;
   // When each step really happened, from the server (ISO strings, null until it happens).
   times?: ServerOrder['times'];
@@ -619,6 +621,7 @@ function fromServer(o: ServerOrder, prev?: Order): Order {
     method: o.payMethod,
     code: o.handoverCode ?? prev?.code ?? '····',
     riderName: o.rider?.name ?? undefined,
+    riderPhone: o.rider?.phone,
     riderAt: o.status === 'picked_up' || o.status === 'at_gate' ? prev?.riderAt : undefined,
     times: o.times,
   };

@@ -112,12 +112,23 @@ test('a student order goes from MoMo to the kitchen to the rider to the gate', a
   await call('POST', '/rider/location', { token: rider, body: { lat: 0.3301, lng: 32.6143 } });
   const tracked = await call('GET', `/orders/${id}`, { token: student });
   assert.equal(tracked.json.riderLocation.lat, 0.3301);
+  // The student can call the rider carrying their food; the kitchen can't see the number.
+  assert.equal(tracked.json.rider.phone, devLogins.rider.phone);
+  assert.equal((await call('GET', '/kitchen/orders', { token: kitchen })).json[0].rider.phone, undefined);
 
   await call('POST', `/rider/orders/${id}/at-gate`, { token: rider });
   const wrong = await call('POST', `/rider/orders/${id}/deliver`, { token: rider, body: { code: code === '1234' ? '4321' : '1234' } });
   assert.equal(wrong.status, 400);
   const done = await call('POST', `/rider/orders/${id}/deliver`, { token: rider, body: { code } });
   assert.equal(done.json.status, 'delivered');
+  assert.equal((await call('GET', `/orders/${id}`, { token: student })).json.rider.phone, undefined, 'the number goes once delivered');
+});
+
+test('the student hears that the kitchen accepted their order', async () => {
+  const student = await signIn('0772 123 999', 'student');
+  await call('POST', '/push-tokens', { token: student, body: { token: 'ExponentPushToken[accepted-test]', app: 'student' } });
+  await call('POST', '/orders', { token: student, body: order('cash') });
+  await waitFor(async () => server.push.sent.some((m) => m.to === 'ExponentPushToken[accepted-test]' && m.title === 'Nakawa Kitchen accepted your order' && m.channel === 'updates'));
 });
 
 test('a declined MoMo payment cancels the order', async () => {

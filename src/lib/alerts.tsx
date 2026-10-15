@@ -218,6 +218,22 @@ function OrderAlerts() {
     if (stage === 4) void notify.dismiss(alertId(order, 2));
   }, [order, stage, show]);
 
+  // Server orders: the kitchen accepting (paid, or straight away for cash and wallet) and the bag
+  // being sealed show as a quiet banner while the app is open. The phone's push covers it otherwise.
+  const lastStatus = useRef<{ id: string; status?: Order['status'] } | null>(null);
+  const status = order?.status;
+  useEffect(() => {
+    if (!order?.serverId) return;
+    const prev = lastStatus.current;
+    lastStatus.current = { id: order.id, status };
+    // First look at an order: only one placed in the last two minutes is news.
+    const changed = prev?.id === order.id ? prev.status !== status : Date.now() - order.placedAt < 2 * 60_000;
+    if (!changed || AppState.currentState !== 'active') return;
+    const kitchen = findRestaurant(order.restaurantId)?.name ?? 'The kitchen';
+    if (status === 'cooking') show({ title: `${kitchen} accepted your order`, body: `They’re cooking it now. Your code is ${order.code}.`, icon: 'check', href: '/tracking', orderKey: order.serverId });
+    else if (status === 'ready') show({ title: 'Your food is packed', body: order.riderName ? `${order.riderName} is collecting it from ${kitchen}.` : `Sealed at ${kitchen}. A rider is on the way to collect it.`, icon: 'package', href: '/tracking', orderKey: order.serverId });
+  }, [order, status, show]);
+
   // Going to the background hands the coming loud alerts to the phone; coming back takes them back.
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {

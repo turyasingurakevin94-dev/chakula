@@ -4,17 +4,18 @@ import type { Push, PushMessage } from './providers/push.ts';
 import type { Sms } from './providers/sms.ts';
 
 // Which order changes make a phone ring, following the notifications design: the student hears
-// two per order (picked up with the code, and at the gate); the kitchen hears each new order; the
-// rider hears new runs and "bags sealed". A student with no push token gets those two by SMS.
+// two per order (picked up with the code, and at the gate), plus a quiet "accepted" when the
+// kitchen gets it; the kitchen hears each new order; the rider hears new runs and "bags sealed".
+// A student with no push token gets the two loud ones by SMS.
 
 export function createNotify(db: Db, push: Push, sms: Sms) {
   async function tokens(where: string, params: unknown[]) {
     return db.query<{ token: string; user_id: string }>(`select p.token, p.user_id from push_tokens p join users u on u.id = p.user_id where ${where}`, params);
   }
 
-  async function toStudent(studentId: string, phone: string, title: string, body: string, data: Record<string, unknown>, smsText?: string) {
+  async function toStudent(studentId: string, phone: string, title: string, body: string, data: Record<string, unknown>, smsText?: string, channel = 'orders') {
     const ts = await tokens("u.id = $1 and p.app = 'student'", [studentId]);
-    if (ts.length) await push.send(ts.map((t) => ({ to: t.token, title, body, data, channel: 'orders' })));
+    if (ts.length) await push.send(ts.map((t) => ({ to: t.token, title, body, data, channel })));
     else if (smsText) await sms.send(phone, smsText);
   }
 
@@ -34,6 +35,8 @@ export function createNotify(db: Db, push: Push, sms: Sms) {
           ...riders.map((t) => ({ to: t.token, title: 'New run', body: `${order.kitchen_name} to ${order.drop_name}`, data, channel: 'runs' })),
         ];
         await push.send(msgs);
+        // Kitchens accept every order they're sent, so this is the student's "accepted".
+        await toStudent(order.student_id, order.student_phone, `${order.kitchen_name} accepted your order`, `They’re cooking it now. Your code is ${order.handover_code}.`, data, undefined, 'updates');
         break;
       }
       case 'ready': {

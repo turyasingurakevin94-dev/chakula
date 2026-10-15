@@ -15,6 +15,8 @@ import { lockedBalance, orderEntry, ugx } from './wallet.ts';
 export type Status = 'awaiting_payment' | 'cooking' | 'ready' | 'picked_up' | 'at_gate' | 'delivered' | 'cancelled';
 const CANCEL_MS = 60_000;
 const ACTIVE: Status[] = ['awaiting_payment', 'cooking', 'ready', 'picked_up', 'at_gate'];
+// While the student may call their rider: from taking the run to the handover.
+const RIDER_REACHABLE: Status[] = ['cooking', 'ready', 'picked_up', 'at_gate'];
 
 export const placeOrderInput = z.object({
   kitchenId: z.string(),
@@ -44,14 +46,14 @@ type OrderRow = {
   note: string | null; rider_id: string | null; created_at: Date; paid_at: Date | null; ready_at: Date | null;
   rider_at: Date | null; picked_at: Date | null; at_gate_at: Date | null; delivered_at: Date | null; cancelled_at: Date | null;
   cancel_reason: string | null; kitchen_name: string; drop_name: string; student_name: string | null; student_phone: string;
-  rider_name: string | null;
+  rider_name: string | null; rider_phone: string | null;
 };
 type LineRow = { order_id: string; dish_id: string; name: string; unit_price: number; quantity: number; extras: { id: string; name: string; price: number }[]; pepper: string | null; note: string | null };
 
 export type OrderEvent = { order: OrderRow; lines: LineRow[]; change: Status | 'rider' };
 
 const SELECT = `
-  select o.*, k.name as kitchen_name, d.name as drop_name, s.name as student_name, s.phone as student_phone, r.name as rider_name
+  select o.*, k.name as kitchen_name, d.name as drop_name, s.name as student_name, s.phone as student_phone, r.name as rider_name, r.phone as rider_phone
   from orders o
   join kitchens k on k.id = o.kitchen_id
   join drop_points d on d.id = o.drop_point_id
@@ -66,7 +68,8 @@ function shortName(name: string | null) {
 }
 
 // What one person may see of an order. Only the student sees the handover code; only the
-// rider carrying it sees the student's number.
+// rider carrying it sees the student's number, and the student sees the rider's number while
+// the rider has their order, so they can call or text them.
 export function viewOrder(o: OrderRow, lines: LineRow[], viewer: User) {
   const isStudent = viewer.id === o.student_id;
   const isRider = viewer.role === 'rider' && viewer.id === o.rider_id;
@@ -86,7 +89,9 @@ export function viewOrder(o: OrderRow, lines: LineRow[], viewer: User) {
     cashToCollect: o.pay_method === 'cash' && o.status !== 'delivered' ? o.total : 0,
     ...(isStudent || viewer.role === 'admin' ? { handoverCode: o.handover_code } : {}),
     note: o.note,
-    rider: o.rider_id ? { id: o.rider_id, name: o.rider_name } : null,
+    rider: o.rider_id
+      ? { id: o.rider_id, name: o.rider_name, ...(isStudent && o.rider_phone && RIDER_REACHABLE.includes(o.status) ? { phone: o.rider_phone } : {}) }
+      : null,
     times: {
       placed: o.created_at, paid: o.paid_at, ready: o.ready_at, riderAssigned: o.rider_at, pickedUp: o.picked_at,
       atGate: o.at_gate_at, delivered: o.delivered_at, cancelled: o.cancelled_at,

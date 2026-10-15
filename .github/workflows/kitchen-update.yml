@@ -60,3 +60,11 @@ jobs:
         env:
           EXPO_PUBLIC_API_URL: https://chakula-production.up.railway.app
         run: eas update --branch ${{ github.ref_name }} --message "${{ github.sha }}" --platform all --non-interactive
+
+      # The installed APK asks the "main" channel for updates. The student project's channel once had
+      # no branch linked, so phones got nothing; keep this one pointed at the main branch too.
+      - name: Point the main channel at the main branch
+        if: github.ref_name == 'main'
+        run: |
+          eas channel:edit main --branch main --non-interactive || eas channel:create main --non-interactive
+          eas channel:view main --non-interactive
