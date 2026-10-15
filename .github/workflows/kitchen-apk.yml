@@ -72,6 +72,10 @@ jobs:
 
       - name: Build APK on GitHub
         if: inputs.where != 'expo'
+        # Only the 64-bit ARM code every current Android phone runs: about a quarter of the native
+        # compiling, so the free runner finishes much sooner.
+        env:
+          ORG_GRADLE_PROJECT_reactNativeArchitectures: arm64-v8a
         run: eas build --platform android --profile preview --non-interactive --local --output "$GITHUB_WORKSPACE/chakula-kitchen.apk"
 
       - name: Publish APK
