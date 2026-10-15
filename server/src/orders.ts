@@ -12,6 +12,7 @@ import type { PaymentProvider, PayOutcome } from './providers/payments.ts';
 // student's 4 digit handover code. The server prices everything; the app's numbers are a preview.
 
 export type Status = 'awaiting_payment' | 'cooking' | 'ready' | 'picked_up' | 'at_gate' | 'delivered' | 'cancelled';
+const CANCEL_MS = 60_000;
 const ACTIVE: Status[] = ['awaiting_payment', 'cooking', 'ready', 'picked_up', 'at_gate'];
 
 export const placeOrderInput = z.object({
@@ -218,17 +219,21 @@ export function createOrders(db: Db, deps: { payments: () => PaymentProvider; on
 
     settle,
 
-    async cancelUnpaid(student: User, id: string) {
+    // Undo: before paying, or a cash order in its first minute (the 5 second Undo on Home).
+    async cancel(student: User, id: string) {
       const { order } = await mine(student, id);
       if (order.student_id !== student.id) throw new HttpError(404, 'No such order.');
-      return move(id, ['awaiting_payment'], 'cancelled', "cancelled_at = now(), cancel_reason = 'Cancelled before paying'");
+      if (order.status === 'awaiting_payment') return move(id, ['awaiting_payment'], 'cancelled', "cancelled_at = now(), cancel_reason = 'Cancelled before paying'");
+      const fresh = Date.now() - new Date(order.created_at).getTime() < CANCEL_MS;
+      if (order.pay_method !== 'cash' || order.rider_id || !fresh) throw new HttpError(409, 'The kitchen has already started on this one.');
+      return move(id, ['cooking'], 'cancelled', "cancelled_at = now(), cancel_reason = 'Cancelled by the student'");
     },
 
     // ---- Students ----
     forStudent: (user: User) => load('o.student_id = $1', [user.id]),
 
     // ---- Kitchens ----
-    forKitchen: (user: User) => load("o.kitchen_id = $1 and o.status <> 'awaiting_payment' and o.created_at > now() - interval '1 day'", [user.kitchen_id], 200),
+    forKitchen: (user: User) => load("o.kitchen_id = $1 and (o.paid_at is not null or o.pay_method = 'cash') and o.created_at > now() - interval '1 day'", [user.kitchen_id], 200),
 
     async markReady(user: User, id: string) {
       const { order } = await mine(user, id);

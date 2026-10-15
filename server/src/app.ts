@@ -1,4 +1,5 @@
 import { Hono, type Context } from 'hono';
+import { cors } from 'hono/cors';
 import { z } from 'zod';
 import { createAuth, type AppName, type Role, type User } from './auth.ts';
 import type { Config } from './config.ts';
@@ -34,6 +35,8 @@ export async function createServer(config: Config) {
   payments = createPayments(config, (o) => orders.settle(o));
 
   const app = new Hono<Env>();
+  // The apps' web previews call from another origin. Phones don't need it.
+  app.use('*', cors());
 
   app.onError((err, c) => {
     if (err instanceof HttpError) return c.json({ error: err.message }, err.status as 400);
@@ -140,7 +143,7 @@ export async function createServer(config: Config) {
   });
   app.post('/orders/:id/cancel', signedIn('student'), async (c) => {
     const user = c.get('user');
-    const { order, lines } = await orders.cancelUnpaid(user, c.req.param('id')!);
+    const { order, lines } = await orders.cancel(user, c.req.param('id')!);
     return c.json(viewOrder(order, lines, user));
   });
 

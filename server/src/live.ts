@@ -48,8 +48,9 @@ export function createLive(auth: Auth) {
       for (const [ws, user] of sockets) {
         const sees =
           user.id === order.student_id ||
-          (user.role === 'kitchen' && user.kitchen_id === order.kitchen_id && order.status !== 'awaiting_payment') ||
+          (user.role === 'kitchen' && user.kitchen_id === order.kitchen_id && order.status !== 'awaiting_payment' && !(order.status === 'cancelled' && !order.paid_at && order.pay_method !== 'cash')) ||
           (user.role === 'rider' && (order.rider_id === user.id || (!order.rider_id && (order.status === 'cooking' || order.status === 'ready')))) ||
+          (user.role === 'rider' && change === 'cancelled') ||
           user.role === 'admin';
         if (sees) send(ws, { type: 'order', order: viewOrder(order, lines, user) });
         else if (user.role === 'rider' && change === 'rider') send(ws, { type: 'run-taken', orderId: order.id });

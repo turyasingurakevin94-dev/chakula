@@ -131,6 +131,13 @@ test('cash orders go straight to the kitchen, and riders see the cash to collect
   assert.equal(placed.json.order.status, 'cooking');
   const runs = await call('GET', '/rider/runs', { token: rider2 });
   assert.equal(runs.json.find((r: any) => r.id === placed.json.order.id).cashToCollect, 23_000);
+  // Undo on Home: a fresh cash order can be taken back, and leaves the kitchen board as cancelled.
+  const undone = await call('POST', `/orders/${placed.json.order.id}/cancel`, { token: student });
+  assert.equal(undone.json.status, 'cancelled');
+  const board = await call('GET', '/kitchen/orders', { token: kitchen });
+  assert.equal(board.json.find((o: any) => o.id === placed.json.order.id).status, 'cancelled');
+  // Unpaid MoMo orders that were cancelled never reach the board.
+  assert.ok(!board.json.some((o: any) => o.status === 'cancelled' && o.payMethod !== 'cash'));
 });
 
 test('sign-in rules', async () => {
