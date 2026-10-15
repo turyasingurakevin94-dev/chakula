@@ -20,9 +20,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # To attach the APK built on GitHub to a release, so it downloads on a phone without signing in.
     permissions:
-      contents: write
+      contents: read
     defaults:
       run:
         working-directory: rider
@@ -90,15 +89,13 @@ jobs:
           EAS_BUILD_DISABLE_EXPO_DOCTOR_STEP: '1'
         run: eas build --platform android --profile preview --non-interactive --local --output "$GITHUB_WORKSPACE/chakula-rider.apk"
 
-      - name: Publish APK
+      - name: Keep the APK for publishing
         if: inputs.where != 'expo' && github.event_name == 'workflow_dispatch'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          tag="rider-apk-${{ github.run_number }}"
-          gh release create "$tag" "$GITHUB_WORKSPACE/chakula-rider.apk" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title "Rider app (build ${{ github.run_number }})" --notes "Install on Android: open this page on the phone and tap chakula-rider.apk."
-          url="https://github.com/$GITHUB_REPOSITORY/releases/download/$tag/chakula-rider.apk"
-          printf '## Rider app ready\n\n- Direct APK download: %s\n' "$url" | tee -a "$GITHUB_STEP_SUMMARY"
+        uses: actions/upload-artifact@v4
+        with:
+          name: chakula-rider-apk
+          path: ${{ github.workspace }}/chakula-rider.apk
+          retention-days: 1
 
       - name: Build APK on Expo
         if: inputs.where == 'expo'
@@ -119,3 +116,25 @@ jobs:
             console.log(lines.join("\n"));
             require("fs").appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join("\n") + "\n");
           '
+
+  # Attaches the APK to a pre-release, so it downloads on a phone without signing in. A job of its
+  # own, so only this step (never the build, which runs on pull requests too) can write to the repo.
+  publish:
+    needs: build
+    if: github.event_name == 'workflow_dispatch' && inputs.where != 'expo'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: chakula-rider-apk
+
+      - name: Publish APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="rider-apk-${{ github.run_number }}-${{ github.run_attempt }}"
+          gh release create "$tag" chakula-rider.apk --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title "Rider app (build ${{ github.run_number }})" --notes "Install on Android: open this page on the phone and tap chakula-rider.apk."
+          url="https://github.com/$GITHUB_REPOSITORY/releases/download/$tag/chakula-rider.apk"
+          printf '## Rider app ready\n\n- Direct APK download: %s\n' "$url" | tee -a "$GITHUB_STEP_SUMMARY"
