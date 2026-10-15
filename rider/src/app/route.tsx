@@ -1,10 +1,12 @@
 import { Redirect, router, useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Circle, Path, Rect, Text as SvgText } from 'react-native-svg';
+import Svg, { Path } from 'react-native-svg';
+import { CampusMap, mapInk, type MapLine, type MapPin } from '../components/map';
 import { Body, Bold, Icon, Label } from '../components/ui';
-import { KITCHEN, useRider, type Point, type Stop } from '../lib/rider';
+import { along, findDropPoint, fitView, followView, headingAhead, kitchenAt, minutesFor, nextTurn, route, type Route } from '../lib/campus';
+import { KITCHEN, useRider, type Stop } from '../lib/rider';
 import { colors, fonts, money } from '../lib/theme';
 
 // The sample ride "arrives" by itself after this long, as GPS would. Tapping the stop arrives at once.
@@ -24,6 +26,19 @@ export default function RouteScreen() {
   const insets = useSafeAreaInsets();
   // Only things that change the drop interrupt riding mode: a new note from the student.
   const [heard, setHeard] = useState<{ bag: string; first: string; note: string } | null>(null);
+  const { width, height } = useWindowDimensions();
+  // How far along this leg the sample ride is, 0 to 1. GPS replaces this once the backend exists.
+  const [ride, setRide] = useState({ stop: -1, moved: 0 });
+  const moved = ride.stop === stopIndex && stage === 'riding' ? ride.moved : 0;
+  const [overview, setOverview] = useState(false);
+  const legs = useMemo(() => (run ? legsFor(run.stops) : []), [run]);
+
+  useEffect(() => {
+    if (stage !== 'riding') return;
+    const started = Date.now();
+    const t = setInterval(() => setRide({ stop: stopIndex, moved: Math.min(1, (Date.now() - started) / ARRIVE_MS) }), 400);
+    return () => clearInterval(t);
+  }, [stage, stopIndex]);
 
   useEffect(() => {
     if (stage !== 'riding' || !stop?.newNote || stop.note === stop.newNote) return;
@@ -56,23 +71,28 @@ export default function RouteScreen() {
 
   if (!run || !stop) return <Redirect href="/" />;
 
+  const leg = legs[stopIndex]!;
+  const here = along(leg.points, moved);
+  const turn = nextTurn(here.ahead, shortName(stop.place));
+  const minutes = minutesFor(leg.seconds * (1 - moved));
+
   const next = run.stops[stopIndex + 1];
   const watching = run.stops.slice(stopIndex).map((x) => x.first);
   const names = watching.length > 1 ? `${watching.slice(0, -1).join(', ')} and ${watching[watching.length - 1]}` : watching[0];
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.mapGround }}>
-      <Map stops={run.stops} current={stopIndex} />
+      <RunMap stops={run.stops} legs={legs} current={stopIndex} at={here} overview={overview} width={width} height={height} anchorY={height - 400} />
 
       <View style={[s.turn, { top: insets.top + 16 }]} accessibilityRole="header">
         <View style={s.turnIcon}>
           <Svg width={32} height={32} viewBox="0 0 24 24" fill="none" stroke={colors.forest} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round">
-            <Path d={turnPaths[stop.turn.icon]} />
+            <Path d={turnPaths[turn.icon]} />
           </Svg>
         </View>
         <View style={{ flex: 1, gap: 2 }}>
-          <Text style={{ fontFamily: fonts.display, fontSize: 34, lineHeight: 36, color: colors.cream }}>{stop.turn.distance}</Text>
-          <Text style={{ fontFamily: fonts.semibold, fontSize: 16, color: colors.onForest }}>{stop.turn.text}</Text>
+          <Text style={{ fontFamily: fonts.display, fontSize: 34, lineHeight: 36, color: colors.cream }}>{turn.metres} m</Text>
+          <Text style={{ fontFamily: fonts.semibold, fontSize: 16, color: colors.onForest }}>{turn.text}</Text>
         </View>
       </View>
 
@@ -106,6 +126,10 @@ export default function RouteScreen() {
           <Icon name={voice ? 'volume-2' : 'volume-x'} size={16} />
           <Text style={{ fontFamily: fonts.semibold, fontSize: 13, color: colors.forest }}>{voice ? 'Voice on' : 'Voice off'}</Text>
         </Pressable>
+        <Pressable accessibilityRole="switch" accessibilityState={{ checked: overview }} accessibilityLabel="Show the whole run" onPress={() => setOverview(!overview)} style={s.chip}>
+          <Icon name="map" size={16} />
+          <Text style={{ fontFamily: fonts.semibold, fontSize: 13, color: colors.forest }}>{overview ? 'Follow me' : 'Whole run'}</Text>
+        </Pressable>
         <View style={s.chip}>
           <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.orange }} />
           <Text style={{ fontFamily: fonts.semibold, fontSize: 13, color: colors.body }}>{names} see{watching.length > 1 ? '' : 's'} you</Text>
@@ -125,12 +149,12 @@ export default function RouteScreen() {
             </Body>
           </View>
           <View style={{ alignItems: 'flex-end' }}>
-            <Text style={{ fontFamily: fonts.display, fontSize: 46, lineHeight: 48, color: colors.forest }}>{stop.minutes}</Text>
+            <Text style={{ fontFamily: fonts.display, fontSize: 46, lineHeight: 48, color: colors.forest }}>{minutes}</Text>
             <Text style={{ fontFamily: fonts.bold, fontSize: 12, letterSpacing: 1.2, color: colors.muted }}>MIN</Text>
           </View>
         </Pressable>
         <View style={s.progress}>
-          <View style={[s.progressFill, { width: `${Math.round(stop.progress * 100)}%` }]} />
+          <View style={[s.progressFill, { width: `${Math.round(moved * 100)}%` }]} />
         </View>
         <View style={{ flexDirection: 'row', gap: 10 }}>
           <Pressable accessibilityRole="button" accessibilityLabel={`Call ${stop.first}`} onPress={() => notify(`Calling ${stop.first} through Chakula`)} style={s.call}>
@@ -154,61 +178,49 @@ export default function RouteScreen() {
   );
 }
 
-const line = (pts: Point[]) => pts.map(([x, y], i) => `${i ? 'L' : 'M'}${x} ${y}`).join(' ');
+// Kitchen names in the sample data, to their spot on the map.
+const kitchenIds: Record<string, string> = { 'Nakawa Kitchen': 'nakawa-kitchen', 'Rolex Corner': 'rolex-corner' };
 
-// The stylised campus map from the canvas: the rider's leg solid, later legs dotted, done legs faded.
-function Map({ stops, current }: { stops: Stop[]; current: number }) {
-  const stop = stops[current];
+// The road for each stop: from the kitchen to the first drop, then drop to drop.
+function legsFor(stops: Stop[]): Route[] {
+  return stops.map((x, i) => {
+    const from = i === 0 ? kitchenAt(kitchenIds[x.kitchen ?? KITCHEN] ?? 'nakawa-kitchen') : findDropPoint(stops[i - 1]!.drop)!.at;
+    return route(from, findDropPoint(x.drop)!.at);
+  });
+}
+
+// Our campus map, heading-up behind the rider; or the whole run, north up.
+function RunMap({ stops, legs, current, at, overview, width, height, anchorY }: { stops: Stop[]; legs: Route[]; current: number; at: ReturnType<typeof along>; overview: boolean; width: number; height: number; anchorY: number }) {
+  const heading = headingAhead(at.ahead);
+  const view = overview ? fitView(legs.flatMap((l) => l.points), width, height, [230, 40, 380, 40], 1.6) : followView(at.at, heading, width, height, anchorY, 1.5);
+  const lines: MapLine[] = [];
+  legs.forEach((l, i) => {
+    if (i < current) lines.push({ points: l.points, color: mapInk.done, width: 6 });
+    if (i > current) lines.push({ points: l.points, color: colors.forest, width: 5, dashed: true });
+  });
+  lines.push({ points: at.done, color: mapInk.done, width: 8 }, { points: at.ahead, color: colors.forest, width: 8 });
+  const first = stops[0]!;
+  const pins: MapPin[] = [
+    { id: 'kitchen', at: legs[0]!.points[0]!, label: 'K', tone: 'kitchen' },
+    ...stops.map((x, i) => ({ id: x.bag, at: findDropPoint(x.drop)!.at, label: i < current ? '✓' : String(i + 1), tone: i < current ? ('muted' as const) : ('forest' as const), big: i === current })),
+  ];
   return (
-    <Svg style={StyleSheet.absoluteFill} viewBox="0 0 390 844" preserveAspectRatio="xMidYMid slice" accessibilityLabel={`Map: riding to ${stop.place}`}>
-      <Rect width={390} height={844} fill={colors.mapGround} />
-      <Rect x={20} y={420} width={110} height={90} rx={10} fill={colors.mapBlock} />
-      <Rect x={230} y={200} width={140} height={110} rx={10} fill={colors.mapGreen} />
-      <Rect x={30} y={200} width={100} height={80} rx={8} fill={colors.mapBlock} />
-      <Rect x={170} y={350} width={70} height={60} rx={8} fill={colors.mapBlock} />
-      <Rect x={270} y={380} width={90} height={80} rx={8} fill={colors.mapBlock} />
-      <Rect x={20} y={560} width={120} height={70} rx={8} fill={colors.mapGreen} />
-      <Path d="M0 330H390M150 160V844M0 540H390M260 330V700" stroke="#FFFFFF" strokeWidth={18} fill="none" />
-      {stops.map((x, i) =>
-        i < current ? (
-          <Path key={`leg${i}`} d={line(x.leg)} stroke={colors.forest} strokeOpacity={0.25} strokeWidth={6} fill="none" strokeLinecap="round" strokeLinejoin="round" />
-        ) : i > current ? (
-          <Path key={`leg${i}`} d={line(x.leg)} stroke={colors.forest} strokeOpacity={0.5} strokeWidth={5} fill="none" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="2 10" />
-        ) : null,
-      )}
-      <Path d={line(stop.leg)} stroke={colors.forest} strokeWidth={8} fill="none" strokeLinecap="round" strokeLinejoin="round" />
-      <Circle cx={stop.rider[0]} cy={stop.rider[1]} r={22} fill={colors.orange} fillOpacity={0.22} />
-      <Circle cx={stop.rider[0]} cy={stop.rider[1]} r={11} fill={colors.orange} stroke="#FFFFFF" strokeWidth={3} />
-      {stops.map((x, i) => {
-        const [cx, cy] = x.leg[x.leg.length - 1];
-        const on = i === current;
-        const done = i < current;
-        return (
-          <Circle key={`pin${i}`} cx={cx} cy={cy} r={on ? 18 : 16} fill={on ? colors.forest : done ? colors.barDone : '#FFFFFF'} stroke={colors.forest} strokeWidth={on || done ? 0 : 2.5} />
-        );
-      })}
-      {stops.map((x, i) => {
-        const [cx, cy] = x.leg[x.leg.length - 1];
-        const on = i === current;
-        return (
-          <SvgText key={`num${i}`} x={cx} y={cy + (on ? 6 : 5)} textAnchor="middle" fontFamily={fonts.bold} fontSize={on ? 16 : 15} fontWeight="700" fill={on ? colors.cream : colors.forest}>
-            {i < current ? '✓' : String(i + 1)}
-          </SvgText>
-        );
-      })}
-      {stops.map((x, i) => (
-        <SvgText key={`label${i}`} x={x.label.at[0]} y={x.label.at[1]} textAnchor={x.label.anchor} fontFamily={fonts.bold} fontSize={13} fontWeight="700" fill={colors.forest} opacity={i < current ? 0.5 : 1}>
-          {shortName(x.place)}
-        </SvgText>
-      ))}
-    </Svg>
+    <CampusMap
+      style={StyleSheet.absoluteFill}
+      width={width}
+      height={height}
+      view={view}
+      lines={lines}
+      pins={pins}
+      rider={{ at: at.at, heading }}
+      accessibilityLabel={`Map: riding to ${stops[current]!.place}, starting from ${first.kitchen ?? KITCHEN}`}
+    />
   );
 }
 
-// "Block B, room 214" -> "Block B"; "Library entrance" -> "Library".
+// "Akamwesi Hostel, room 214" -> "Akamwesi Hostel"; "Digital Library entrance" -> "Digital Library".
 function shortName(place: string) {
-  if (place.startsWith('Library')) return 'Library';
-  return place.split(',')[0];
+  return place.split(',')[0]!.replace(' entrance', '').replace(' gate', '');
 }
 
 const s = StyleSheet.create({

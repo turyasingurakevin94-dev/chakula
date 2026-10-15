@@ -1,17 +1,15 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { dropPoints, type DropKind } from './campus';
 import { findSpecial, type Extra, type MenuItem } from './data';
 import type { PhotoKey } from './photos';
 import { findPlanKind, planMeals, planPrice, type PlanKindId, type PlanPeriod } from './plans';
 
 // Prototype account state, kept in memory. Sign-in, wallet and orders move to the backend later.
 
-export type Place = { id: string; name: string; detail: string };
+export type Place = { id: string; name: string; detail: string; kind: DropKind };
 
-export const places: Place[] = [
-  { id: 'block-b', name: 'Block B Hostel', detail: 'Nakawa · 4 min from most kitchens' },
-  { id: 'block-c', name: 'Block C Hostel', detail: 'Nakawa · 6 min from most kitchens' },
-  { id: 'campus', name: 'Main campus', detail: 'Library, lecture blocks, sports ground' },
-];
+// The drop points pinned on our campus map. Riders only go to these, so nobody types an address.
+export const places: Place[] = dropPoints.map((p) => ({ id: p.id, name: p.name, detail: p.where, kind: p.kind }));
 
 export type Pepper = 'None' | 'Mild' | 'Hot';
 

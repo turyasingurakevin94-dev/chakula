@@ -189,7 +189,7 @@ export const supportWhatsApp: string | null = null;
 export const student = {
   firstName: 'Kevin',
   initials: 'KK',
-  hostel: 'Block B, Room 12',
+  hostel: 'Akamwesi Hostel, Room 12',
   deliveryNote: 'Call me at the gate',
   walletBalance: 4500,
   momoNumber: '0772 ••• 456',

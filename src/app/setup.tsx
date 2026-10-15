@@ -1,14 +1,16 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Display, Icon, Label, PrimaryButton, styles as ui } from '../components/ui';
-import { places, useAccount, type Place } from '../lib/account';
+import { Display, Label, PrimaryButton, styles as ui } from '../components/ui';
+import { PlacePicker } from '../components/placePicker';
+import { useAccount, type Place } from '../lib/account';
 import { colors, fonts } from '../lib/theme';
 
 export default function Setup() {
   const account = useAccount();
+  const { width } = useWindowDimensions();
   const [name, setName] = useState(account.name);
-  const [place, setPlace] = useState<Place | null>(account.place ?? places[0]!);
+  const [place, setPlace] = useState<Place | null>(account.place);
   const [room, setRoom] = useState(account.room);
   const [note, setNote] = useState(account.note);
   const ok = name.trim().length > 1 && !!place;
@@ -28,33 +30,8 @@ export default function Setup() {
           </View>
 
           <View style={s.section}>
-            <Label>Hostel or campus spot</Label>
-            <View style={[ui.card, { borderRadius: 18, overflow: 'hidden' }]}>
-              {places.map((p) => {
-                const on = place?.id === p.id;
-                return (
-                  <Pressable key={p.id} accessibilityRole="radio" accessibilityState={{ checked: on }} onPress={() => setPlace(p)} style={[s.row, s.divider, on && { backgroundColor: '#FFF4EC' }]}>
-                    <View style={[s.tile, { backgroundColor: on ? colors.forest : colors.lineSoft }]}>
-                      <Icon name="home" size={18} color={on ? colors.cream : colors.forest} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={[s.strong, !on && { fontFamily: fonts.semibold }]}>{p.name}</Text>
-                      <Text style={s.meta}>{p.detail}</Text>
-                    </View>
-                    <View style={[s.radio, on && { borderColor: colors.forest }]}>{on ? <View style={s.radioDot} /> : null}</View>
-                  </Pressable>
-                );
-              })}
-              <View style={s.row}>
-                <View style={[s.tile, { backgroundColor: colors.peach }]}>
-                  <Icon name="plus" size={18} color={colors.orangeText} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[s.strong, { fontFamily: fonts.semibold }]}>Somewhere else</Text>
-                  <Text style={s.meta}>More spots arrive as we grow</Text>
-                </View>
-              </View>
-            </View>
+            <Label>Where we meet you</Label>
+            <PlacePicker value={place} onChange={setPlace} width={width - 40} />
           </View>
 
           <View style={s.section}>
@@ -80,11 +57,4 @@ export default function Setup() {
 const s = StyleSheet.create({
   section: { paddingHorizontal: 20, paddingTop: 18, gap: 8 },
   input: { height: 54, paddingHorizontal: 16, borderRadius: 16, fontFamily: fonts.regular, fontSize: 16, color: colors.ink },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 14 },
-  divider: { borderBottomWidth: 1, borderBottomColor: colors.lineSoft },
-  tile: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  strong: { fontFamily: fonts.bold, fontSize: 15, color: colors.forest },
-  meta: { fontFamily: fonts.regular, fontSize: 13, color: colors.muted },
-  radio: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' },
-  radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.forest },
 });

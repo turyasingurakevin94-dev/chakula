@@ -1,0 +1,37 @@
+{
+ "nakawa-kitchen": {
+  "name": "Nakawa Kitchen",
+  "ll": [
+   0.3301,
+   32.6143
+  ]
+ },
+ "rolex-corner": {
+  "name": "Rolex Corner",
+  "ll": [
+   0.32625,
+   32.6156
+  ]
+ },
+ "green-bowl": {
+  "name": "Green Bowl",
+  "ll": [
+   0.3278,
+   32.61468
+  ]
+ },
+ "mama-jos": {
+  "name": "Mama Jo’s Chips",
+  "ll": [
+   0.3237,
+   32.6176
+  ]
+ },
+ "night-grill": {
+  "name": "Night Grill",
+  "ll": [
+   0.3307,
+   32.615
+  ]
+ }
+}

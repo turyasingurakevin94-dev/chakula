@@ -1,3 +1,4 @@
+import { dropPoints } from './campus';
 import { DELIVERY_MINUTES, DEMO_MINUTE_MS, deliveryStartsAt, isWaiting, minutesLeft, type Order } from './account';
 
 // The rider the prototype uses everywhere until the rider app assigns real ones.
@@ -34,7 +35,9 @@ export function isLoudStage(stage: Stage) {
   return stage === 2 || stage === 3;
 }
 
-// "Block B", from "Block B Hostel".
+// Where the rider meets the student, said in a sentence: "the Main Gate", "the Akamwesi Hostel gate".
 export function blockName(placeName: string | undefined) {
-  return placeName?.replace(' Hostel', '') ?? 'your block';
+  const point = dropPoints.find((p) => p.name === placeName);
+  if (!point) return placeName ? `the ${placeName}` : 'your gate';
+  return point.kind === 'hostel' ? `the ${point.name} gate` : `the ${point.name}`;
 }

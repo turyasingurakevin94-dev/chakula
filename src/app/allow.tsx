@@ -36,7 +36,7 @@ export default function Allow() {
         </View>
 
         {/* A lock screen with the gate alert on it. */}
-        <View style={s.hero} accessible accessibilityLabel={`Example alert: ${rider.name} is at the ${block} gate, code 7415`}>
+        <View style={s.hero} accessible accessibilityLabel={`Example alert: ${rider.name} is at ${block}, code 7415`}>
           <FoodImage tint={colors.sand} photo="rolex-special" style={StyleSheet.absoluteFill} />
           <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(24,22,18,0.25)' }]} />
           <Scrim id="allow-scrim" from={0} color="#181612" opacity={0.45} />
@@ -51,7 +51,7 @@ export default function Allow() {
                 <Text style={s.eyebrow}>AT YOUR GATE</Text>
               </View>
               <Text style={{ fontFamily: fonts.bold, fontSize: 14, lineHeight: 18, color: colors.forest }} numberOfLines={2}>
-                {rider.name} is at the {block} gate
+                {rider.name} is at {block}
               </Text>
             </View>
             <View style={{ alignItems: 'flex-end' }}>
