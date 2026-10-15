@@ -4,8 +4,8 @@ import type { Push, PushMessage } from './providers/push.ts';
 import type { Sms } from './providers/sms.ts';
 
 // Which order changes make a phone ring, following the notifications design: the student hears
-// two per order (picked up with the code, and at the gate), plus a quiet "accepted" when the
-// kitchen gets it; the kitchen hears each new order; the rider hears new runs and "bags sealed".
+// two per order (picked up with the code, and at the gate), plus silent "accepted" and "packed"
+// lines; the kitchen hears each new order; the rider hears new runs and "bags sealed".
 // A student with no push token gets the two loud ones by SMS.
 
 export function createNotify(db: Db, push: Push, sms: Sms) {
@@ -15,7 +15,7 @@ export function createNotify(db: Db, push: Push, sms: Sms) {
 
   async function toStudent(studentId: string, phone: string, title: string, body: string, data: Record<string, unknown>, smsText?: string, channel = 'orders') {
     const ts = await tokens("u.id = $1 and p.app = 'student'", [studentId]);
-    if (ts.length) await push.send(ts.map((t) => ({ to: t.token, title, body, data, channel })));
+    if (ts.length) await push.send(ts.map((t) => ({ to: t.token, title, body, data, channel, ...(channel === 'updates' ? { quiet: true } : {}) })));
     else if (smsText) await sms.send(phone, smsText);
   }
 
@@ -40,6 +40,8 @@ export function createNotify(db: Db, push: Push, sms: Sms) {
         break;
       }
       case 'ready': {
+        // A silent line in the student's tray; the in-app banner covers it while the app is open.
+        await toStudent(order.student_id, order.student_phone, 'Your food is packed', order.rider_name ? `${order.rider_name} is collecting it from ${order.kitchen_name}.` : `Sealed at ${order.kitchen_name}. A rider is on the way to collect it.`, data, undefined, 'updates');
         if (!order.rider_id) break;
         const ts = await tokens("u.id = $1 and p.app = 'rider'", [order.rider_id]);
         await push.send(ts.map((t) => ({ to: t.token, title: 'Bags sealed and waiting', body: `Bag ${order.number} at ${order.kitchen_name}`, data, channel: 'pickup' })));

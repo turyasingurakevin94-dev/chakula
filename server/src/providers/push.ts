@@ -1,6 +1,8 @@
 import type { Config } from '../config.ts';
 
-export type PushMessage = { to: string; title: string; body: string; data?: Record<string, unknown>; channel: string };
+// quiet: no sound on any phone (Android also takes it from the channel), and the app shows no
+// banner of its own for it while open, since the live connection already did.
+export type PushMessage = { to: string; title: string; body: string; data?: Record<string, unknown>; channel: string; quiet?: boolean };
 export type Push = { send(messages: PushMessage[]): Promise<void>; sent: PushMessage[] };
 
 // Expo's push service: free, no account needed beyond the apps' Expo project. Each app registers
@@ -22,8 +24,8 @@ export function createPush(config: Config): Push {
           to: m.to,
           title: m.title,
           body: m.body,
-          data: m.data,
-          sound: 'default',
+          data: m.quiet ? { ...m.data, quiet: true } : m.data,
+          ...(m.quiet ? {} : { sound: 'default' }),
           priority: 'high',
           channelId: m.channel,
         }));

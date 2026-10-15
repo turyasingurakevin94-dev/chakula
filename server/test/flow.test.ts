@@ -145,11 +145,14 @@ test('a rider returns a bag the student never came for; a wallet order is refund
   assert.equal((await call('GET', '/wallet', { token: student })).json.balance, 50_000);
 });
 
-test('the student hears that the kitchen accepted their order', async () => {
+test('the student gets silent "accepted" and "packed" lines', async () => {
   const student = await signIn('0772 123 999', 'student');
   await call('POST', '/push-tokens', { token: student, body: { token: 'ExponentPushToken[accepted-test]', app: 'student' } });
-  await call('POST', '/orders', { token: student, body: order('cash') });
-  await waitFor(async () => server.push.sent.some((m) => m.to === 'ExponentPushToken[accepted-test]' && m.title === 'Nakawa Kitchen accepted your order' && m.channel === 'updates'));
+  const placed = await call('POST', '/orders', { token: student, body: order('cash') });
+  const quietTo = (title: string) => async () => server.push.sent.some((m) => m.to === 'ExponentPushToken[accepted-test]' && m.title === title && m.channel === 'updates' && m.quiet === true);
+  await waitFor(quietTo('Nakawa Kitchen accepted your order'));
+  await call('POST', `/kitchen/orders/${placed.json.order.id}/ready`, { token: kitchen });
+  await waitFor(quietTo('Your food is packed'));
 });
 
 test('a declined MoMo payment cancels the order', async () => {
