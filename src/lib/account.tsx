@@ -4,6 +4,7 @@ import { dropPoints, type DropKind, type Pt } from './campus';
 import { applyServerMenus, findSpecial, type Extra, type MenuItem, type ServerKitchen } from './data';
 import type { PhotoKey } from './photos';
 import { findPlanKind, planMeals, planPrice, type PlanKindId, type PlanPeriod } from './plans';
+import { getPayDefault } from './payDefault';
 import { openPaymentPage } from './payPage';
 import { api, connectLive, getToken, onServer, readItem, restoreToken, saveItem, sendCode, setOnSignedOut, setToken, toCampusMetres, verifyCode, type ServerOrder, type ServerStatus, type ServerUser, type ServerWallet, type ServerWalletEntry } from './server';
 
@@ -570,6 +571,8 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       kitchenId: o.restaurantId,
       dropPointId: place?.id,
       payMethod: o.method ?? 'mtn',
+      // Another MoMo number from Profile › Payment; the server charges the student's own without it.
+      payPhone: (o.method ?? 'mtn') === 'mtn' || o.method === 'airtel' ? getPayDefault().momoPhone || undefined : undefined,
       note: [room, note].filter(Boolean).join(' · ') || undefined,
       lines: o.lines.map((l) => ({ dishId: l.item.id, quantity: l.quantity, extraIds: (l.extras ?? []).map((e) => e.id), pepper: l.pepper, note: l.note || undefined })),
     };

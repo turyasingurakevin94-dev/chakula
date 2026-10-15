@@ -6,6 +6,7 @@ import { Display, FoodImage, Icon, Label, Stars, styles as ui } from '../../comp
 import { DELIVERY_MINUTES, formatClock, formatWhen, isWaiting, minutesLeft, useAccount, useNow, type Order } from '../../lib/account';
 import { todaysLines, useCart } from '../../lib/cart';
 import { findRestaurant, findSpecial } from '../../lib/data';
+import { arriveBy, stageOf } from '../../lib/stages';
 import { colors, fonts, formatUGX } from '../../lib/theme';
 
 export default function Orders() {
@@ -28,7 +29,7 @@ export default function Orders() {
           <Display>Orders</Display>
         </View>
 
-        {active ? <ActiveOrder order={active} minutes={minutesLeft(active, now)} waiting={isWaiting(active, now)} /> : null}
+        {active ? <ActiveOrder order={active} now={now} /> : null}
 
         {account.preorders.length > 0 ? (
           <View style={s.section}>
@@ -98,9 +99,17 @@ export default function Orders() {
           })}
 
           {!active && past.length === 0 ? (
-            <View style={{ alignItems: 'center', paddingTop: 64, gap: 8 }}>
-              <Display size={22}>No orders yet</Display>
-              <Text style={s.meta}>{onServer ? 'Your orders will show here.' : 'Your first three deliveries are free.'}</Text>
+            <View style={[ui.card, s.empty]}>
+              <View style={s.emptyIcon}>
+                <Icon name="shopping-bag" size={24} color={colors.orangeText} />
+              </View>
+              <Display size={22} style={{ textAlign: 'center' }}>
+                No orders yet
+              </Display>
+              <Text style={[s.meta, { textAlign: 'center', lineHeight: 19 }]}>{onServer ? 'Your orders and their codes show here once you order.' : 'Your first three deliveries are free.'}</Text>
+              <Pressable accessibilityRole="button" accessibilityLabel="Find food" onPress={() => router.navigate('/')} style={({ pressed }) => [s.find, pressed && { opacity: 0.9 }]}>
+                <Text style={{ fontFamily: fonts.bold, fontSize: 15, color: colors.cream }}>Find food</Text>
+              </Pressable>
             </View>
           ) : null}
         </View>
@@ -109,38 +118,63 @@ export default function Orders() {
   );
 }
 
-function ActiveOrder({ order, minutes, waiting }: { order: Order; minutes: number; waiting: boolean }) {
+function ActiveOrder({ order, now }: { order: Order; now: number }) {
   const r = findRestaurant(order.restaurantId);
-  const arrived = minutes === 0;
-  const scheduled = waiting && order.scheduledFor ? formatClock(order.scheduledFor, true) : null;
-  // Same steps as tracking: confirmed, cooked, on the way, at your door.
-  const step = scheduled ? 0 : arrived ? 3 : minutes > DELIVERY_MINUTES - 2 ? 1 : 2;
-  const status = scheduled ? 'coming later' : arrived ? 'arrived' : step === 1 ? 'cooking' : 'on the way';
+  const { status, headline, step } = order.serverId ? serverCard(order, now) : sampleCard(order, now);
   return (
     <View style={{ paddingHorizontal: 20, paddingTop: 16 }}>
-      <Pressable accessibilityRole="button" accessibilityLabel="Track your order" onPress={() => router.push('/tracking')} style={({ pressed }) => [s.active, { opacity: pressed ? 0.94 : 1 }]}>
+      <Pressable accessibilityRole="button" accessibilityLabel={`Track your order. ${status}`} onPress={() => router.push('/tracking')} style={({ pressed }) => [ui.card, s.active, { opacity: pressed ? 0.94 : 1 }]}>
         <FoodImage tint={order.lines[0]?.item.tint ?? colors.sand} photo={order.lines[0]?.item.photo} size={26} style={{ width: 64, height: 64, borderRadius: 16 }} />
         <View style={{ flex: 1, gap: 6 }}>
-          <Text style={{ fontFamily: fonts.regular, fontSize: 13, color: colors.mint }} numberOfLines={1}>
+          <Text style={{ fontFamily: fonts.regular, fontSize: 13, color: colors.muted }} numberOfLines={1}>
             {r?.name} · {status}
           </Text>
-          <Text style={{ fontFamily: fonts.displayLight, fontSize: 24, lineHeight: 27, color: colors.cream }}>{scheduled ? `Arrives ${scheduled}` : arrived ? 'At your door' : `${minutes} min away`}</Text>
+          <Text style={{ fontFamily: fonts.displayLight, fontSize: 24, lineHeight: 27, color: colors.forest }}>{headline}</Text>
           <View style={{ flexDirection: 'row', gap: 4 }}>
             {[0, 1, 2, 3].map((i) => (
-              <View key={i} style={[s.bar, { backgroundColor: i < step ? colors.cream : i === step ? colors.orange : colors.forestLine }]} />
+              <View key={i} style={[s.bar, { backgroundColor: i < step ? colors.forest : i === step ? colors.orange : colors.line }]} />
             ))}
           </View>
         </View>
-        <Icon name="chevron-right" size={20} color={colors.cream} />
+        <Icon name="chevron-right" size={20} color={colors.chevron} />
       </Pressable>
     </View>
   );
 }
 
+// Sample orders move on the demo timer. Same steps as tracking: confirmed, cooked, on the way, at your door.
+function sampleCard(order: Order, now: number) {
+  const minutes = minutesLeft(order, now);
+  const arrived = minutes === 0;
+  const scheduled = isWaiting(order, now) && order.scheduledFor ? formatClock(order.scheduledFor, true) : null;
+  const step = scheduled ? 0 : arrived ? 3 : minutes > DELIVERY_MINUTES - 2 ? 1 : 2;
+  const status = scheduled ? 'coming later' : arrived ? 'arrived' : step === 1 ? 'cooking' : 'on the way';
+  return { status, step, headline: scheduled ? `Arrives ${scheduled}` : arrived ? 'At your door' : `${minutes} min away` };
+}
+
+// Server orders show where the kitchen and rider really are.
+function serverCard(order: Order, now: number) {
+  const stage = stageOf(order, true, now);
+  const minutes = Math.max(1, Math.round((arriveBy(order) - now) / 60_000));
+  switch (order.status) {
+    case 'awaiting_payment':
+      return { status: 'waiting for payment', step: 0, headline: 'Approve on your phone' };
+    case 'ready':
+      return { status: 'packed, waiting for a rider', step: 1, headline: `${minutes} min away` };
+    case 'at_gate':
+      return { status: 'your rider is here', step: 3, headline: 'At your gate' };
+    default:
+      return { status: stage === 2 ? 'on the way' : 'cooking', step: Math.min(stage, 3), headline: `${minutes} min away` };
+  }
+}
+
 const s = StyleSheet.create({
   section: { paddingHorizontal: 20, paddingTop: 20, gap: 10 },
-  active: { backgroundColor: colors.forest, borderRadius: 22, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 14 },
+  active: { borderRadius: 22, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 14 },
   bar: { flex: 1, height: 5, borderRadius: 3 },
+  empty: { marginTop: 24, paddingHorizontal: 20, paddingVertical: 28, alignItems: 'center', gap: 8 },
+  emptyIcon: { width: 56, height: 56, borderRadius: 28, backgroundColor: colors.tile, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
+  find: { marginTop: 10, height: 46, paddingHorizontal: 28, borderRadius: 23, backgroundColor: colors.forest, alignItems: 'center', justifyContent: 'center' },
   card: { padding: 12, gap: 10 },
   thumb: { width: 60, height: 60, borderRadius: 14 },
   again: { height: 38, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, borderColor: colors.forest, flexDirection: 'row', alignItems: 'center', gap: 6 },

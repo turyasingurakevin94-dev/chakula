@@ -7,6 +7,7 @@ import { BackHeader, Display, FoodImage, Icon, Label, PrimaryButton, styles as u
 import { formatClock, lineOptions, unitPrice, useAccount, type PayMethod } from '../lib/account';
 import { priceBasket, useCart } from '../lib/cart';
 import { findRestaurant, student } from '../lib/data';
+import { getPayDefault } from '../lib/payDefault';
 import { onServer } from '../lib/server';
 import { colors, fonts, formatUGX } from '../lib/theme';
 
@@ -39,7 +40,8 @@ export default function Checkout() {
   const cart = useCart();
   const account = useAccount();
   const { width } = useWindowDimensions();
-  const [method, setMethod] = useState<PayMethod>('mtn');
+  // Starts on the student's usual way to pay (Profile › Payment).
+  const [method, setMethod] = useState<PayMethod>(() => getPayDefault().method);
   const [choosingMethod, setChoosingMethod] = useState(false);
   const [choosingPlace, setChoosingPlace] = useState(false);
   // Null means as soon as possible.
@@ -61,9 +63,11 @@ export default function Checkout() {
   const walletDetail = onServer
     ? `Balance ${formatUGX(account.balance)}${shortOfFunds ? ` · ${formatUGX(price.total - account.balance)} short` : ''}`
     : `Balance ${formatUGX(account.balance)}${shortOfFunds ? ' · not enough' : ' · free delivery'}`;
+  const momoPhone = getPayDefault().momoPhone;
+  const momoDetail = momoPhone ? `0${momoPhone.replace(/^(256|0)/, '').slice(0, 3)} ••• ${momoPhone.slice(-3)}` : account.maskedPhone;
   const methods: Method[] = [
-    { id: 'mtn', name: 'MTN Mobile Money', detail: account.maskedPhone, badge: 'MTN', badgeBg: '#FFCB05', badgeFg: colors.forest },
-    { id: 'airtel', name: 'Airtel Money', detail: account.maskedPhone, badge: 'airtel', badgeBg: '#E40000', badgeFg: '#FFFFFF' },
+    { id: 'mtn', name: 'MTN Mobile Money', detail: momoDetail, badge: 'MTN', badgeBg: '#FFCB05', badgeFg: colors.forest },
+    { id: 'airtel', name: 'Airtel Money', detail: momoDetail, badge: 'airtel', badgeBg: '#E40000', badgeFg: '#FFFFFF' },
     { id: 'wallet', name: 'Chakula Wallet', detail: walletDetail, badge: 'C', badgeBg: colors.forest, badgeFg: colors.cream },
     // The server doesn't take cards yet, so it isn't offered there.
     ...(onServer ? [] : [{ id: 'card', name: 'Debit or credit card', badge: 'card', badgeBg: colors.tile, badgeFg: colors.forest } as Method]),
@@ -221,10 +225,13 @@ export default function Checkout() {
       </ScrollView>
 
       <View style={s.footer}>
-        <View style={s.promise}>
-          <Icon name="check" size={14} color={colors.green} />
-          <Text style={{ fontFamily: fonts.regular, fontSize: 12, color: colors.green }}>On time, or your next delivery is free</Text>
-        </View>
+        {/* A sample-mode promise; the server doesn't give late deliveries back yet. */}
+        {onServer ? null : (
+          <View style={s.promise}>
+            <Icon name="check" size={14} color={colors.green} />
+            <Text style={{ fontFamily: fonts.regular, fontSize: 12, color: colors.green }}>On time, or your next delivery is free</Text>
+          </View>
+        )}
         <PrimaryButton floating disabled={blocked} label={payLabel} onPress={pay}>
           {payLabel}
         </PrimaryButton>

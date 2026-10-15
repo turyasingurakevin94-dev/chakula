@@ -72,6 +72,8 @@ function Screens() {
         <Stack.Screen name="checkout" />
         <Stack.Screen name="tracking" />
         <Stack.Screen name="profile" />
+        <Stack.Screen name="place" />
+        <Stack.Screen name="payment" />
         <Stack.Screen name="notifications" />
         <Stack.Screen name="wallet" />
         <Stack.Screen name="help" />
