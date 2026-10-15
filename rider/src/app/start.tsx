@@ -13,7 +13,7 @@ const CHECKS = ['Delivery box clean and dry', 'Helmet and Chakula jacket on', 'F
 
 // Start your shift: the Gold Rider card and a three-tap check, then the alerts check, then online.
 export default function Start() {
-  const { checks, toggleCheck, notify, drops } = useRider();
+  const { checks, toggleCheck, notify, drops, riderName } = useRider();
   const [step, setStep] = useState<1 | 2>(1);
 
   const go = () => {
@@ -34,7 +34,7 @@ export default function Start() {
           <Label>{today()} · start shift · step 1 of 2</Label>
           <Headline>
             Ready to ride,{'\n'}
-            <Italic>Moses?</Italic>
+            <Italic>{riderName}?</Italic>
           </Headline>
         </View>
 

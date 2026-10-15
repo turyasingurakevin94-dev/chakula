@@ -3,12 +3,13 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { Body, Bold, Headline, Italic, Label, Num, TearLine } from '../../components/ui';
-import { greeting, KITCHEN, onlineFor, useNow, useRider, type Run } from '../../lib/rider';
+import { greeting, KITCHEN, onlineFor, pickupOrder, useNow, useRider, type Run } from '../../lib/rider';
+import { onServer } from '../../lib/server';
 import { colors, fonts, money } from '../../lib/theme';
 
 // Today: the next run as a boarding-pass ticket, one button, and tonight's money.
 export default function Today() {
-  const { onlineSince, goOffline, run, stage, stopIndex, drops, pay, cash } = useRider();
+  const { onlineSince, goOffline, run, stage, stopIndex, drops, pay, cash, riderName } = useRider();
   const now = useNow(30_000);
 
   const cta =
@@ -45,7 +46,7 @@ export default function Today() {
         <View style={{ paddingHorizontal: 20, paddingTop: 22, gap: 12 }}>
           <Headline>
             {greeting()},{'\n'}
-            <Italic>Moses.</Italic>
+            <Italic>{riderName}.</Italic>
           </Headline>
           <View style={{ flexDirection: 'row', gap: 18 }}>
             <Stat value="4.9" label="rating" />
@@ -90,15 +91,17 @@ function Ticket({ run, current }: { run: Run; current: number }) {
         <View style={{ paddingHorizontal: 20, paddingTop: 18, paddingBottom: 6, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', gap: 12 }}>
           <View style={{ flex: 1, gap: 4 }}>
             <Label>{kicker}</Label>
-            <Num size={28}>{KITCHEN}</Num>
+            <Num size={28}>{onServer ? pickupOrder(run)[0]!.name : KITCHEN}</Num>
             <Body style={{ fontSize: 13, color: colors.body }}>
-              {run.stops.length} sealed bags · {run.away}
+              {run.stops.length} sealed bag{run.stops.length === 1 ? '' : 's'} · {run.away}
             </Body>
           </View>
-          <View style={{ alignItems: 'center' }}>
-            <Text style={{ fontFamily: fonts.bold, fontSize: 10, letterSpacing: 1.4, color: colors.muted }}>SLOT</Text>
-            <Text style={{ fontFamily: fonts.display, fontSize: 52, lineHeight: 56, color: colors.forest }}>{run.slot}</Text>
-          </View>
+          {run.slot !== undefined ? (
+            <View style={{ alignItems: 'center' }}>
+              <Text style={{ fontFamily: fonts.bold, fontSize: 10, letterSpacing: 1.4, color: colors.muted }}>SLOT</Text>
+              <Text style={{ fontFamily: fonts.display, fontSize: 52, lineHeight: 56, color: colors.forest }}>{run.slot}</Text>
+            </View>
+          ) : null}
         </View>
         <TearLine />
         <View style={{ paddingHorizontal: 20, paddingTop: 6, paddingBottom: 18, gap: 10 }}>

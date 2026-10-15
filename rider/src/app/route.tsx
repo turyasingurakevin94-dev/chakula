@@ -7,6 +7,7 @@ import { CampusMap, mapInk, type MapLine, type MapPin } from '../components/map'
 import { Body, Bold, Icon, Label } from '../components/ui';
 import { along, findDropPoint, fitView, followView, headingAhead, kitchenAt, minutesFor, nextTurn, route, type Route } from '../lib/campus';
 import { KITCHEN, useRider, type Stop } from '../lib/rider';
+import { onServer } from '../lib/server';
 import { colors, fonts, money } from '../lib/theme';
 
 // The sample ride "arrives" by itself after this long, as GPS would. Tapping the stop arrives at once.
@@ -62,8 +63,9 @@ export default function RouteScreen() {
     router.push('/drop');
   };
 
+  // On the server, arriving tells the student, so it waits for the rider's tap.
   useEffect(() => {
-    if (stage !== 'riding') return;
+    if (stage !== 'riding' || onServer) return;
     const t = setTimeout(arrived, ARRIVE_MS);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -172,7 +174,7 @@ export default function RouteScreen() {
             </View>
           </View>
         </View>
-        <Text style={{ fontFamily: fonts.regular, fontSize: 13, color: colors.muted, textAlign: 'center' }}>Riding mode: big text, voice turns. The handover opens by itself when you arrive.</Text>
+        <Text style={{ fontFamily: fonts.regular, fontSize: 13, color: colors.muted, textAlign: 'center' }}>{onServer ? 'Riding mode: big text, voice turns. Tap the stop when you arrive.' : 'Riding mode: big text, voice turns. The handover opens by itself when you arrive.'}</Text>
       </View>
     </View>
   );
@@ -184,7 +186,7 @@ const kitchenIds: Record<string, string> = { 'Nakawa Kitchen': 'nakawa-kitchen',
 // The road for each stop: from the kitchen to the first drop, then drop to drop.
 function legsFor(stops: Stop[]): Route[] {
   return stops.map((x, i) => {
-    const from = i === 0 ? kitchenAt(kitchenIds[x.kitchen ?? KITCHEN] ?? 'nakawa-kitchen') : findDropPoint(stops[i - 1]!.drop)!.at;
+    const from = i === 0 ? kitchenAt(x.kitchenId ?? kitchenIds[x.kitchen ?? KITCHEN] ?? 'nakawa-kitchen') : findDropPoint(stops[i - 1]!.drop)!.at;
     return route(from, findDropPoint(x.drop)!.at);
   });
 }

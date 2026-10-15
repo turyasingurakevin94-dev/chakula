@@ -1,10 +1,11 @@
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Defs, Path, RadialGradient, Rect, Stop as GradientStop } from 'react-native-svg';
 import { BackButton, Body, Bold, Icon, Label, Num, RoundButton } from '../components/ui';
-import { KITCHEN, kitchenOf, ordinal, spotOf, useRider } from '../lib/rider';
+import { KITCHEN, kitchenOf, ordinal, pickupOrder, spotOf, useRider } from '../lib/rider';
+import { onServer } from '../lib/server';
 import { colors, fonts } from '../lib/theme';
 
 // How long the sample scanner takes to "read" each seal. There is no camera yet.
@@ -12,7 +13,7 @@ const SCAN_MS = 2200;
 
 // Pick up: scan each bag's seal at the kitchen hatch. The last scan starts the route.
 export default function Pickup() {
-  const { run, scanned, startPickup, scanNext, notify } = useRider();
+  const { run, scanned, startPickup, scanNext, pickUp, notify } = useRider();
   const [torch, setTorch] = useState(false);
   const [line] = useState(() => new Animated.Value(0));
 
@@ -35,8 +36,13 @@ export default function Pickup() {
   const bags = run ? [...run.stops].map((stop, i) => ({ stop, number: i + 1 })).reverse() : [];
   const waiting = bags.find((b) => !scanned.includes(b.stop.bag));
 
-  const scan = () => {
-    const bag = scanNext();
+  // On the server each scan picks the bag up there; one at a time.
+  const busy = useRef(false);
+  const scan = async () => {
+    if (busy.current) return;
+    busy.current = true;
+    const bag = onServer ? await pickUp() : scanNext();
+    busy.current = false;
     if (!bag || !run) return;
     if (scanned.length + 1 === run.stops.length) {
       notify(`All ${run.stops.length} bags on · students told you're on the way`);
@@ -44,13 +50,14 @@ export default function Pickup() {
     }
   };
 
-  // The sample scanner reads the next seal by itself after a moment.
+  // The sample scanner reads the next seal by itself after a moment. A bag still cooking waits for
+  // the kitchen's Ready tap.
   useEffect(() => {
-    if (!waiting) return;
+    if (!waiting || waiting.stop.status === 'cooking') return;
     const t = setTimeout(scan, SCAN_MS);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [waiting?.stop.bag]);
+  }, [waiting?.stop.bag, waiting?.stop.status]);
 
   if (!run) return null;
 
@@ -60,7 +67,8 @@ export default function Pickup() {
         <BackButton />
         <View style={{ flex: 1, gap: 1 }}>
           <Label>
-            {KITCHEN} · slot {run.slot}
+            {onServer ? pickupOrder(run)[0]!.name : KITCHEN}
+            {run.slot !== undefined ? ` · slot ${run.slot}` : ''}
           </Label>
           <Text style={{ fontFamily: fonts.displayMedium, fontSize: 24, lineHeight: 28, color: colors.forest }}>Scan each seal</Text>
         </View>

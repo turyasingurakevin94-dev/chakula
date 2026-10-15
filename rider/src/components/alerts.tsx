@@ -42,13 +42,13 @@ export function CountdownRing({ size, stroke, share, track, fill, children }: { 
 
 // New run: the boarding-pass offer, full screen over whatever is open, ringing for 42 seconds.
 export function RunOffer() {
-  const { offer, run } = useRider();
-  if (!offer || !run || run.id !== offer.runId) return null;
+  const { offer, offerRun } = useRider();
+  if (!offer || !offerRun) return null;
   return <OfferScreen at={offer.at} />;
 }
 
 function OfferScreen({ at }: { at: number }) {
-  const { run, acceptRun, passRun } = useRider();
+  const { offerRun: run, acceptRun, passRun } = useRider();
   const insets = useSafeAreaInsets();
   const now = useNow(250);
   const left = Math.max(0, OFFER_MS - (now - at));
@@ -96,10 +96,12 @@ function OfferScreen({ at }: { at: number }) {
                   {kitchens.length > 1 ? `Then ${kitchens.slice(1).map((k) => k.name).join(', ')} · sealed as you arrive` : 'Bags sealed by the time you arrive'}
                 </Body>
               </View>
-              <View style={{ alignItems: 'center' }}>
-                <Text style={{ fontFamily: fonts.bold, fontSize: 10, letterSpacing: 1.4, color: colors.muted }}>SLOT</Text>
-                <Text style={{ fontFamily: fonts.display, fontSize: 52, lineHeight: 56, color: colors.forest }}>{run.slot}</Text>
-              </View>
+              {run.slot !== undefined ? (
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ fontFamily: fonts.bold, fontSize: 10, letterSpacing: 1.4, color: colors.muted }}>SLOT</Text>
+                  <Text style={{ fontFamily: fonts.display, fontSize: 52, lineHeight: 56, color: colors.forest }}>{run.slot}</Text>
+                </View>
+              ) : null}
             </View>
             <TearLine />
             <View style={{ paddingHorizontal: 20, paddingTop: 6, paddingBottom: 18, gap: 10 }}>

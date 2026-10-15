@@ -4,13 +4,17 @@ import { Animated, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleS
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BackButton, Body, Button, Headline, Icon, Label, Num } from '../components/ui';
 import { useRider } from '../lib/rider';
+import { onServer } from '../lib/server';
 import { colors, fonts, money } from '../lib/theme';
 
 // Hand over: collect any cash, then type the student's 4-digit code. The last digit completes the drop.
 export default function Drop() {
-  const { run, stop, stopIndex, completeStop, backToRoute, notify } = useRider();
+  const { run, stop, stopIndex, completeStop, backToRoute, notify, handOver } = useRider();
   const [code, setCode] = useState('');
   const [wrong, setWrong] = useState(false);
+  // On the server: the code is being checked, and the server's words when it doesn't match.
+  const [checking, setChecking] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const input = useRef<TextInput>(null);
   const [shake] = useState(() => new Animated.Value(0));
 
@@ -32,19 +36,36 @@ export default function Drop() {
     else router.back();
   };
 
-  const onChange = (text: string) => {
-    const digits = text.replace(/\D/g, '').slice(0, 4);
-    setWrong(false);
-    setCode(digits);
-    if (digits.length < 4) return;
-    if (digits === stop.code) {
-      finish();
-      return;
-    }
+  const mismatch = () => {
     setWrong(true);
     Animated.sequence(
       [10, -10, 8, -8, 0].map((toValue) => Animated.timing(shake, { toValue, duration: 60, useNativeDriver: true })),
     ).start(() => setCode(''));
+  };
+
+  const onChange = (text: string) => {
+    if (checking) return;
+    const digits = text.replace(/\D/g, '').slice(0, 4);
+    setWrong(false);
+    setError(null);
+    setCode(digits);
+    if (digits.length < 4) return;
+    // On the server only the student's app knows the code, so the server checks what they read out.
+    if (onServer) {
+      setChecking(true);
+      handOver(digits).then((problem) => {
+        setChecking(false);
+        if (!problem) return finish();
+        setError(problem);
+        mismatch();
+      });
+      return;
+    }
+    if (digits === stop.code) {
+      finish();
+      return;
+    }
+    mismatch();
   };
 
   const back = () => {
@@ -60,10 +81,13 @@ export default function Drop() {
           <Label style={{ flex: 1 }}>
             Stop {stopIndex + 1} of {run.stops.length} · arrived {stop.eta}
           </Label>
-          <View style={s.offline}>
-            <Icon name="wifi" size={14} color={colors.body} />
-            <Text style={{ fontFamily: fonts.semibold, fontSize: 12, color: colors.body }}>Works offline</Text>
-          </View>
+          {/* On the server the code is checked there, so the handover needs a connection. */}
+          {onServer ? null : (
+            <View style={s.offline}>
+              <Icon name="wifi" size={14} color={colors.body} />
+              <Text style={{ fontFamily: fonts.semibold, fontSize: 12, color: colors.body }}>Works offline</Text>
+            </View>
+          )}
         </View>
 
         <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 20 }}>
@@ -141,7 +165,11 @@ export default function Drop() {
               style={s.hidden}
             />
             <Body style={{ fontSize: 13, lineHeight: 19, color: wrong ? colors.danger : colors.muted }}>
-              {wrong ? `That code doesn't match. Ask ${stop.first} to read it from the Chakula app.` : 'The last digit completes the drop. The code proves the food reached the right person.'}
+              {wrong
+                ? (error ?? `That code doesn't match. Ask ${stop.first} to read it from the Chakula app.`)
+                : checking
+                  ? 'Checking the code…'
+                  : 'The last digit completes the drop. The code proves the food reached the right person.'}
             </Body>
           </View>
         </ScrollView>
