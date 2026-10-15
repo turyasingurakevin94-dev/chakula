@@ -69,31 +69,30 @@ function nearestNode(p: Pt) {
 export type Route = { points: Pt[]; metres: number; seconds: number };
 
 const routeCache = new Map<string, Route>();
+const trees = new Map<number, { time: Float64Array; prev: Int32Array }>();
 
-// The fastest way between two spots, starting and ending on the nearest road.
-export function route(from: Pt, to: Pt): Route {
-  const key = `${from.join(',')}>${to.join(',')}`;
-  const hit = routeCache.get(key);
+// Fastest times from one road node to every other, worked out once and reused, so a list of
+// drop points costs one search, not one per row.
+function tree(s: number) {
+  const hit = trees.get(s);
   if (hit) return hit;
   const adj = graph();
-  const { nodes } = campusData.graph;
-  const s = nearestNode(from);
-  const t = nearestNode(to);
-  const time = new Float64Array(nodes.length).fill(Infinity);
-  const prev = new Int32Array(nodes.length).fill(-1);
-  const done = new Uint8Array(nodes.length);
+  const n = campusData.graph.nodes.length;
+  const time = new Float64Array(n).fill(Infinity);
+  const prev = new Int32Array(n).fill(-1);
+  const done = new Uint8Array(n);
   time[s] = 0;
-  // A plain scan is quick enough for ~1,500 nodes and keeps this dependency-free.
+  // A plain scan is quick enough for ~1,400 nodes and keeps this dependency-free.
   for (;;) {
     let u = -1;
     let best = Infinity;
-    for (let i = 0; i < nodes.length; i++) {
+    for (let i = 0; i < n; i++) {
       if (!done[i] && time[i]! < best) {
         best = time[i]!;
         u = i;
       }
     }
-    if (u < 0 || u === t) break;
+    if (u < 0) break;
     done[u] = 1;
     for (const e of adj[u]!) {
       const nt = best + e.s;
@@ -103,6 +102,19 @@ export function route(from: Pt, to: Pt): Route {
       }
     }
   }
+  const result = { time, prev };
+  trees.set(s, result);
+  return result;
+}
+
+// The fastest way between two spots, starting and ending on the nearest road.
+export function route(from: Pt, to: Pt): Route {
+  const key = `${from.join(',')}>${to.join(',')}`;
+  const hit = routeCache.get(key);
+  if (hit) return hit;
+  const { nodes } = campusData.graph;
+  const t = nearestNode(to);
+  const { time, prev } = tree(nearestNode(from));
   const path: Pt[] = [];
   if (time[t] === Infinity) {
     path.push(from, to);

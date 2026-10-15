@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Linking, Pressable, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import Svg, { Circle, G, Path, Text as SvgText } from 'react-native-svg';
 import { mapData, project, type MapView, type Pt } from '../lib/campus';
 import { colors, fonts } from '../lib/theme';
@@ -39,8 +39,8 @@ export function CampusMap({ width, height, view, lines = [], pins = [], rider, o
   const at = (p: Pt) => project(view, width, height, p);
   const line = (pts: Pt[]) => pts.map((p, i) => `${i ? 'L' : 'M'}${at(p)[0].toFixed(1)} ${at(p)[1].toFixed(1)}`).join('');
   return (
-    <View style={[{ width, height, backgroundColor: ink.ground, overflow: 'hidden' }, style]} accessible accessibilityRole="image" accessibilityLabel={accessibilityLabel}>
-      <Svg width={width} height={height}>
+    <View style={[{ width, height, backgroundColor: ink.ground, overflow: 'hidden' }, style]}>
+      <Svg width={width} height={height} accessible accessibilityRole="image" accessibilityLabel={accessibilityLabel}>
         <Base width={width} height={height} cx={view.center[0]} cy={view.center[1]} scale={view.scale} rotate={view.rotate} />
         {lines.map((l, i) => (
           <G key={`l${i}`}>
@@ -69,7 +69,10 @@ export function CampusMap({ width, height, view, lines = [], pins = [], rider, o
         })}
         {rider ? <Rider at={at(rider.at)} angle={rider.heading + view.rotate} /> : null}
       </Svg>
-      <Text style={{ position: 'absolute', right: 6, bottom: 4, fontFamily: fonts.regular, fontSize: 9, color: colors.muted, backgroundColor: 'rgba(255,248,240,0.85)', paddingHorizontal: 5, borderRadius: 4 }}>© OpenStreetMap</Text>
+      {/* The map data is OpenStreetMap's, under the ODbL: credit it and link to the licence. */}
+      <Pressable accessibilityRole="link" accessibilityLabel="Map data © OpenStreetMap contributors, open licence" hitSlop={8} onPress={() => Linking.openURL('https://www.openstreetmap.org/copyright')} style={{ position: 'absolute', right: 6, bottom: 4, backgroundColor: 'rgba(255,248,240,0.85)', paddingHorizontal: 5, borderRadius: 4 }}>
+        <Text style={{ fontFamily: fonts.regular, fontSize: 9, color: colors.muted, textDecorationLine: 'underline' }}>© OpenStreetMap contributors</Text>
+      </Pressable>
     </View>
   );
 }

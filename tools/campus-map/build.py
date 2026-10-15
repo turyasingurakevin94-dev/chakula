@@ -105,9 +105,21 @@ for wid, refs, t in ways:
     elif hw in PATHS:
         roads['path'].append(d_line(simplify(pts)))
 
-# Road graph for routing on the phone: a motorbike can use lanes and campus paths, slowly.
+# Road graph for routing on the phone: roads, lanes and tracks. Footways and pedestrian areas only
+# when motorbikes are explicitly allowed on them, so riding mode never sends a bike down a footpath.
 SPEED = {'trunk': 22, 'trunk_link': 18, 'secondary': 22, 'tertiary': 20, 'residential': 18, 'unclassified': 16, 'living_street': 12,
          'service': 14, 'path': 8, 'footway': 7, 'track': 10, 'pedestrian': 7}
+FOOT_ONLY = {'footway', 'pedestrian'}
+ALLOWED = {'yes', 'permissive', 'designated', 'destination'}
+BLOCKED = {'no', 'private'}
+
+
+def rideable(t):
+    hw = t.get('highway')
+    bike = t.get('motorcycle') or t.get('motor_vehicle') or t.get('vehicle')
+    if bike in BLOCKED or t.get('access') in BLOCKED and bike not in ALLOWED:
+        return False
+    return hw not in FOOT_ONLY or bike in ALLOWED
 gid, gpts, edges = {}, [], []
 
 
@@ -119,7 +131,7 @@ def gnode(r):
 
 for wid, refs, t in ways:
     hw = t.get('highway')
-    if hw not in SPEED:
+    if hw not in SPEED or not rideable(t):
         continue
     refs = [r for r in refs if r in nodes and inbox(nodes[r], 0.001)]
     oneway = 1 if t.get('oneway') == 'yes' else 0
