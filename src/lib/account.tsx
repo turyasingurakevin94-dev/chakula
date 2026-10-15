@@ -1,9 +1,10 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Alert, Linking } from 'react-native';
+import { Alert } from 'react-native';
 import { dropPoints, type DropKind, type Pt } from './campus';
 import { applyServerMenus, findSpecial, type Extra, type MenuItem, type ServerKitchen } from './data';
 import type { PhotoKey } from './photos';
 import { findPlanKind, planMeals, planPrice, type PlanKindId, type PlanPeriod } from './plans';
+import { openPaymentPage } from './payPage';
 import { api, connectLive, getToken, onServer, sendCode, setToken, toCampusMetres, verifyCode, type ServerOrder, type ServerStatus } from './server';
 
 // Account state. On the Chakula server (EXPO_PUBLIC_API_URL set), sign-in, profile and orders are
@@ -427,7 +428,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       .then(({ order, payment }) => {
         setOrders((prev) => prev.map((p) => (p.localId === localId ? fromServer(order, p) : p)));
         // Flutterwave's page that waits with the student while they approve on their phone.
-        if (payment?.redirectUrl) Linking.openURL(payment.redirectUrl).catch(() => {});
+        if (payment?.redirectUrl) void openPaymentPage(payment.redirectUrl);
       })
       .catch((e) => {
         setOrders((prev) => prev.filter((p) => p.localId !== localId));

@@ -126,7 +126,7 @@ export async function createServer(config: Config) {
   // ---- Students ----
   app.post('/orders', signedIn('student'), async (c) => {
     const user = c.get('user');
-    const { order, lines, payment } = await orders.place(user, await body(c, placeOrderInput));
+    const { order, lines, payment } = await orders.place(user, await body(c, placeOrderInput), { returnUrl: `${publicOrigin(c)}/payments/done` });
     return c.json({ order: viewOrder(order, lines, user), payment }, 201);
   });
   app.get('/orders', signedIn(), async (c) => {
@@ -148,6 +148,16 @@ export async function createServer(config: Config) {
   });
 
   // ---- Payment provider callbacks ----
+  // Flutterwave's page lands here when the student is done. The app's in-app browser closes when it
+  // sees the chakula:// address; anywhere else this page just says to go back to the app.
+  app.get('/payments/done', (c) =>
+    c.html(
+      '<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>Chakula</title>' +
+        '<body style="font-family:sans-serif;background:#FFF8F0;color:#1B4332;text-align:center;padding:48px 24px">' +
+        '<p>All done. Going back to Chakula…</p><p><a href="chakula://payment-done" style="color:#1B4332">Open Chakula</a></p>' +
+        '<script>location.replace("chakula://payment-done")</script>',
+    ),
+  );
   app.post('/payments/:provider/webhook', async (c) => {
     if (c.req.param('provider') !== payments.name || !payments.webhook) throw new HttpError(404, 'Not found.');
     let outcome;
@@ -239,4 +249,13 @@ export async function createServer(config: Config) {
       await db.close();
     },
   };
+}
+
+// This server's public address as the caller reached it. Railway terminates HTTPS in front of us,
+// so the scheme comes from X-Forwarded-Proto.
+function publicOrigin(c: Context) {
+  const url = new URL(c.req.url);
+  const proto = c.req.header('x-forwarded-proto')?.split(',')[0]?.trim() || url.protocol.replace(':', '');
+  const host = c.req.header('x-forwarded-host') || c.req.header('host') || url.host;
+  return `${proto}://${host}`;
 }
