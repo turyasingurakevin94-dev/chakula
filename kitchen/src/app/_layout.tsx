@@ -63,7 +63,9 @@ export default function RootLayout() {
 
 // On the server, the counter signs in before seeing any orders. Without it, straight in.
 function SignedIn({ children }: { children: ReactNode }) {
-  const { user } = useKitchen();
+  const { user, restoring } = useKitchen();
+  // Reading back a saved sign-in takes a moment; a plain cream screen, not a flash of Sign in.
+  if (onServer && !user && restoring) return <View style={{ flex: 1, backgroundColor: colors.cream }} />;
   if (onServer && !user) return <SignIn />;
   return <>{children}</>;
 }
@@ -93,7 +95,7 @@ function Toast() {
           elevation: 6,
         }}
       >
-        <Icon name="printer" size={18} />
+        <Icon name={onServer ? 'bell' : 'printer'} size={18} />
         <Text style={{ fontFamily: fonts.semibold, fontSize: 14, color: colors.forest }}>{toast}</Text>
       </View>
     </View>

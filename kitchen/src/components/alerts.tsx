@@ -7,6 +7,7 @@ import { hears, MORNING, PAYOUT, type Device } from '../lib/alerts';
 import { clock, demoNow, ridersDue, useKitchen, type Order } from '../lib/kitchen';
 import { listen, onInAppAlert, ring, scheduleDaily, setupNotifications, showInAppOnly, startRepeating, stopRepeating, type Alert, type InAppAlert } from '../lib/notify';
 import { photoFor } from '../lib/photos';
+import { onServer } from '../lib/server';
 import { colors, fonts } from '../lib/theme';
 import { DishPhoto, Icon } from './ui';
 
@@ -31,7 +32,7 @@ export function newOrderAlert(o: Order): Alert {
   return {
     kind: 'newOrder',
     title: `${head} · ready by ${clock(o.dueAt)}`,
-    body: o.printed ? `${o.student} · ${o.place}. Ticket printed, ${first(o)} told.` : `${o.student} · ${o.place}. The ticket didn’t print: tap to see it.`,
+    body: onServer ? `${o.student} · ${o.place}. Tap to see it.` : o.printed ? `${o.student} · ${o.place}. Ticket printed, ${first(o)} told.` : `${o.student} · ${o.place}. The ticket didn’t print: tap to see it.`,
     url: `/order/${o.id}`,
   };
 }
@@ -108,7 +109,9 @@ export function AlertHost() {
 
     // 2. Not seen: rings until someone taps "Seen it".
     for (const o of unseen(k.orders, now)) {
-      const alert: Alert = { kind: 'notSeen', title: k.settings.printTicket ? `Order ${o.id} didn’t print` : `Order ${o.id} needs a look`, body: `Nobody has seen it yet. Tap “Seen it” so ${first(o)} knows you’re cooking.`, url: `/order/${o.id}` };
+      const alert: Alert = onServer
+        ? { kind: 'notSeen', title: `Order ${o.id} needs a look`, body: 'Nobody has opened it yet. Tap “Seen it” to stop the bell.', url: `/order/${o.id}` }
+        : { kind: 'notSeen', title: k.settings.printTicket ? `Order ${o.id} didn’t print` : `Order ${o.id} needs a look`, body: `Nobody has seen it yet. Tap “Seen it” so ${first(o)} knows you’re cooking.`, url: `/order/${o.id}` };
       const last = repeating.current.get(o.id);
       if (last === undefined) {
         ring(alert);
@@ -150,7 +153,7 @@ export function AlertHost() {
       once(`late-${o.id}-${o.dueAt}`, () => {
         if (!on('runningOver')) return;
         const over = Math.max(1, Math.round((now - o.dueAt) / MIN));
-        ring({ kind: 'runningOver', title: `${o.id} is ${over} min over`, body: `${first(o)} has been told the new time.`, url: `/order/${o.id}` });
+        ring({ kind: 'runningOver', title: `${o.id} is ${over} min over`, body: onServer ? 'Tap Ready as soon as it’s packed.' : `${first(o)} has been told the new time.`, url: `/order/${o.id}` });
       });
     }
 

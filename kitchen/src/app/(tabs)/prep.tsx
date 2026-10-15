@@ -1,8 +1,9 @@
 import { useState, type ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Display, Icon, Label, Segments } from '../../components/ui';
+import { Body, Card, Display, Icon, Label, Segments, type IconName } from '../../components/ui';
 import { clock, nextDrop, useKitchen } from '../../lib/kitchen';
+import { onServer } from '../../lib/server';
 import { colors, fonts } from '../../lib/theme';
 
 type Tab = 'scheduled' | 'plans' | 'specials';
@@ -36,9 +37,36 @@ export default function Prep() {
             ]}
           />
         </View>
-        <View style={{ paddingHorizontal: 20, paddingTop: 16, gap: 12 }}>{tab === 'scheduled' ? <Scheduled now={k.now} /> : tab === 'plans' ? <Plans now={k.now} /> : <Specials />}</View>
+        <View style={{ paddingHorizontal: 20, paddingTop: 16, gap: 12 }}>
+          {onServer ? (
+            // The server has no scheduled orders, meal plans or specials yet: say so rather than show samples.
+            tab === 'scheduled' ? (
+              <Empty icon="calendar" title="No scheduled orders yet" text="Orders students book ahead for a set drop time will show here, with what to start and when." />
+            ) : tab === 'plans' ? (
+              <Empty icon="users" title="No meal plans yet" text="When students subscribe to your lunches or suppers, their picks will add up here." />
+            ) : (
+              <Empty icon="star" title="No specials yet" text="Weekend specials students pre-order will show here, with portions taken." />
+            )
+          ) : tab === 'scheduled' ? (
+            <Scheduled now={k.now} />
+          ) : tab === 'plans' ? (
+            <Plans now={k.now} />
+          ) : (
+            <Specials />
+          )}
+        </View>
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+function Empty({ icon, title, text }: { icon: IconName; title: string; text: string }) {
+  return (
+    <Card style={{ alignItems: 'center', gap: 8, paddingVertical: 28, paddingHorizontal: 20 }}>
+      <Icon name={icon} size={26} color={colors.sub} />
+      <Text style={{ fontFamily: fonts.display, fontSize: 20, color: colors.forest, textAlign: 'center' }}>{title}</Text>
+      <Body style={{ textAlign: 'center', color: colors.muted, maxWidth: 280 }}>{text}</Body>
+    </Card>
   );
 }
 

@@ -3,6 +3,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { Display, DishPhoto, Icon, Label, Toggle } from '../../components/ui';
 import { useKitchen, type Dish } from '../../lib/kitchen';
+import { onServer } from '../../lib/server';
 import { colors, fonts } from '../../lib/theme';
 
 const SECTIONS: Dish['section'][] = ['Popular', 'Mains', 'Drinks'];
@@ -26,10 +27,10 @@ export default function Menu() {
       <ScrollView contentContainerStyle={{ paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
         <View style={s.header}>
           <View style={{ gap: 2 }}>
-            <Label>Nakawa Kitchen</Label>
+            <Label>{k.kitchenName}</Label>
             <Display>Menu</Display>
           </View>
-          <Pressable accessibilityRole="button" accessibilityLabel="Add a dish" onPress={() => k.notify('Adding dishes comes with the real menu')} style={s.add}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Add a dish" onPress={() => k.notify(onServer ? 'To add a dish, send it to the Chakula team' : 'Adding dishes comes with the real menu')} style={s.add}>
             <Icon name="plus" size={18} color={colors.cream} />
             <Text style={{ fontFamily: fonts.bold, fontSize: 14, color: colors.cream }}>Dish</Text>
           </Pressable>
@@ -60,7 +61,7 @@ export default function Menu() {
                     {d.hasPhoto ? (
                       <DishPhoto name={d.name} size={64} radius={14} style={d.soldOut && { opacity: 0.45 }} />
                     ) : (
-                      <Pressable accessibilityRole="button" accessibilityLabel={`Add a photo of ${d.name}`} onPress={() => k.notify('The camera opens here in the real app')} style={[s.photo, s.photoMissing]}>
+                      <Pressable accessibilityRole="button" accessibilityLabel={`Add a photo of ${d.name}`} onPress={() => k.notify(onServer ? 'Send the photo to the Chakula team to add it' : 'The camera opens here in the real app')} style={[s.photo, s.photoMissing]}>
                         <Camera color={colors.forest} />
                         <Text style={{ fontFamily: fonts.bold, fontSize: 11, color: colors.forest }}>Add</Text>
                       </Pressable>
