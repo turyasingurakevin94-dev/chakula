@@ -23,7 +23,7 @@ export type ServerOrder = {
   subtotal: number;
   deliveryFee: number;
   total: number;
-  payMethod: 'mtn' | 'airtel' | 'cash';
+  payMethod: 'mtn' | 'airtel' | 'cash' | 'wallet';
   paid: boolean;
   cashToCollect: number;
   // Only on the student's own orders.

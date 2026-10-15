@@ -5,10 +5,11 @@ import type { Db } from './db.ts';
 import { HttpError } from './errors.ts';
 import { normalisePhone } from './phone.ts';
 import type { PaymentProvider, PayOutcome } from './providers/payments.ts';
+import { lockedBalance, orderEntry, ugx } from './wallet.ts';
 
 // One order's journey: awaiting_payment → cooking → ready → picked_up → at_gate → delivered.
-// Paid orders start cooking the moment MoMo says yes (kitchens auto-accept and print); cash orders
-// start straight away. Riders take a run, scan the bag at the kitchen, and finish with the
+// Paid orders start cooking the moment MoMo says yes (kitchens auto-accept and print); cash and
+// wallet orders start straight away (the wallet is charged in the same transaction). Riders take a run, scan the bag at the kitchen, and finish with the
 // student's 4 digit handover code. The server prices everything; the app's numbers are a preview.
 
 export type Status = 'awaiting_payment' | 'cooking' | 'ready' | 'picked_up' | 'at_gate' | 'delivered' | 'cancelled';
@@ -39,7 +40,7 @@ export type PlaceOrderInput = z.infer<typeof placeOrderInput>;
 
 type OrderRow = {
   id: string; number: number; status: Status; student_id: string; kitchen_id: string; drop_point_id: string;
-  pay_method: 'mtn' | 'airtel' | 'cash'; subtotal: number; delivery_fee: number; total: number; handover_code: string;
+  pay_method: 'mtn' | 'airtel' | 'cash' | 'wallet'; subtotal: number; delivery_fee: number; total: number; handover_code: string;
   note: string | null; rider_id: string | null; created_at: Date; paid_at: Date | null; ready_at: Date | null;
   rider_at: Date | null; picked_at: Date | null; at_gate_at: Date | null; delivered_at: Date | null; cancelled_at: Date | null;
   cancel_reason: string | null; kitchen_name: string; drop_name: string; student_name: string | null; student_phone: string;
@@ -104,7 +105,7 @@ export function kampalaDay(now = new Date()) {
   return { day, start, end: new Date(start.getTime() + 86_400_000) };
 }
 
-export function createOrders(db: Db, deps: { payments: () => PaymentProvider; onEvent: (e: OrderEvent) => void }) {
+export function createOrders(db: Db, deps: { payments: () => PaymentProvider; onEvent: (e: OrderEvent) => void; onWallet?: (userId: string) => void }) {
   async function load(where: string, params: unknown[], limit = 50) {
     const orders = await db.query<OrderRow>(`${SELECT} where ${where} order by o.created_at desc limit ${limit}`, params);
     if (!orders.length) return [];
@@ -119,12 +120,16 @@ export function createOrders(db: Db, deps: { payments: () => PaymentProvider; on
   }
 
   // Moves an order on, only from the status it's expected to be in, so two taps can't race.
-  async function move(id: string, from: Status[], to: Status, set: string, params: unknown[] = []) {
-    const rows = await db.query<{ id: string }>(
-      `update orders set status = '${to}', ${set} where id = $1 and status = any($2) returning id`,
-      [id, from, ...params],
-    );
-    if (!rows.length) throw new HttpError(409, 'This order has already moved on.');
+  // `then` runs in the same transaction, e.g. to refund the wallet as the order is cancelled.
+  async function move(id: string, from: Status[], to: Status, set: string, params: unknown[] = [], opts: { and?: string; then?: (t: Db) => Promise<void> } = {}) {
+    await db.tx(async (t) => {
+      const rows = await t.query<{ id: string }>(
+        `update orders set status = '${to}', ${set} where id = $1 and status = any($2)${opts.and ? ` and ${opts.and}` : ''} returning id`,
+        [id, from, ...params],
+      );
+      if (!rows.length) throw new HttpError(409, 'This order has already moved on.');
+      await opts.then?.(t);
+    });
     const found = await loadOne(id);
     deps.onEvent({ ...found, change: to });
     return found;
@@ -145,7 +150,7 @@ export function createOrders(db: Db, deps: { payments: () => PaymentProvider; on
   // A payment provider's answer. Safe to receive twice: only a pending payment changes.
   async function settle(outcome: PayOutcome) {
     const [p] = await db.query<{ order_id: string }>(
-      "update payments set status = $2, provider_ref = coalesce($3, provider_ref), failure = $4, updated_at = now() where id = $1 and status = 'pending' returning order_id",
+      "update payments set status = $2, provider_ref = coalesce($3, provider_ref), failure = $4, updated_at = now() where id = $1 and status = 'pending' and order_id is not null returning order_id",
       [outcome.paymentId, outcome.status, outcome.providerRef ?? null, outcome.failure ?? null],
     );
     if (!p) return;
@@ -164,13 +169,13 @@ export function createOrders(db: Db, deps: { payments: () => PaymentProvider; on
     mine,
 
     async place(student: User, input: PlaceOrderInput, opts: { returnUrl?: string } = {}) {
-      if (input.payMethod === 'wallet' || input.payMethod === 'card') throw new HttpError(400, 'Wallet and card payments aren’t switched on yet. Pay with MoMo or cash.');
+      if (input.payMethod === 'card') throw new HttpError(400, 'Card payments aren’t switched on yet. Pay with MoMo, your wallet or cash.');
       const [kitchen] = await db.query<{ id: string; open: boolean; opens_at: string | null; delivery_fee: number; name: string }>('select * from kitchens where id = $1', [input.kitchenId]);
       if (!kitchen) throw new HttpError(400, 'That kitchen isn’t on Chakula.');
       if (!kitchen.open) throw new HttpError(400, `${kitchen.name} is closed${kitchen.opens_at ? ` until ${kitchen.opens_at}` : ''}.`);
       const [drop] = await db.query('select id from drop_points where id = $1', [input.dropPointId]);
       if (!drop) throw new HttpError(400, 'Pick a drop point on the map.');
-      const payPhone = input.payMethod === 'cash' ? student.phone : normalisePhone(input.payPhone ?? student.phone);
+      const payPhone = input.payMethod === 'cash' || input.payMethod === 'wallet' ? student.phone : normalisePhone(input.payPhone ?? student.phone);
       if (!payPhone) throw new HttpError(400, 'That MoMo number doesn’t look right.');
 
       const dishes = await db.query<{ id: string; name: string; price: number; sold_out: boolean }>('select * from dishes where kitchen_id = $1', [kitchen.id]);
@@ -191,12 +196,18 @@ export function createOrders(db: Db, deps: { payments: () => PaymentProvider; on
       const total = subtotal + kitchen.delivery_fee;
       const id = randomUUID();
       const cash = input.payMethod === 'cash';
+      const wallet = input.payMethod === 'wallet';
 
       await db.tx(async (t) => {
+        // Paid from the wallet: checked and charged with the order, or neither happens.
+        if (wallet) {
+          const balance = await lockedBalance(t, student.id);
+          if (balance < total) throw new HttpError(400, `Your wallet has ${ugx(balance)} and this order is ${ugx(total)}. Top up, or pay with MoMo or cash.`);
+        }
         await t.query(
-          `insert into orders (id, student_id, kitchen_id, drop_point_id, status, pay_method, subtotal, delivery_fee, total, handover_code, note)
-           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-          [id, student.id, kitchen.id, input.dropPointId, cash ? 'cooking' : 'awaiting_payment', input.payMethod, subtotal, kitchen.delivery_fee, total, String(randomInt(1000, 10000)), input.note?.trim() || null],
+          `insert into orders (id, student_id, kitchen_id, drop_point_id, status, pay_method, subtotal, delivery_fee, total, handover_code, note, paid_at)
+           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+          [id, student.id, kitchen.id, input.dropPointId, cash || wallet ? 'cooking' : 'awaiting_payment', input.payMethod, subtotal, kitchen.delivery_fee, total, String(randomInt(1000, 10000)), input.note?.trim() || null, wallet ? new Date() : null],
         );
         for (const [i, l] of priced.entries()) {
           await t.query(
@@ -204,10 +215,12 @@ export function createOrders(db: Db, deps: { payments: () => PaymentProvider; on
             [id, i, l.dish.id, l.dish.name, l.unit, l.quantity, JSON.stringify(l.extras), l.pepper, l.note],
           );
         }
+        if (wallet) await orderEntry(t, student.id, id, 'order', total);
       });
+      if (wallet) deps.onWallet?.(student.id);
 
       let payment: { id: string; status: 'pending'; redirectUrl?: string } | null = null;
-      if (!cash) {
+      if (!cash && !wallet) {
         const paymentId = randomUUID();
         const provider = deps.payments();
         let redirectUrl: string | undefined;
@@ -231,14 +244,21 @@ export function createOrders(db: Db, deps: { payments: () => PaymentProvider; on
 
     settle,
 
-    // Undo: before paying, or a cash order in its first minute (the 5 second Undo on Home).
+    // Undo: before paying, or a cash or wallet order in its first minute (the 5 second Undo on
+    // Home). A wallet order's money goes straight back to the wallet.
     async cancel(student: User, id: string) {
       const { order } = await mine(student, id);
       if (order.student_id !== student.id) throw new HttpError(404, 'No such order.');
       if (order.status === 'awaiting_payment') return move(id, ['awaiting_payment'], 'cancelled', "cancelled_at = now(), cancel_reason = 'Cancelled before paying'");
       const fresh = Date.now() - new Date(order.created_at).getTime() < CANCEL_MS;
-      if (order.pay_method !== 'cash' || order.rider_id || !fresh) throw new HttpError(409, 'The kitchen has already started on this one.');
-      return move(id, ['cooking'], 'cancelled', "cancelled_at = now(), cancel_reason = 'Cancelled by the student'");
+      if ((order.pay_method !== 'cash' && order.pay_method !== 'wallet') || order.rider_id || !fresh) throw new HttpError(409, 'The kitchen has already started on this one.');
+      if (order.pay_method === 'cash') return move(id, ['cooking'], 'cancelled', "cancelled_at = now(), cancel_reason = 'Cancelled by the student'", [], { and: 'rider_id is null' });
+      const moved = await move(id, ['cooking'], 'cancelled', "cancelled_at = now(), cancel_reason = 'Cancelled by the student'", [], {
+        and: 'rider_id is null',
+        then: async (t) => void (await orderEntry(t, order.student_id, id, 'refund', order.total)),
+      });
+      deps.onWallet?.(order.student_id);
+      return moved;
     },
 
     // ---- Students ----
@@ -261,7 +281,7 @@ export function createOrders(db: Db, deps: { payments: () => PaymentProvider; on
     // The rider's deliveries today (Kampala day): what the Run and Money screens count.
     async today(rider: User, now = new Date()) {
       const { day, start, end } = kampalaDay(now);
-      const rows = await db.query<{ id: string; number: number; delivered_at: Date; kitchen_name: string; drop_name: string; total: number; pay_method: 'mtn' | 'airtel' | 'cash' }>(
+      const rows = await db.query<{ id: string; number: number; delivered_at: Date; kitchen_name: string; drop_name: string; total: number; pay_method: OrderRow['pay_method'] }>(
         `select o.id, o.number, o.delivered_at, k.name as kitchen_name, d.name as drop_name, o.total, o.pay_method
          from orders o
          join kitchens k on k.id = o.kitchen_id

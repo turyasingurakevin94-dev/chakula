@@ -10,7 +10,10 @@ import { Linking, Platform, TurboModuleRegistry } from 'react-native';
 
 export const DONE_SCHEME = 'chakula://payment-done';
 
-export type PayPage = { url: string; orderId?: string };
+// What the page pays for: an order, or a wallet top-up. The sheet closes once the server says
+// that one is settled.
+export type PayTarget = { orderId?: string; topupId?: string };
+export type PayPage = PayTarget & { url: string };
 
 let listener: ((page: PayPage | null) => void) | null = null;
 // The pay sheet registers here while it is on screen.
@@ -45,9 +48,9 @@ function loadBrowser(): WebBrowser | null {
   return mod;
 }
 
-export async function openPaymentPage(url: string, orderId?: string) {
+export async function openPaymentPage(url: string, target: PayTarget = {}) {
   if (listener && hasWebView()) {
-    listener({ url, orderId });
+    listener({ url, ...target });
     return;
   }
   const browser = loadBrowser();

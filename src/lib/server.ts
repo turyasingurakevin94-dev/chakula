@@ -22,7 +22,7 @@ export type ServerOrder = {
   subtotal: number;
   deliveryFee: number;
   total: number;
-  payMethod: 'mtn' | 'airtel' | 'cash';
+  payMethod: 'mtn' | 'airtel' | 'cash' | 'wallet';
   paid: boolean;
   cashToCollect: number;
   // Only on the student's own orders.
@@ -32,11 +32,20 @@ export type ServerOrder = {
   times: Record<'placed' | 'paid' | 'ready' | 'riderAssigned' | 'pickedUp' | 'atGate' | 'delivered' | 'cancelled', string | null>;
   cancelReason: string | null;
 };
+// GET /wallet. Amounts are whole shillings: + money in, − an order.
+export type ServerWalletEntry = { id: string; amount: number; kind: 'topup' | 'order' | 'refund'; createdAt: string; orderId: string | null; orderNumber: number | null; topupId: string | null; method: string | null };
+export type ServerWallet = {
+  balance: number;
+  entries: ServerWalletEntry[];
+  pendingTopups: { id: string; amount: number; method: string; createdAt: string }[];
+  limits: { min: number; max: number };
+};
 export type LiveMessage =
   | { type: 'hello'; userId: string; role: string }
   | { type: 'order'; order: ServerOrder }
   | { type: 'run-taken'; orderId: string }
-  | { type: 'rider-location'; orderId: string; lat: number; lng: number; at: string };
+  | { type: 'rider-location'; orderId: string; lat: number; lng: number; at: string }
+  | { type: 'wallet'; balance: number; topup?: { id: string; status: 'succeeded' | 'failed'; amount: number } };
 
 // The server's own words ("Chicken pilau just ran out."), ready to show.
 export class ServerError extends Error {

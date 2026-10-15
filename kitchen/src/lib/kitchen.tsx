@@ -192,7 +192,7 @@ type ServerKitchen = {
   menu: { id: string; name: string; category: string; price: number; prepMinutes: number; soldOut: boolean; extras: { id: string; name: string; price: number; soldOut: boolean }[] }[];
 };
 
-const PAID: Record<ServerOrder['payMethod'], Payment> = { mtn: 'MTN MoMo', airtel: 'Airtel Money', cash: 'Cash on delivery' };
+const PAID: Record<ServerOrder['payMethod'], Payment> = { mtn: 'MTN MoMo', airtel: 'Airtel Money', wallet: 'Wallet', cash: 'Cash on delivery' };
 // Waiting for MoMo and cancelled orders aren't on the board.
 const STATUS: Partial<Record<ServerStatus, Status>> = { cooking: 'cooking', ready: 'ready', picked_up: 'picked', at_gate: 'picked', delivered: 'delivered' };
 const SECTIONS: Dish['section'][] = ['Popular', 'Mains', 'Drinks'];

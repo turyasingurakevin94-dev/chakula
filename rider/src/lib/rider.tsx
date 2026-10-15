@@ -191,7 +191,7 @@ export type RiderToday = {
   day: string;
   drops: number;
   cashCollected: number;
-  orders: { id: string; number: number; deliveredAt: string; kitchen: string; dropPoint: string; total: number; payMethod: 'mtn' | 'airtel' | 'cash' }[];
+  orders: { id: string; number: number; deliveredAt: string; kitchen: string; dropPoint: string; total: number; payMethod: 'mtn' | 'airtel' | 'cash' | 'wallet' }[];
 };
 export type HandIn = { day: string; by: string; receipt: string; amount: number };
 export type CashOrder = { bag: string; student: string; at: string; amount: number };

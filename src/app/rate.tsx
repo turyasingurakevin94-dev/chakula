@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Display, FoodImage, PrimaryButton, Stars } from '../components/ui';
 import { DELIVERY_MINUTES, useAccount } from '../lib/account';
 import { findRestaurant } from '../lib/data';
+import { onServer } from '../lib/server';
 import { riderFor } from '../lib/stages';
 import { colors, fonts } from '../lib/theme';
 
@@ -61,6 +62,8 @@ function RateOrder() {
           <Stars value={stars} size={40} gap={8} onPick={setStars} />
         </View>
 
+        {/* On the server there are no rider payouts yet, so a tip can't be passed on: none is offered. */}
+        {onServer ? null : (
         <View style={{ gap: 10, marginTop: 26 }}>
           <Text style={[s.question, { textAlign: 'center' }]}>{named ? `Tip ${rider}, your rider?` : 'Tip your rider?'}</Text>
           <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -83,6 +86,7 @@ function RateOrder() {
           </View>
           <Text style={[s.meta12, { textAlign: 'center' }]}>From your wallet. All of it goes to {rider}.</Text>
         </View>
+        )}
       </ScrollView>
 
       <View style={{ paddingHorizontal: 16, paddingBottom: 12, gap: 4 }}>

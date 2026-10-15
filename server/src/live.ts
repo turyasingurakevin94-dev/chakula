@@ -7,6 +7,7 @@ import { viewOrder, type OrderEvent } from './orders.ts';
 //   { type: 'order', order }                       an order you can see changed
 //   { type: 'run-taken', orderId }                 riders: another rider took this run
 //   { type: 'rider-location', orderId, lat, lng, at } students: your rider moved
+//   { type: 'wallet', balance, topup? }            students: your wallet changed (topup: one settled)
 // Apps still fetch over HTTP when they open; this only keeps the screen current.
 
 export type Live = ReturnType<typeof createLive>;
@@ -55,6 +56,11 @@ export function createLive(auth: Auth) {
         if (sees) send(ws, { type: 'order', order: viewOrder(order, lines, user) });
         else if (user.role === 'rider' && change === 'rider') send(ws, { type: 'run-taken', orderId: order.id });
       }
+    },
+
+    // Tells every app this student has open that their wallet changed.
+    wallet(userId: string, msg: { balance: number; topup?: { id: string; status: 'succeeded' | 'failed'; amount: number } }) {
+      for (const [ws, user] of sockets) if (user.id === userId) send(ws, { type: 'wallet', ...msg });
     },
 
     riderLocation(studentIds: Map<string, string>, lat: number, lng: number, at: Date) {

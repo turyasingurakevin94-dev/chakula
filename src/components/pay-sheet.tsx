@@ -8,7 +8,8 @@ import { IconButton } from './ui';
 
 // Flutterwave's MoMo page on our own sheet, so paying never leaves Chakula. It closes when
 // Flutterwave sends the student back to /payments/done, or as soon as the server sees the order
-// paid (the webhook can beat the page). Only mounted on APKs that have WebView's native code.
+// paid or the wallet top-up settled (the webhook can beat the page). Only mounted on APKs that
+// have WebView's native code.
 
 type WebViewProps = {
   source: { uri: string };
@@ -34,7 +35,7 @@ const isDone = (url: string) => url.startsWith(DONE_SCHEME) || /\/payments\/done
 
 export function PaySheet() {
   const [page, setPage] = useState<PayPage | null>(null);
-  const { orders } = useAccount();
+  const { orders, topups } = useAccount();
   const insets = useSafeAreaInsets();
 
   useEffect(() => {
@@ -45,8 +46,9 @@ export function PaySheet() {
 
   // Paid (or cancelled) on the server: nothing left to do on the page.
   const order = page?.orderId ? orders.find((o) => o.serverId === page.orderId) : undefined;
-  const settled = !!page?.orderId && (!order || (order.status !== undefined && order.status !== 'awaiting_payment'));
-  const visible = !!page && !settled;
+  const orderSettled = !!page?.orderId && (!order || (order.status !== undefined && order.status !== 'awaiting_payment'));
+  const topupSettled = !!page?.topupId && !!topups[page.topupId] && topups[page.topupId] !== 'pending';
+  const visible = !!page && !orderSettled && !topupSettled;
 
   if (!Web) return null;
   return (
@@ -54,7 +56,7 @@ export function PaySheet() {
       <View style={{ flex: 1, backgroundColor: colors.cream, paddingTop: insets.top }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.line }}>
           <View style={{ flex: 1 }}>
-            <Text style={{ fontFamily: fonts.display, fontSize: 20, color: colors.forest }}>Pay with mobile money</Text>
+            <Text style={{ fontFamily: fonts.display, fontSize: 20, color: colors.forest }}>{page?.topupId ? 'Top up your wallet' : 'Pay with mobile money'}</Text>
             <Text style={{ fontFamily: fonts.regular, fontSize: 13, color: colors.muted, marginTop: 2 }}>Approve on your phone. This closes once it’s paid.</Text>
           </View>
           <IconButton icon="x" label="Close" variant="outline" size={40} onPress={() => setPage(null)} />
