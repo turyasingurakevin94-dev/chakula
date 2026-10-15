@@ -5,7 +5,9 @@ import { applyServerMenus, findSpecial, type Extra, type MenuItem, type ServerKi
 import type { PhotoKey } from './photos';
 import { findPlanKind, planMeals, planPrice, type PlanKindId, type PlanPeriod } from './plans';
 import { openPaymentPage } from './payPage';
-import { api, connectLive, getToken, onServer, sendCode, setToken, toCampusMetres, verifyCode, type ServerOrder, type ServerStatus } from './server';
+import { api, connectLive, getToken, onServer, readItem, restoreToken, saveItem, sendCode, setOnSignedOut, setToken, toCampusMetres, verifyCode, type ServerOrder, type ServerStatus, type ServerUser } from './server';
+
+const PROFILE_KEY = 'chakula.student.profile';
 
 // Account state. On the Chakula server (EXPO_PUBLIC_API_URL set), sign-in, profile and orders are
 // real; the wallet, meal plans and specials are still kept in memory until the server has them.
@@ -56,6 +58,8 @@ export type Order = {
   status?: ServerStatus;
   riderName?: string;
   riderAt?: Pt;
+  // When each step really happened, from the server (ISO strings, null until it happens).
+  times?: ServerOrder['times'];
   // The id the app gave it before the server answered, so Undo still finds it.
   localId?: string;
 };
@@ -173,6 +177,9 @@ type AccountState = {
   room: string;
   note: string;
   ready: boolean;
+  // On the server, while the saved sign-in is being checked at start. Screens wait for it.
+  restoring: boolean;
+  ordersLoaded: boolean;
   initials: string;
   firstName: string;
   maskedPhone: string;
@@ -240,6 +247,64 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   const [preorders, setPreorders] = useState<Preorder[]>([]);
   const [alertPrefs, setAlertPrefsState] = useState<AlertPrefs>(defaultAlertPrefs);
   const [alertsPrimed, setAlertsPrimed] = useState(false);
+  // On the server, false until the student's orders have come back, so a screen opened straight
+  // to an order (a reload, a tapped notification) waits for it instead of leaving.
+  const [ordersLoaded, setOrdersLoaded] = useState(!onServer);
+  // Only on the server: a saved sign-in is checked before any screen shows.
+  const [restoring, setRestoring] = useState(onServer);
+
+  // Fills the account from the server's record of the student.
+  const applyUser = (user: ServerUser) => {
+    setPhone(user.phone.replace(/^\+256/, ''));
+    if (user.name) setName(user.name);
+    const saved = places.find((pl) => pl.id === user.dropPointId);
+    if (saved) setPlace(saved);
+    setVerified(true);
+  };
+
+  // Stay signed in: put back the saved token and ask the server who it belongs to. If the server
+  // can't be reached quickly, show sign-in but keep the token; a late answer still signs them in.
+  useEffect(() => {
+    if (!onServer) return;
+    let done = false;
+    const finish = () => {
+      if (!done) setRestoring(false);
+      done = true;
+    };
+    const timer = setTimeout(finish, 6000);
+    setOnSignedOut(() => {
+      setVerified(false);
+      setPhone(null);
+      setOrders([]);
+      setOrdersLoaded(false);
+    });
+    void (async () => {
+      const token = await restoreToken();
+      if (!token) return finish();
+      const extras = await readItem(PROFILE_KEY);
+      try {
+        const user = await api<ServerUser>('GET', '/me');
+        // Signed in another way meanwhile: leave that alone.
+        if (getToken() !== token) return finish();
+        applyUser(user);
+        try {
+          // Only this student's: another student may have used the phone before.
+          const { room: r, note: n, phone: p } = JSON.parse(extras ?? '{}') as { room?: string; note?: string; phone?: string };
+          if (p === user.phone && r) setRoom(r);
+          if (p === user.phone && n) setNote(n);
+        } catch {
+          // No room or note saved.
+        }
+      } catch {
+        // 401 clears the token in api(); no connection keeps it for next time.
+      }
+      finish();
+    })();
+    return () => {
+      clearTimeout(timer);
+      setOnSignedOut(null);
+    };
+  }, []);
 
   // Real menus, prices and sold out dishes from the kitchens.
   useEffect(() => {
@@ -260,7 +325,8 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     let stop = () => {};
     api<ServerOrder[]>('GET', '/orders')
       .then((list) => setOrders(list.filter((o) => o.status !== 'cancelled').map((o) => fromServer(o))))
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setOrdersLoaded(true));
     stop = connectLive((m) => {
       if (m.type === 'order') {
         const o = m.order;
@@ -285,6 +351,8 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       room,
       note,
       ready: verified && !!place && parts.length > 0,
+      restoring,
+      ordersLoaded,
       initials: parts.slice(0, 2).map((p) => p[0]!.toUpperCase()).join('') || '?',
       firstName: parts[0] ?? '',
       maskedPhone: phone ? `0${phone.slice(0, 3)} ••• ${phone.slice(-3)}` : '',
@@ -317,10 +385,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
         }
         try {
           const { user } = await verifyCode(`+256${phone}`, code, 'student');
-          if (user.name) setName(user.name);
-          const saved = places.find((pl) => pl.id === user.dropPointId);
-          if (saved) setPlace(saved);
-          setVerified(true);
+          applyUser(user);
           return null;
         } catch (e) {
           return e instanceof Error ? e.message : 'That didn’t work. Try again.';
@@ -331,13 +396,19 @@ export function AccountProvider({ children }: { children: ReactNode }) {
         setPlace(pl);
         setRoom(r.trim());
         setNote(nt.trim());
-        if (onServer) api('PATCH', '/me', { name: n.trim(), dropPointId: pl.id }).catch(() => {});
+        if (onServer) {
+          api('PATCH', '/me', { name: n.trim(), dropPointId: pl.id }).catch(() => {});
+          // Room and note aren't on the server; kept on the phone for next time.
+          void saveItem(PROFILE_KEY, JSON.stringify({ phone: `+256${phone}`, room: r.trim(), note: nt.trim() }));
+        }
       },
       signOut: () => {
         if (onServer) {
           api('POST', '/auth/sign-out').catch(() => {});
           setToken(null);
+          void saveItem(PROFILE_KEY, null);
           setOrders([]);
+          setOrdersLoaded(false);
         }
         setPhone(null);
         setVerified(false);
@@ -407,13 +478,16 @@ export function AccountProvider({ children }: { children: ReactNode }) {
         // Prototype: tips come out of the wallet. Later the student picks how to pay it.
         if (rating.tip > 0) {
           setBalance((b) => b - rating.tip);
-          setWallet((w) => [{ id: `tip${id}`, title: `Tip for Brian, #${id}`, when: 'Just now', amount: -rating.tip }, ...w]);
+          // The sample rider is Brian; a server order names its real rider.
+          const rated = orders.find((p) => p.id === id);
+          const riderName = rated?.serverId ? (rated.riderName ?? 'your rider') : 'Brian';
+          setWallet((w) => [{ id: `tip${id}`, title: `Tip for ${riderName}, #${id}`, when: 'Just now', amount: -rating.tip }, ...w]);
         }
       },
       preorder: (sid, slot) => setPreorders((prev) => [{ id: `p${Date.now()}`, specialId: sid, slot }, ...prev]),
       cancelPreorder: (id) => setPreorders((prev) => prev.filter((p) => p.id !== id)),
     };
-  }, [phone, verified, name, place, room, note, balance, wallet, bonusEarned, plan, orders, preorders, alertPrefs, alertsPrimed, devCode, menuVersion]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [phone, verified, name, place, room, note, balance, wallet, bonusEarned, plan, orders, preorders, alertPrefs, alertsPrimed, devCode, menuVersion, restoring, ordersLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Places an order on the server and swaps the stand-in for the real one.
   function sendOrder(localId: string, o: Omit<Order, 'id' | 'placedAt' | 'delivered' | 'code'>) {
@@ -472,6 +546,7 @@ function fromServer(o: ServerOrder, prev?: Order): Order {
     code: o.handoverCode ?? prev?.code ?? '····',
     riderName: o.rider?.name ?? undefined,
     riderAt: o.status === 'picked_up' || o.status === 'at_gate' ? prev?.riderAt : undefined,
+    times: o.times,
   };
 }
 

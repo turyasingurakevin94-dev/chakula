@@ -7,6 +7,7 @@ import { BackHeader, Display, FoodImage, Icon, Label, PrimaryButton, styles as u
 import { formatClock, lineOptions, unitPrice, useAccount, type PayMethod } from '../lib/account';
 import { priceBasket, useCart } from '../lib/cart';
 import { findRestaurant, student } from '../lib/data';
+import { onServer } from '../lib/server';
 import { colors, fonts, formatUGX } from '../lib/theme';
 
 type Method = { id: PayMethod; name: string; detail?: string; badge: string; badgeBg: string; badgeFg: string };
@@ -44,7 +45,8 @@ export default function Checkout() {
   // Null means as soon as possible.
   const [slot, setSlot] = useState<number | null>(null);
   const [now] = useState(Date.now);
-  const slots = deliverySlots(now);
+  // The server has no scheduled orders yet (a later slot would be sent as "now"), so it offers only Now.
+  const slots = onServer ? [] : deliverySlots(now);
   const restaurant = findRestaurant(cart.restaurantId ?? '');
   const minutes = restaurant?.minutes ?? 15;
   const prep = Math.max(0, ...cart.lines.map((l) => l.item.prepMinutes ?? 0));

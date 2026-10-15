@@ -47,12 +47,80 @@ export class ServerError extends Error {
   }
 }
 
-// Kept in memory: signing in again after the app restarts. Saving it on the phone needs a
-// secure storage module, which comes with the next APK.
+// The session token, kept on the phone so the student stays signed in. On Android and iOS it goes
+// in expo-secure-store, loaded lazily inside try/catch: APKs built before it was added lack its native
+// code, and OTA updates still run this JavaScript on them, so there it stays in memory only (signing
+// in again after the app restarts). On web it goes in localStorage.
+const TOKEN_KEY = 'chakula.student.token';
+type SecureStore = typeof import('expo-secure-store');
+let secure: SecureStore | null | undefined;
+function loadSecureStore(): SecureStore | null {
+  if (secure !== undefined) return secure;
+  secure = null;
+  if (Platform.OS === 'web') return secure;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    secure = require('expo-secure-store') as SecureStore;
+  } catch {
+    secure = null;
+  }
+  return secure;
+}
+
+function webStorage(): Storage | null {
+  try {
+    return Platform.OS === 'web' && typeof localStorage !== 'undefined' ? localStorage : null;
+  } catch {
+    return null;
+  }
+}
+
+// Saved on the phone; quietly does nothing where it can't (old APKs, private browsing).
+export async function saveItem(key: string, value: string | null) {
+  try {
+    const web = webStorage();
+    if (web) {
+      if (value === null) web.removeItem(key);
+      else web.setItem(key, value);
+      return;
+    }
+    const store = loadSecureStore();
+    if (!store) return;
+    if (value === null) await store.deleteItemAsync(key);
+    else await store.setItemAsync(key, value);
+  } catch {
+    // Not saved: the student signs in again next time, as before.
+  }
+}
+
+export async function readItem(key: string): Promise<string | null> {
+  try {
+    const web = webStorage();
+    if (web) return web.getItem(key);
+    return (await loadSecureStore()?.getItemAsync(key)) ?? null;
+  } catch {
+    return null;
+  }
+}
+
 let token: string | null = null;
 export const getToken = () => token;
 export const setToken = (t: string | null) => {
   token = t;
+  void saveItem(TOKEN_KEY, t);
+};
+
+// The token saved by an earlier session, if any. Also puts it back in memory for api().
+export async function restoreToken(): Promise<string | null> {
+  const saved = await readItem(TOKEN_KEY);
+  if (saved && !token) token = saved;
+  return token;
+}
+
+// Called when the server says the token is no longer good (401), so the app can go back to sign-in.
+let onSignedOut: (() => void) | null = null;
+export const setOnSignedOut = (fn: (() => void) | null) => {
+  onSignedOut = fn;
 };
 
 export async function api<T>(method: 'GET' | 'POST' | 'PATCH', path: string, body?: unknown): Promise<T> {
@@ -67,6 +135,10 @@ export async function api<T>(method: 'GET' | 'POST' | 'PATCH', path: string, bod
     throw new ServerError(0, 'No connection. Check your data and try again.');
   }
   const json = await res.json().catch(() => ({}));
+  if (res.status === 401 && token && !path.startsWith('/auth/')) {
+    setToken(null);
+    onSignedOut?.();
+  }
   if (!res.ok) throw new ServerError(res.status, json.error ?? 'Something went wrong. Try again.');
   return json as T;
 }
