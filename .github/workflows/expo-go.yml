@@ -7,9 +7,12 @@ on:
   push:
     branches: [main]
     # The kitchen and rider apps publish their own updates (kitchen-update.yml, rider-update.yml).
+    # The backend in server/ is not part of any app.
     paths-ignore:
       - kitchen/**
       - rider/**
+      - server/**
+      - .github/workflows/server.yml
       - .github/workflows/kitchen-*.yml
       - .github/workflows/rider-*.yml
   workflow_dispatch:
