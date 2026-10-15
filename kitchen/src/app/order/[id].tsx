@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Bike, Note } from '../../components/order';
@@ -26,6 +26,12 @@ export default function OrderScreen() {
   const k = useKitchen();
   const [swapping, setSwapping] = useState(false);
   const o = k.orders.find((x) => x.id === id);
+  const needsSeen = !!o && !o.seenAt;
+  const { markSeen } = k;
+  // Opening the order counts as seeing it, which stops the "Didn't print" bell.
+  useEffect(() => {
+    if (needsSeen && id) markSeen(id);
+  }, [needsSeen, id, markSeen]);
 
   if (!o) {
     return (
@@ -102,7 +108,15 @@ export default function OrderScreen() {
             </View>
           ))}
           {o.note ? <Note text={o.note} /> : null}
-          {cooking ? (
+          {o.swap ? (
+            <View style={s.swapState} accessibilityLiveRegion="polite">
+              <Icon name="repeat" size={16} color={colors.chipText} />
+              <Text style={{ flex: 1, fontFamily: fonts.semibold, fontSize: 14, color: colors.chipText }}>
+                {o.swap.chose ? `${first} chose ${o.swap.chose.toLowerCase()} instead of the ${o.swap.item.toLowerCase()}` : `Out of ${o.swap.item.toLowerCase()} · ${first} is choosing`}
+              </Text>
+            </View>
+          ) : null}
+          {cooking && !o.swap ? (
             <Pressable accessibilityRole="button" onPress={() => setSwapping((v) => !v)} style={s.swap}>
               <Text style={s.smallText}>Out of something? Offer a swap</Text>
             </Pressable>
@@ -117,6 +131,7 @@ export default function OrderScreen() {
                   style={s.swap}
                   onPress={() => {
                     setSwapping(false);
+                    k.askSwap(o.id, i.name);
                     k.notify(`Asked ${first} about the ${i.name.toLowerCase()}`);
                   }}
                 >
@@ -133,7 +148,7 @@ export default function OrderScreen() {
               <Icon name="printer" size={18} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={s.rowTitle}>{printed ? `${printed} printed` : 'Nothing printed'}</Text>
+              <Text style={s.rowTitle}>{o.live && o.printed === false && k.settings.printTicket ? 'Ticket didn’t print' : printed ? `${printed} printed` : 'Nothing printed'}</Text>
               <Text style={s.meta}>
                 {clock(o.inAt)}
                 {o.posSale ? ` · sale ${o.posSale} is in your POS` : ''}
@@ -186,6 +201,7 @@ const s = StyleSheet.create({
   small: { height: 44, paddingHorizontal: 14, borderRadius: 14, borderWidth: 1, borderColor: colors.toggleOff, backgroundColor: colors.card, justifyContent: 'center' },
   smallText: { fontFamily: fonts.bold, fontSize: 14, color: colors.forest },
   item: { fontFamily: fonts.bold, fontSize: 16, color: colors.forest },
+  swapState: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.chipBg, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 },
   swap: { height: 44, borderRadius: 12, borderWidth: 1, borderColor: colors.toggleOff, alignItems: 'center', justifyContent: 'center' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 },
   iconWell: { width: 36, height: 36, borderRadius: 10, backgroundColor: colors.lineSoft, alignItems: 'center', justifyContent: 'center' },

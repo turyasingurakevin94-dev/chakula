@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { JustIn } from '../../components/justin';
 import { Countdown, Lines, TimeBar } from '../../components/order';
 import { Body, Button, Card, Display, Icon, Label, Segments, Toggle } from '../../components/ui';
 import { clock, cookingQueue, cookNow, shortName, minutesUntil, ordinal, SERVED_EARLIER, useKitchen, type Order } from '../../lib/kitchen';
@@ -29,10 +30,15 @@ export default function Orders() {
             </Pressable>
             <Display>Orders</Display>
           </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Pressable accessibilityRole="link" accessibilityLabel="Who hears what: alert settings" onPress={() => router.push('/alerts')} style={s.round}>
+            <Icon name="bell" size={18} />
+          </Pressable>
           <Pressable accessibilityRole="switch" accessibilityLabel="Kitchen open for orders" accessibilityState={{ checked: k.settings.open }} onPress={() => k.setSetting('open', !k.settings.open)} style={s.openPill}>
             <Text style={{ fontFamily: fonts.bold, fontSize: 14, color: colors.forest }}>{k.settings.open ? 'Open' : 'Closed'}</Text>
             <Toggle small label="Kitchen open for orders" value={k.settings.open} />
           </Pressable>
+          </View>
         </View>
 
         {!k.settings.open ? (
@@ -43,6 +49,8 @@ export default function Orders() {
             </Card>
           </View>
         ) : null}
+
+        <JustIn />
 
         {totals.length > 0 ? (
           <View style={{ paddingHorizontal: 20, paddingTop: 14 }}>

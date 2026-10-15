@@ -2,12 +2,13 @@ import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { CategoryChips, ChefsPick, dishNames, DishCard, QuickDishRow, UndoBar, UsualCard } from '../../components/home';
+import { CategoryChips, ChefsPick, dishNames, DishCard, LiveOrderCard, QuickDishRow, UndoBar, UsualCard } from '../../components/home';
 import { BasketBar, Display, FoodImage, Icon, Italic, styles as ui } from '../../components/ui';
 import { useAccount, useNow, type PayMethod } from '../../lib/account';
 import { priceBasket, todaysLines, useCart } from '../../lib/cart';
 import { chefsPick, findRestaurant, foodCategories, popularDishes, specials, student, type MenuItem, type Restaurant } from '../../lib/data';
 import { colors, fonts, formatUGX, smallCaps } from '../../lib/theme';
+import { blockName, stageOf } from '../../lib/stages';
 import { mealAt, pickUsual, quickDishes } from '../../lib/usual';
 
 // Seconds an "Order again" can still be taken back before tracking opens.
@@ -119,6 +120,16 @@ export default function Home() {
             </Display>
           )}
         </View>
+
+        {account.activeOrder && !justOrdered ? (
+          <LiveOrderCard
+            order={account.activeOrder}
+            restaurant={findRestaurant(account.activeOrder.restaurantId)}
+            stage={stageOf(account.activeOrder, true, now)}
+            block={blockName(account.place?.name)}
+            onPress={() => router.push('/tracking')}
+          />
+        ) : null}
 
         {usual && usualKitchen ? (
           <UsualCard

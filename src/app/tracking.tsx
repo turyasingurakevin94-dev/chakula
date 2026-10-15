@@ -4,26 +4,18 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, G, Path, Rect, Text as SvgText } from 'react-native-svg';
 import { Display, Icon, IconButton, PrimaryButton } from '../components/ui';
-import { DELIVERY_MINUTES, formatClock, isWaiting, minutesLeft, useAccount, useNow, type Order } from '../lib/account';
+import { DELIVERY_MINUTES, formatClock, minutesLeft, useAccount, useNow } from '../lib/account';
+import { useAlerts } from '../lib/alerts';
 import { findRestaurant } from '../lib/data';
+import { blockName, rider, stageOf } from '../lib/stages';
 import { colors, fonts, smallCaps } from '../lib/theme';
 
 const MIN = 60 * 1000;
 
-// Where the order is: 0 confirmed, 1 cooking, 2 on the way, 3 at the gate, 4 at the room.
-function stageOf(order: Order, active: boolean, now: number) {
-  if (!active) return 4;
-  if (isWaiting(order, now)) return 0;
-  const left = minutesLeft(order, now);
-  if (left === 0) return 4;
-  if (left === 1) return 3;
-  if (left > DELIVERY_MINUTES - 2) return 1;
-  return 2;
-}
-
 export default function Tracking() {
   const insets = useSafeAreaInsets();
   const account = useAccount();
+  const alerts = useAlerts();
   const now = useNow();
   // Show the latest order, which stays on screen after it is delivered.
   const order = account.activeOrder ?? account.orders[0]!;
@@ -37,7 +29,8 @@ export default function Tracking() {
   // Clock times for each step, counted in real minutes from when the kitchen starts.
   const start = order.scheduledFor ? order.scheduledFor - DELIVERY_MINUTES * MIN : order.placedAt;
   const arriveBy = order.scheduledFor ?? order.placedAt + DELIVERY_MINUTES * MIN;
-  const block = account.place?.name.replace(' Hostel', '') ?? 'your block';
+  const block = blockName(account.place?.name);
+  const atGate = stage === 3;
   const room = account.room || 'your door';
   const steps = [
     { label: 'Order confirmed', time: order.placedAt },
@@ -107,6 +100,46 @@ export default function Tracking() {
             </View>
             <IconButton icon="phone" label="Call Brian" variant="outline" size={42} style={{ borderColor: colors.forest }} />
           </View>
+
+          {active && !arrived ? (
+            <View style={s.codeCard} accessible accessibilityLabel={`Your handover code is ${order.code.split('').join(' ')}`}>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={smallCaps}>Your code</Text>
+                <Text style={{ fontFamily: fonts.regular, fontSize: 13, lineHeight: 18, color: colors.muted }}>
+                  {atGate ? `Say it to ${rider.name}` : `Show it to ${rider.name} at the gate`}
+                </Text>
+              </View>
+              <View style={{ flexDirection: 'row', gap: 6 }}>
+                {order.code.split('').map((d, i) => (
+                  <View key={i} style={s.digit}>
+                    <Text style={{ fontFamily: fonts.display, fontSize: 24, color: colors.forest }}>{d}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          ) : null}
+
+          {active && !arrived && account.alertPrefs.sms && alerts.permission !== 'granted' && stage >= 2 ? (
+            <Text style={{ fontFamily: fonts.regular, fontSize: 12, lineHeight: 17, color: colors.muted, marginTop: -6 }}>Phone alerts are off, so we’ll also text this code to {account.maskedPhone || 'your phone'}.</Text>
+          ) : null}
+
+          {atGate && active ? (
+            order.comingDownAt ? (
+              <View style={s.coming} accessibilityLiveRegion="polite">
+                <View style={s.comingIcon}>
+                  <Icon name="check" size={18} />
+                </View>
+                <View style={{ flex: 1, gap: 1 }}>
+                  <Text style={{ fontFamily: fonts.bold, fontSize: 15, color: colors.forest }}>{rider.name} knows you’re coming</Text>
+                  <Text style={{ fontFamily: fonts.regular, fontSize: 12, color: colors.muted }}>He’ll wait at the {block} gate. Nobody will call you.</Text>
+                </View>
+              </View>
+            ) : (
+              <PrimaryButton floating label="I'm coming down" onPress={() => account.comingDown(order.id)}>
+                I’m coming down
+              </PrimaryButton>
+            )
+          ) : null}
 
           <View style={{ gap: 14, paddingHorizontal: 4 }} accessibilityRole="progressbar" accessibilityLabel={`Order status: ${steps[Math.min(stage, 4)]!.label}`}>
             {steps.map((st, i) => {
@@ -202,4 +235,8 @@ const s = StyleSheet.create({
   // Orange dot with a soft halo, sized so the row still lines up with the 12px dots.
   dotNow: { width: 22, height: 22, borderRadius: 11, borderWidth: 5, borderColor: '#FBE3D4', backgroundColor: colors.orange, marginHorizontal: -5, marginTop: -1, marginBottom: -5 },
   dotTodo: { backgroundColor: colors.cream, borderWidth: 2, borderColor: '#C9BBA6' },
+  codeCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: 18, paddingHorizontal: 14, paddingVertical: 12 },
+  digit: { width: 38, height: 48, borderRadius: 12, backgroundColor: colors.well, alignItems: 'center', justifyContent: 'center' },
+  coming: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: 18, paddingHorizontal: 14, paddingVertical: 12 },
+  comingIcon: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.sage, alignItems: 'center', justifyContent: 'center' },
 });

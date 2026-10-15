@@ -5,8 +5,10 @@ import { Stack, type ErrorBoundaryProps } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Pressable, Text, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { AlertHost } from '../components/alerts';
 import { Incoming } from '../components/incoming';
 import { Icon } from '../components/ui';
+import { Unseen } from '../components/unseen';
 import { KitchenProvider, useKitchen } from '../lib/kitchen';
 import { colors, fonts } from '../lib/theme';
 import { restartNow, useApplyUpdates } from '../lib/updates';
@@ -42,9 +44,12 @@ export default function RootLayout() {
           <Stack.Screen name="receipt/[id]" />
           <Stack.Screen name="setup" />
           <Stack.Screen name="display" />
+          <Stack.Screen name="alerts" />
         </Stack>
         <Incoming />
+        <Unseen />
         <Toast />
+        <AlertHost />
         {updateReady ? <UpdateBar /> : null}
       </KitchenProvider>
     </SafeAreaProvider>
@@ -87,8 +92,8 @@ function Toast() {
 function UpdateBar() {
   const insets = useSafeAreaInsets();
   const { orders } = useKitchen();
-  // Never over the new-order alert, where a mis-tap would restart instead of accepting.
-  if (orders.some((o) => o.status === 'incoming')) return null;
+  // Never over the new-order or didn't-print alerts, where a mis-tap would restart instead of answering.
+  if (orders.some((o) => o.status === 'incoming' || (o.live && o.status === 'cooking' && !o.seenAt))) return null;
   return (
     <View style={{ position: 'absolute', left: 16, right: 16, bottom: insets.bottom + 84, alignItems: 'center' }}>
       <Pressable

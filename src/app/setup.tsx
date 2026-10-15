@@ -18,7 +18,7 @@ export default function Setup() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={{ paddingBottom: 24 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <View style={{ paddingHorizontal: 20, paddingTop: 20, gap: 6 }}>
-            <Label>Step 2 of 2</Label>
+            <Label>{account.alertsPrimed ? 'Step 2 of 2' : 'Step 2 of 3'}</Label>
             <Display size={30}>Where should we bring your food?</Display>
           </View>
 

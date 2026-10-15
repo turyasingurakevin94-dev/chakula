@@ -16,6 +16,17 @@ A run takes three actions: scan each bag seal at the kitchen hatch, ride the sto
 - **Money**: tonight's pay, the week so far and today's tips.
 - **Cash**: cash held against the limit, the hand-in code and receipts.
 
+## Alerts
+
+All system notifications go through `src/lib/notify.ts`, the only file that may load `expo-notifications`. It loads the module lazily and only when its native side is in the build, so the first APK (which doesn't have it) keeps working on OTA updates: every alert then shows inside the app instead. Riders need a new APK for loud alerts.
+
+- **Alerts check** (step 2 of Start your shift): loud run alert, notifications on, battery saver (Fix opens settings), SMS backup, and a test run alert. Anything marked Fix blocks going online.
+- **New run**: rings on the loud "New runs" channel and opens full screen with a 42-second ring. No answer passes the run on.
+- **Pickup**: "Leave now", then "Your bags are sealed and waiting" with each kitchen in pickup order.
+- **Riding mode**: a banner when the student changes the note (not read aloud yet: there is no speech module).
+- **Student not answering**: the wait ring and what Chakula is doing, including the student's saved friend when they set one.
+- **Reminders**: 30 minutes before the next shift, and tonight's pay with cash to hand in at 9:30 pm. See them, or preview them, at the bottom of Shift.
+
 Everything is sample data in `src/lib/rider.tsx`: two runs (Library then Block B, then the after-lectures drop). The scanner reads each seal by itself after two seconds and the ride "arrives" after nine; there is no camera, GPS, voice or backend yet. Sample codes: Grace 3390, Brian 7415, Aisha 2208, Peter 5061, Joan 9134, Daniel 6627.
 
 ## Run it

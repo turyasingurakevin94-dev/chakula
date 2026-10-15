@@ -16,6 +16,7 @@ export default function Profile() {
     { icon: 'credit-card', title: 'Wallet', detail: 'Top up and see activity', value: formatUGX(account.balance), onPress: () => router.push('/wallet') },
     { icon: 'map-pin', title: 'Saved places', detail: account.note ? `${account.address} · ${account.note}` : account.address },
     { icon: 'smartphone', title: 'Payment methods', detail: 'MTN Mobile Money' },
+    { icon: 'bell', title: 'Notifications', detail: 'Two sounds per order, nothing more', onPress: () => router.push('/notifications') },
   ];
   const moreRows: Row[] = [
     { icon: 'gift', title: 'Invite a friend, get UGX 3,000', detail: 'They get free delivery too', accent: true },

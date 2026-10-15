@@ -68,6 +68,20 @@ export default function Setup() {
           {!st.autoAccept ? <Body style={{ color: colors.muted }}>New orders will pop up for someone to accept, with two minutes to answer.</Body> : null}
         </View>
 
+        <View style={{ paddingTop: 18, gap: 10 }}>
+          <Label>Alerts</Label>
+          <Pressable accessibilityRole="link" onPress={() => router.push('/alerts')} style={s.card}>
+            <View style={s.iconWell}>
+              <Icon name="bell" size={20} />
+            </View>
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text style={s.rowTitle}>Who hears what</Text>
+              <Text style={s.meta}>Kitchen bell, riders, late tickets, prep list and payout</Text>
+            </View>
+            <Icon name="chevron-right" size={20} color={colors.chevron} />
+          </Pressable>
+        </View>
+
         {/* Not on the canvas: the only way into the counter display on a phone. */}
         <Pressable accessibilityRole="link" onPress={() => router.push('/display')} style={{ marginTop: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 44 }}>
           <Icon name="monitor" size={16} color={colors.muted} />

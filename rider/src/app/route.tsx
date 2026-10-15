@@ -1,5 +1,5 @@
 import { Redirect, router, useFocusEffect } from 'expo-router';
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Path, Rect, Text as SvgText } from 'react-native-svg';
@@ -9,6 +9,8 @@ import { colors, fonts, money } from '../lib/theme';
 
 // The sample ride "arrives" by itself after this long, as GPS would. Tapping the stop arrives at once.
 const ARRIVE_MS = 9000;
+// Sample: a student who edits their note does it this long into the ride.
+const NOTE_MS = 3000;
 
 const turnPaths = {
   right: 'M7 20V10h10M13 6l4 4-4 4',
@@ -18,8 +20,20 @@ const turnPaths = {
 
 // Riding mode: big text, voice turns, the stop and minutes left. The handover opens on arrival.
 export default function RouteScreen() {
-  const { run, stop, stopIndex, stage, arrive, backToRoute, voice, setVoice, notify } = useRider();
+  const { run, stop, stopIndex, stage, arrive, backToRoute, voice, setVoice, notify, changeNote } = useRider();
   const insets = useSafeAreaInsets();
+  // Only things that change the drop interrupt riding mode: a new note from the student.
+  const [heard, setHeard] = useState<{ bag: string; first: string; note: string } | null>(null);
+
+  useEffect(() => {
+    if (stage !== 'riding' || !stop?.newNote || stop.note === stop.newNote) return;
+    const { bag, first, newNote } = stop;
+    const t = setTimeout(() => {
+      changeNote(bag, newNote);
+      setHeard({ bag, first, note: newNote });
+    }, NOTE_MS);
+    return () => clearTimeout(t);
+  }, [stage, stop, changeNote]);
 
   // Back from the handover by gesture or the Android back button still means riding again.
   useFocusEffect(
@@ -62,7 +76,32 @@ export default function RouteScreen() {
         </View>
       </View>
 
-      <View style={[s.chips, { top: insets.top + 132 }]}>
+      {heard && heard.bag === stop.bag ? (
+        <View accessibilityRole="alert" accessibilityLiveRegion="assertive" style={[s.noteBanner, { top: insets.top + 132 }]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Icon name="message-circle" size={16} color={colors.chipText} />
+            <Label style={{ color: colors.chipText }}>New note from {heard.first}</Label>
+          </View>
+          <Text style={{ fontFamily: fonts.displayItalic, fontSize: 22, lineHeight: 28, color: colors.forest }}>&ldquo;{heard.note}&rdquo;</Text>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <Pressable accessibilityRole="button" onPress={() => setHeard(null)} style={[s.noteButton, { backgroundColor: colors.forest }]}>
+              <Text style={{ fontFamily: fonts.bold, fontSize: 15, color: colors.cream }}>Got it</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                setHeard(null);
+                notify(`Calling ${heard.first} through Chakula`);
+              }}
+              style={[s.noteButton, { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line }]}
+            >
+              <Text style={{ fontFamily: fonts.bold, fontSize: 15, color: colors.forest }}>Call {heard.first}</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
+
+      <View style={[s.chips, { top: insets.top + 132 }, heard?.bag === stop.bag && { opacity: 0 }]} pointerEvents={heard?.bag === stop.bag ? 'none' : 'auto'}>
         <Pressable accessibilityRole="switch" accessibilityState={{ checked: voice }} onPress={() => setVoice(!voice)} style={s.chip}>
           <Icon name={voice ? 'volume-2' : 'volume-x'} size={16} />
           <Text style={{ fontFamily: fonts.semibold, fontSize: 13, color: colors.forest }}>{voice ? 'Voice on' : 'Voice off'}</Text>
@@ -210,6 +249,25 @@ const s = StyleSheet.create({
     shadowOffset: { width: 0, height: -8 },
     elevation: 12,
   },
+  noteBanner: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    zIndex: 2,
+    backgroundColor: colors.card,
+    borderWidth: 2,
+    borderColor: colors.orange,
+    borderRadius: 22,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    gap: 8,
+    shadowColor: colors.forest,
+    shadowOpacity: 0.18,
+    shadowRadius: 17,
+    shadowOffset: { width: 0, height: 14 },
+    elevation: 10,
+  },
+  noteButton: { height: 44, borderRadius: 14, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center' },
   progress: { height: 6, borderRadius: 3, backgroundColor: colors.line, overflow: 'hidden' },
   progressFill: { position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: 3, backgroundColor: colors.forest },
   call: { width: 56, height: 56, borderRadius: 18, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center' },

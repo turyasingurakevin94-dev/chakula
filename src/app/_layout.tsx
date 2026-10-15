@@ -6,6 +6,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Pressable, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AccountProvider, useAccount } from '../lib/account';
+import { AlertsProvider } from '../lib/alerts';
 import { CartProvider } from '../lib/cart';
 import { colors } from '../lib/theme';
 import { useApplyUpdates } from '../lib/updates';
@@ -36,8 +37,10 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <AccountProvider>
         <CartProvider>
-          <StatusBar style="dark" />
-          <Screens />
+          <AlertsProvider>
+            <StatusBar style="dark" />
+            <Screens />
+          </AlertsProvider>
         </CartProvider>
       </AccountProvider>
     </SafeAreaProvider>
@@ -55,12 +58,17 @@ function Screens() {
       <Stack.Protected guard={account.verified && !account.ready}>
         <Stack.Screen name="setup" />
       </Stack.Protected>
-      <Stack.Protected guard={account.ready}>
+      {/* Once, after setup: ask for alerts. Skipped when the phone can't show them or already does. */}
+      <Stack.Protected guard={account.ready && !account.alertsPrimed}>
+        <Stack.Screen name="allow" />
+      </Stack.Protected>
+      <Stack.Protected guard={account.ready && account.alertsPrimed}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="restaurant/[id]" />
         <Stack.Screen name="checkout" />
         <Stack.Screen name="tracking" />
         <Stack.Screen name="profile" />
+        <Stack.Screen name="notifications" />
         <Stack.Screen name="wallet" />
         <Stack.Screen name="help" />
         <Stack.Screen name="search" />
