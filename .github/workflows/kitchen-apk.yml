@@ -5,6 +5,12 @@ name: Build Kitchen app
 
 on:
   workflow_dispatch:
+    inputs:
+      where:
+        description: Where to build. "github" is free; "expo" uses the Expo plan's monthly Android builds.
+        type: choice
+        options: [github, expo]
+        default: github
   pull_request:
     paths:
       - kitchen/eas.json
@@ -14,6 +20,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     defaults:
       run:
         working-directory: kitchen
@@ -53,7 +61,44 @@ jobs:
             if (!c.updates || !c.updates.url) { console.error("::error::app.json has no updates.url"); process.exit(1); }
           '
 
-      - name: Build APK
+      # Free: builds on this GitHub runner with the same signing key Expo keeps for the app, so it
+      # installs over the current APK. Pull requests build here too, as a check.
+      - uses: actions/setup-java@v4
+        if: inputs.where != 'expo'
+        with:
+          distribution: temurin
+          java-version: 17
+
+      # The app's own Gradle settings give the build too little memory for this runner, and the
+      # build stalls on "OutOfMemoryError: Metaspace". The user-level file wins over the project's.
+      - name: Give Gradle more memory
+        if: inputs.where != 'expo'
+        run: |
+          mkdir -p ~/.gradle
+          echo "org.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=2g -Dfile.encoding=UTF-8" >> ~/.gradle/gradle.properties
+
+      - name: Build APK on GitHub
+        if: inputs.where != 'expo'
+        timeout-minutes: 90
+        # Only the 64-bit ARM code every current Android phone runs: about a quarter of the native
+        # compiling, so the free runner finishes much sooner.
+        env:
+          ORG_GRADLE_PROJECT_reactNativeArchitectures: arm64-v8a
+          # The local build's "expo doctor" step crashes the build when it runs past 30 s
+          # (@expo/build-tools kills a process that has already exited). The checks above cover it.
+          EAS_BUILD_DISABLE_EXPO_DOCTOR_STEP: '1'
+        run: eas build --platform android --profile preview --non-interactive --local --output "$GITHUB_WORKSPACE/chakula-kitchen.apk"
+
+      - name: Keep the APK for publishing
+        if: inputs.where != 'expo' && github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: chakula-kitchen-apk
+          path: ${{ github.workspace }}/chakula-kitchen.apk
+          retention-days: 1
+
+      - name: Build APK on Expo
+        if: inputs.where == 'expo'
         run: |
           eas build --platform android --profile preview --non-interactive --json > build.json
           cat build.json
@@ -71,3 +116,25 @@ jobs:
             console.log(lines.join("\n"));
             require("fs").appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join("\n") + "\n");
           '
+
+  # Attaches the APK to a pre-release, so it downloads on a phone without signing in. A job of its
+  # own, so only this step (never the build, which runs on pull requests too) can write to the repo.
+  publish:
+    needs: build
+    if: github.event_name == 'workflow_dispatch' && inputs.where != 'expo'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: chakula-kitchen-apk
+
+      - name: Publish APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="kitchen-apk-${{ github.run_number }}-${{ github.run_attempt }}"
+          gh release create "$tag" chakula-kitchen.apk --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title "Kitchen app (build ${{ github.run_number }})" --notes "Install on Android: open this page on the phone and tap chakula-kitchen.apk."
+          url="https://github.com/$GITHUB_REPOSITORY/releases/download/$tag/chakula-kitchen.apk"
+          printf '## Kitchen app ready\n\n- Direct APK download: %s\n' "$url" | tee -a "$GITHUB_STEP_SUMMARY"
