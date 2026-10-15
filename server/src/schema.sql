@@ -153,3 +153,6 @@ create table if not exists rider_locations (
   lng double precision not null,
   at timestamptz not null default now()
 );
+
+-- Early production orders stored extras as a JSON string ("[]") instead of an array; unwrap them.
+update order_lines set extras = (extras #>> '{}')::jsonb where jsonb_typeof(extras) = 'string';
