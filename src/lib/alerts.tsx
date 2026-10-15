@@ -203,23 +203,40 @@ function OrderAlerts() {
           const at = stageStartsAt(o, st);
           if (at <= Date.now() || scheduled.current.some((s) => s.orderId === o.id && s.stage === st)) continue;
           const alert = orderAlert(o, st, p);
-          scheduled.current.push({ orderId: o.id, stage: st, at, id: alert.id });
-          void notify.scheduleAt(alert, at);
+          void notify.scheduleAt(alert, at).then((ok) => {
+            if (!ok) return;
+            // Back in the app before the phone took it: take it back now.
+            if (AppState.currentState === 'active') return void notify.cancel(alert.id);
+            // Recorded only once the phone has it, so a failed schedule still leaves the in-app alert.
+            if (!scheduled.current.some((s) => s.orderId === o.id && s.stage === st)) scheduled.current.push({ orderId: o.id, stage: st, at, id: alert.id });
+          });
         }
       } else if (state === 'active') {
+        let rang: Scheduled | undefined;
         for (const s of scheduled.current) {
           if (s.at > Date.now()) {
             void notify.cancel(s.id);
-          } else if (last.current?.id === s.orderId && last.current.stage < s.stage) {
-            // It already rang on the phone; don't ring it again in the app.
-            last.current = { id: s.orderId, stage: s.stage };
+          } else {
+            if (last.current?.id === s.orderId && last.current.stage < s.stage) last.current = { id: s.orderId, stage: s.stage };
+            if (!rang || s.stage > rang.stage) rang = s;
           }
         }
         scheduled.current = [];
+        // Its time passing doesn't mean the phone showed it (Android can hold back alarms without exact
+        // timing). Unless it is in the tray, show it here, while it is still the order's stage.
+        if (rang) {
+          const s = rang;
+          void notify.presentedIds().then((ids) => {
+            const { order: cur, place: where } = latest.current;
+            if (ids?.includes(s.id) || !cur || cur.id !== s.orderId || stageOf(cur, !cur.delivered, Date.now()) !== s.stage) return;
+            const alert = orderAlert(cur, s.stage, where);
+            show({ title: alert.title, body: alert.body, icon: alert.icon, href: alert.href });
+          });
+        }
       }
     });
     return () => sub.remove();
-  }, []);
+  }, [show]);
 
   return null;
 }

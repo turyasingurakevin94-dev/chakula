@@ -183,17 +183,22 @@ export function ring(alert: Alert) {
 }
 
 // "Rings until someone taps": a repeating system alert that keeps going even if the app is in the
-// background, cancelled with stopRepeating. Without the native module the caller repeats ring().
-export function startRepeating(key: string, alert: Alert): boolean {
+// background, cancelled with stopRepeating. Resolves true only once the system has it; otherwise the
+// caller keeps repeating ring() itself.
+export async function startRepeating(key: string, alert: Alert): Promise<boolean> {
   const N = status === 'native' ? load() : null;
   if (!N) return false;
-  N.scheduleNotificationAsync({
-    identifier: `repeat-${key}`,
-    content: content(N, alert, true),
-    // iOS won't repeat more often than once a minute.
-    trigger: { type: N.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: Platform.OS === 'ios' ? 60 : 30, repeats: true, channelId: CHANNEL[alert.kind] },
-  }).catch(() => {});
-  return true;
+  try {
+    await N.scheduleNotificationAsync({
+      identifier: `repeat-${key}`,
+      content: content(N, alert, true),
+      // iOS won't repeat more often than once a minute.
+      trigger: { type: N.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: Platform.OS === 'ios' ? 60 : 30, repeats: true, channelId: CHANNEL[alert.kind] },
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function stopRepeating(key: string) {

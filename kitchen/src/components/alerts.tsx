@@ -112,8 +112,15 @@ export function AlertHost() {
       const last = repeating.current.get(o.id);
       if (last === undefined) {
         ring(alert);
-        // The system repeats it, even with the app in the background. Without it, we repeat while open.
-        repeating.current.set(o.id, startRepeating(o.id, alert) ? Infinity : now);
+        // Repeat in the app until the system has taken over (it then repeats even in the background).
+        // If it can't, the in-app repeat keeps going.
+        repeating.current.set(o.id, now);
+        void startRepeating(o.id, alert).then((ok) => {
+          if (!ok) return;
+          if (repeating.current.has(o.id)) repeating.current.set(o.id, Infinity);
+          // Seen before the system took it: stop the repeat that just started.
+          else stopRepeating(o.id);
+        });
       } else if (now - last >= REPEAT_IN_APP) {
         ring(alert);
         repeating.current.set(o.id, now);

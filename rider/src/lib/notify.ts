@@ -8,6 +8,7 @@ import { Linking, Platform } from 'react-native';
 // inside the app instead. Nothing else in the app may import expo-notifications.
 
 type NotificationsModule = typeof import('expo-notifications');
+type NotificationResponse = import('expo-notifications').NotificationResponse;
 
 // Android channels. Runs ring loud; pickup heads-ups pop up; reminders are ordinary.
 export type AlertChannel = 'runs' | 'pickup' | 'reminders';
@@ -148,6 +149,8 @@ function content(a: Alert) {
     data: { kind: a.kind, url: a.url ?? '/' },
     color: '#1B4332',
     priority: a.channel === 'reminders' ? 'default' : 'max',
+    // Time-sensitive breaks through Focus on iOS, but still follows the ring/silent switch: playing on
+    // silent there needs the critical alerts entitlement, which we don't have.
     interruptionLevel: a.channel === 'reminders' ? ('active' as const) : ('timeSensitive' as const),
   };
 }
@@ -202,10 +205,23 @@ export function onAlertTap(cb: (url: string) => void): () => void {
   const N = load();
   if (!N) return () => {};
   try {
-    const sub = N.addNotificationResponseReceivedListener((r) => {
+    // A tap is routed once, whether it arrives here or as the response that launched the app.
+    let opened = '';
+    const open = (r: NotificationResponse) => {
+      const key = `${r.notification.request.identifier}:${r.notification.date}`;
+      if (key === opened) return;
+      opened = key;
       const url = r.notification.request.content.data?.url;
       if (typeof url === 'string') cb(url);
-    });
+    };
+    const sub = N.addNotificationResponseReceivedListener(open);
+    // A tap that launched the app from closed comes before the listener exists: read it, then clear it
+    // so it isn't replayed the next time this runs.
+    const launch = typeof N.getLastNotificationResponse === 'function' ? N.getLastNotificationResponse() : null;
+    if (launch) {
+      if (typeof N.clearLastNotificationResponse === 'function') N.clearLastNotificationResponse();
+      setTimeout(() => open(launch), 0);
+    }
     return () => sub.remove();
   } catch {
     return () => {};

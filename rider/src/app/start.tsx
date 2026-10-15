@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { AppState, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { AppState, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
 import { Body, Button, Headline, Icon, Italic, Label, Num } from '../components/ui';
@@ -152,7 +152,10 @@ function AlertsCheck() {
   } else {
     const granted = perm === 'granted';
     rows.push(
-      !granted
+      // iOS can't ring through the silent switch without critical alerts, so there it's advice, not a check.
+      Platform.OS === 'ios'
+        ? { title: 'Loud run alert', detail: 'Follows your ring/silent switch on iPhone', state: 'note' }
+        : !granted
         ? { title: 'Loud run alert', detail: perm === null ? 'Checking your phone' : 'Needs notifications on', state: perm === null ? 'ok' : 'fix', fix: allow }
         : loud === false
           ? { title: 'Run alerts are turned down', detail: 'Turn "New runs" back up in settings', state: 'fix', fix: openAppSettings }

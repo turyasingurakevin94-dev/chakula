@@ -7,6 +7,7 @@ import { Platform } from 'react-native';
 // is false, every call quietly does nothing, and the app shows its in-app banner instead.
 
 type Notifications = typeof import('expo-notifications');
+type NotificationResponse = import('expo-notifications').NotificationResponse;
 
 let mod: Notifications | null | undefined;
 
@@ -122,10 +123,23 @@ export const notify = {
           return { shouldShowBanner: false, shouldShowList: false, shouldPlaySound: false, shouldSetBadge: false };
         },
       });
-      sub = N.addNotificationResponseReceivedListener((response) => {
+      // A tap is routed once, whether it arrives here or as the response that launched the app.
+      let opened = '';
+      const open = (response: NotificationResponse) => {
+        const key = `${response.notification.request.identifier}:${response.notification.date}`;
+        if (key === opened) return;
+        opened = key;
         const href = (response.notification.request.content.data ?? {}).href;
         if (typeof href === 'string' && href) handlers.onOpen(href);
-      });
+      };
+      sub = N.addNotificationResponseReceivedListener(open);
+      // A tap that launched the app from closed comes before the listener exists: read it, then clear it
+      // so it isn't replayed the next time this runs.
+      const launch = typeof N.getLastNotificationResponse === 'function' ? N.getLastNotificationResponse() : null;
+      if (launch) {
+        if (typeof N.clearLastNotificationResponse === 'function') N.clearLastNotificationResponse();
+        setTimeout(() => open(launch), 0);
+      }
     } catch {
       // Leave the in-app banner to do the work.
     }
@@ -196,6 +210,11 @@ export const notify = {
   // Stops a scheduled notification from firing.
   cancel(id: string): Promise<void> {
     return safely(undefined, (N) => N.cancelScheduledNotificationAsync(id));
+  },
+
+  // Ids of the notifications in the tray now, or null when the phone can't say.
+  presentedIds(): Promise<string[] | null> {
+    return safely<string[] | null>(null, async (N) => (await N.getPresentedNotificationsAsync()).map((n) => n.request.identifier));
   },
 
   // Takes a shown notification out of the tray.
