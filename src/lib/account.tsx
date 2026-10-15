@@ -502,7 +502,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       .then(({ order, payment }) => {
         setOrders((prev) => prev.map((p) => (p.localId === localId ? fromServer(order, p) : p)));
         // Flutterwave's page that waits with the student while they approve on their phone.
-        if (payment?.redirectUrl) void openPaymentPage(payment.redirectUrl);
+        if (payment?.redirectUrl) void openPaymentPage(payment.redirectUrl, order.id);
       })
       .catch((e) => {
         setOrders((prev) => prev.filter((p) => p.localId !== localId));
