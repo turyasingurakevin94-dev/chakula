@@ -76,6 +76,9 @@ jobs:
         # compiling, so the free runner finishes much sooner.
         env:
           ORG_GRADLE_PROJECT_reactNativeArchitectures: arm64-v8a
+          # The local build's "expo doctor" step crashes the build when it runs past 30 s
+          # (@expo/build-tools kills a process that has already exited). The checks above cover it.
+          EAS_BUILD_DISABLE_EXPO_DOCTOR_STEP: '1'
         run: eas build --platform android --profile preview --non-interactive --local --output "$GITHUB_WORKSPACE/chakula-rider.apk"
 
       - name: Publish APK
