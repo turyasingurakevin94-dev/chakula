@@ -10,7 +10,8 @@ import { versionLabel } from '../lib/updates';
 export default function Setup() {
   const k = useKitchen();
   const st = k.settings;
-  const lastSale = Math.max(...k.orders.filter((o) => o.posSale).map((o) => o.inAt));
+  const sales = k.orders.filter((o) => o.posSale).map((o) => o.inAt);
+  const lastSale = sales.length ? Math.max(...sales) : null;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.cream }} edges={['top', 'bottom']}>
@@ -48,7 +49,7 @@ export default function Setup() {
               <Text style={s.rowTitle}>[Your POS]</Text>
               <View style={s.status}>
                 <View style={[s.dot, !st.addToPOS && { backgroundColor: colors.toggleOff }]} />
-                <Text style={s.meta}>{st.addToPOS ? `Last sale added ${clock(lastSale)}` : 'Not adding sales'}</Text>
+                <Text style={s.meta}>{!st.addToPOS ? 'Not adding sales' : lastSale ? `Last sale added ${clock(lastSale)}` : 'No sales added yet'}</Text>
               </View>
             </View>
             <Pressable accessibilityRole="button" onPress={() => k.notify('Choosing a POS comes once we know which one you use')} style={{ height: 44, paddingHorizontal: 8, justifyContent: 'center' }}>

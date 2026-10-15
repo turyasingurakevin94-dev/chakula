@@ -4,16 +4,26 @@ import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-n
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CampusMap, mapInk } from '../components/map';
 import { Display, Icon, IconButton, PrimaryButton } from '../components/ui';
-import { DELIVERY_MINUTES, formatClock, minutesLeft, useAccount, useNow } from '../lib/account';
+import { DELIVERY_MINUTES, formatClock, minutesLeft, useAccount, useNow, type Order } from '../lib/account';
 import { useAlerts } from '../lib/alerts';
-import { along, findDropPoint, fitView, headingAhead, kitchenAt, route } from '../lib/campus';
+import { along, dist, findDropPoint, fitView, headingAhead, kitchenAt, route } from '../lib/campus';
 import { findRestaurant } from '../lib/data';
-import { blockName, rider, stageOf } from '../lib/stages';
+import { blockName, riderFor, stageOf } from '../lib/stages';
 import { colors, fonts, smallCaps } from '../lib/theme';
 
 const MIN = 60 * 1000;
 
 export default function Tracking() {
+  const account = useAccount();
+  // A server order that didn't go through leaves nothing to track.
+  const hasOrder = !!(account.activeOrder ?? account.orders[0]);
+  useEffect(() => {
+    if (!hasOrder) router.dismissTo('/');
+  }, [hasOrder]);
+  return hasOrder ? <TrackOrder /> : null;
+}
+
+function TrackOrder() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const account = useAccount();
@@ -23,9 +33,11 @@ export default function Tracking() {
   const order = account.activeOrder ?? account.orders[0]!;
   const active = !!account.activeOrder;
   const restaurant = findRestaurant(order.restaurantId) ?? findRestaurant('nakawa-kitchen')!;
-  // Prototype only: the order moves forward on a timer. The rider app will drive this for real.
-  const minutes = active ? minutesLeft(order, now) : 0;
+  // Server orders move when the kitchen and rider act; sample ones on the demo timer.
   const stage = stageOf(order, active, now);
+  const live = !!order.serverId;
+  const rider = riderFor(order);
+  const minutes = !active ? 0 : live ? Math.max(1, Math.ceil((arriveByTime(order) - now) / MIN)) : minutesLeft(order, now);
   const waiting = stage === 0;
   const arrived = stage === 4;
   // Clock times for each step, counted in real minutes from when the kitchen starts.
@@ -35,17 +47,18 @@ export default function Tracking() {
   const atGate = stage === 3;
   const room = account.room || 'your door';
   const steps = [
-    { label: 'Order confirmed', time: order.placedAt },
+    { label: order.status === 'awaiting_payment' ? 'Approve the MoMo prompt' : 'Order confirmed', time: order.placedAt },
     { label: stage === 1 ? 'Being cooked' : 'Cooked and packed', time: start + 2 * MIN },
     { label: 'On the way', time: start + 3 * MIN },
     { label: `At ${block}`, time: arriveBy - MIN },
     { label: `At ${room}`, time: arriveBy },
   ];
   // How far along the route the rider dot is.
-  const progress = stage <= 1 ? 0 : arrived ? 1 : Math.min(1, (DELIVERY_MINUTES - 2 - minutes) / (DELIVERY_MINUTES - 2) + 0.15);
+  // On the server it follows the rider's GPS, or sits on the road until the first fix.
+  const progress = live ? liveProgress(order, stage) : stage <= 1 ? 0 : arrived ? 1 : Math.min(1, (DELIVERY_MINUTES - 2 - minutes) / (DELIVERY_MINUTES - 2) + 0.15);
 
   useEffect(() => {
-    if (minutes === 0 && active && !waiting) account.markDelivered(order.id);
+    if (!live && minutes === 0 && active && !waiting) account.markDelivered(order.id);
   }, [minutes, active, waiting]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
@@ -90,17 +103,25 @@ export default function Tracking() {
 
           <View style={s.rider}>
             <View style={s.riderAvatar}>
-              <Text style={{ fontFamily: fonts.bold, fontSize: 15, color: colors.cream }}>BK</Text>
+              {rider.initials ? <Text style={{ fontFamily: fonts.bold, fontSize: 15, color: colors.cream }}>{rider.initials}</Text> : <Icon name="user" size={20} color={colors.cream} />}
             </View>
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={{ fontFamily: fonts.bold, fontSize: 15, color: colors.forest }} numberOfLines={1}>
-                {waiting ? 'Brian will bring your food' : arrived ? 'Brian brought your food' : 'Brian is bringing your food'}
+                {live && !order.riderName
+                  ? waiting
+                    ? 'A rider will bring your food'
+                    : `${restaurant.name} is cooking`
+                  : waiting
+                    ? `${rider.name} will bring your food`
+                    : arrived
+                      ? `${rider.name} brought your food`
+                      : `${rider.name} is bringing your food`}
               </Text>
               <Text style={{ fontFamily: fonts.regular, fontSize: 13, color: colors.muted }} numberOfLines={1}>
-                ★ 4.9 · red helmet · UBF 412K
+                {live ? (order.riderName ? 'Your Chakula rider' : 'A rider takes it as it cooks') : '★ 4.9 · red helmet · UBF 412K'}
               </Text>
             </View>
-            <IconButton icon="phone" label="Call Brian" variant="outline" size={42} style={{ borderColor: colors.forest }} />
+            <IconButton icon="phone" label={`Call ${rider.name}`} variant="outline" size={42} style={{ borderColor: colors.forest }} />
           </View>
 
           {active && !arrived ? (
@@ -161,7 +182,7 @@ export default function Tracking() {
           </View>
 
           <Text style={{ fontFamily: fonts.regular, fontSize: 12, lineHeight: 17, color: colors.muted }}>
-            We’ll alert you when Brian reaches your gate. If he’s more than 10 minutes late, your next delivery is free.
+            We’ll alert you when {live ? 'your rider reaches' : 'Brian reaches'} your gate. If he’s more than 10 minutes late, your next delivery is free.
           </Text>
 
           {arrived && !order.rating ? <PrimaryButton floating label="Rate your order" onPress={() => router.push({ pathname: '/rate', params: { id: order.id } })}>Got it? Rate your order</PrimaryButton> : null}
@@ -169,6 +190,22 @@ export default function Tracking() {
       </ScrollView>
     </View>
   );
+}
+
+function arriveByTime(order: { scheduledFor?: number; placedAt: number }) {
+  return order.scheduledFor ?? order.placedAt + DELIVERY_MINUTES * MIN;
+}
+
+// How far along the road the rider is, from their last GPS point: the share of the straight-line
+// distance already covered. Rough, but it only places the dot.
+function liveProgress(order: Order, stage: number) {
+  if (stage <= 1) return 0;
+  if (stage >= 4) return 1;
+  const from = kitchenAt(order.restaurantId);
+  const to = findDropPoint(order.dropPointId)?.at;
+  if (!order.riderAt || !to) return stage === 3 ? 0.97 : 0.1;
+  const total = dist(from, to) || 1;
+  return Math.min(0.97, Math.max(0.03, 1 - dist(order.riderAt, to) / total));
 }
 
 // The real road from the kitchen to the student's drop point, on our own map.

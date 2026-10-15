@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { useRider } from '../../lib/rider';
+import { onServer } from '../../lib/server';
 import { colors, fonts } from '../../lib/theme';
 
 type TabIcon = 'run' | 'shift' | 'money';
@@ -17,7 +18,9 @@ const tabs: Record<string, { label: string; icon: TabIcon }> = {
 type TabBarProps = Parameters<NonNullable<ComponentProps<typeof Tabs>['tabBar']>>[0];
 
 export default function TabsLayout() {
-  const { online } = useRider();
+  const { online, user } = useRider();
+  // On the server, sign in first.
+  if (onServer && !user) return <Redirect href="/sign-in" />;
   // Offline riders start with the shift check.
   if (!online) return <Redirect href="/start" />;
   return (

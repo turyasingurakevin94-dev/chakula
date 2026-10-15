@@ -1,4 +1,5 @@
 import { dropPoints } from './campus';
+import type { ServerStatus } from './server';
 import { DELIVERY_MINUTES, DEMO_MINUTE_MS, deliveryStartsAt, isWaiting, minutesLeft, type Order } from './account';
 
 // The rider the prototype uses everywhere until the rider app assigns real ones.
@@ -7,8 +8,21 @@ export const rider = { name: 'Brian', initials: 'BK', detail: 'red helmet · UBF
 // Where an order is: 0 confirmed, 1 cooking, 2 on the way, 3 at the gate, 4 at the room.
 export type Stage = 0 | 1 | 2 | 3 | 4;
 
-// Prototype only: the order moves forward on the demo timer. The rider app will drive this for real.
+// Where a server order is, from what the kitchen and rider app have done.
+const serverStages: Record<ServerStatus, Stage> = { awaiting_payment: 0, cooking: 1, ready: 1, picked_up: 2, at_gate: 3, delivered: 4, cancelled: 4 };
+
+// The rider on this order: the real one once the server assigns them, the sample one before.
+export function riderFor(order: Order | null | undefined) {
+  if (!order?.serverId) return rider;
+  // Before a rider takes the run, sentences say "your rider".
+  if (!order.riderName) return { name: 'your rider', initials: '', detail: '' };
+  const name = order.riderName;
+  return { name, initials: name.split(/\s+/).map((p) => p[0]?.toUpperCase()).join('').slice(0, 2), detail: '' };
+}
+
+// Server orders move when the kitchen and rider act. Sample orders move on the demo timer.
 export function stageOf(order: Order, active: boolean, now: number): Stage {
+  if (order.status) return serverStages[order.status];
   if (!active) return 4;
   if (isWaiting(order, now)) return 0;
   const left = minutesLeft(order, now);

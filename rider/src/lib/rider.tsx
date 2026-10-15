@@ -1,8 +1,12 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { cancelAlert, scheduleAlert, sendAlert, setupAlerts, type Alert } from './notify';
+import { api, onServer, type ServerOrder, type ServerStatus, type ServerUser } from './server';
+import { errorText, useServerOrders } from './serverRuns';
 
 // Everything here is sample data held in memory, like the kitchen app. The rider opens mid-way
 // through the lunch shift, as on the design canvas: 11 drops done, the next run waiting at the hatch.
+// With EXPO_PUBLIC_API_URL set (onServer), runs come from the Chakula server instead; pay, tips,
+// cash, shifts and help stay local.
 
 export const PER_DROP = 2500;
 export const CASH_LIMIT = 50_000;
@@ -20,6 +24,8 @@ export const OFFER_MS = 42_000;
 const OFFER_DELAY_MS = 3000;
 const LEAVE_MS = 2500;
 const SEALED_MS = 10_000;
+// A server run rings this long after it arrives.
+const SERVER_OFFER_MS = 800;
 
 export type Point = [number, number];
 
@@ -44,6 +50,10 @@ export type Stop = {
   sealedAt: string;
   // The drop point on our campus map. Riding mode routes to it from the last stop or the kitchen.
   drop: string;
+  // On the server: the order behind this bag, its status and its kitchen's id.
+  id?: string;
+  status?: ServerStatus;
+  kitchenId?: string;
 };
 
 export type Run = {
@@ -51,7 +61,8 @@ export type Run = {
   title: string;
   // How the run offer names it: "Lunch run, 2 drops."
   name: string;
-  slot: number;
+  // The hatch slot. Server runs don't have one yet.
+  slot?: number;
   pickupAt: string;
   // When it shows on the Shift timeline.
   plannedAt: string;
@@ -221,6 +232,8 @@ type RiderState = {
   handIns: HandIn[];
   toast: string | null;
   offer: Offer | null;
+  // The run the offer rings for.
+  offerRun: Run | null;
   banner: Banner | null;
   tipAlerts: boolean;
   shiftReminder: boolean;
@@ -245,6 +258,13 @@ type RiderState = {
   setShiftReminder: (v: boolean) => void;
   fixBatterySaver: () => void;
   previewReminder: (id: ReminderId) => void;
+  // On the server: who signed in, and the steps that go to it.
+  user: ServerUser | null;
+  riderName: string;
+  signIn: (user: ServerUser) => void;
+  pickUp: () => Promise<string | null>;
+  // Null when the code matched, otherwise the server's words.
+  handOver: (code: string) => Promise<string | null>;
 };
 
 const Ctx = createContext<RiderState | null>(null);
@@ -261,7 +281,7 @@ export function RiderProvider({ children }: { children: ReactNode }) {
   const [onlineSince, setOnlineSince] = useState(() => Date.now() - (2 * 60 + 14) * 60_000);
   const [checks, setChecks] = useState([true, true, false]);
   const [runIndex, setRunIndex] = useState(0);
-  const [stage, setStage] = useState<Stage>('waiting');
+  const [stageSet, setStage] = useState<Stage>('waiting');
   const [scanned, setScanned] = useState<string[]>([]);
   const [stopIndex, setStopIndex] = useState(0);
   const [arrivedAt, setArrivedAt] = useState<number | null>(null);
@@ -283,7 +303,7 @@ export function RiderProvider({ children }: { children: ReactNode }) {
   }, [toast]);
 
   const [accepted, setAccepted] = useState<string[]>([]);
-  const [offer, setOffer] = useState<Offer | null>(null);
+  const [offerSet, setOffer] = useState<Offer | null>(null);
   const [sealedFor, setSealedFor] = useState<string | null>(null);
   const [banner, setBanner] = useState<Banner | null>(null);
   const [notes, setNotes] = useState<Record<string, string>>({});
@@ -291,11 +311,6 @@ export function RiderProvider({ children }: { children: ReactNode }) {
   const [shiftReminder, setShiftReminder] = useState(true);
   // Sample: battery saver is on until the rider fixes it in the alerts check. We can't read it yet.
   const [batterySaver, setBatterySaver] = useState(true);
-
-  const run = runs[runIndex] ?? null;
-  const baseStop = run?.stops[stopIndex] ?? null;
-  // The student's latest note wins over the one they ordered with.
-  const stop = useMemo(() => (baseStop && notes[baseStop.bag] ? { ...baseStop, note: notes[baseStop.bag] } : baseStop), [baseStop, notes]);
 
   const notify = useCallback((message: string) => setToast(message), []);
 
@@ -306,13 +321,77 @@ export function RiderProvider({ children }: { children: ReactNode }) {
   }, []);
   const dismissBanner = useCallback(() => setBanner(null), []);
 
+  // ---- On the server ----
+  const [user, setUser] = useState<ServerUser | null>(null);
+  // Offers the rider passed on or let ring out. They don't ring again.
+  const [passed, setPassed] = useState<string[]>([]);
+  // Orders from finished runs; the current run is the rider's other orders.
+  const [done, setDone] = useState<string[]>([]);
+  const { orders: serverOrders, put, remove } = useServerOrders(onServer ? user : null, {
+    onChange: (o, before) => {
+      if (o.rider?.id === user?.id && o.status === 'ready' && before?.status !== 'ready') sealedAlert([o]);
+    },
+    onGone: (id, why) => {
+      if (offer?.runId !== id) return;
+      setOffer(null);
+      setToast(why === 'taken' ? 'Another rider took this run' : 'The student cancelled this run');
+    },
+  });
+  const serverRun = useMemo(() => {
+    if (!user) return null;
+    const own = Object.values(serverOrders).filter((o) => o.rider?.id === user.id && !done.includes(o.id));
+    return own.length ? toRun(own.sort((a, b) => a.number - b.number)) : null;
+  }, [serverOrders, user, done]);
+  const offerable = useMemo(() => Object.values(serverOrders).filter((o) => !o.rider && !passed.includes(o.id)), [serverOrders, passed]);
+
+  const run = onServer ? serverRun : (runs[runIndex] ?? null);
+  // On the server, once every bag is on the bike (or was, before the app restarted), the route starts.
+  const onBike = !!run && run.stops.every((x) => x.status === 'picked_up' || x.status === 'at_gate' || x.status === 'delivered');
+  const stage: Stage = onServer && onBike && (stageSet === 'waiting' || stageSet === 'pickup') ? 'riding' : stageSet;
+  const baseStop = run?.stops[stopIndex] ?? null;
+  // The student's latest note wins over the one they ordered with.
+  const stop = useMemo(() => (baseStop && notes[baseStop.bag] ? { ...baseStop, note: notes[baseStop.bag] } : baseStop), [baseStop, notes]);
+
+  const offerOrder = offerSet ? serverOrders[offerSet.runId] : undefined;
+  const offerRun = onServer ? (offerOrder && !offerOrder.rider ? toRun([offerOrder]) : null) : run && offerSet && run.id === offerSet.runId ? run : null;
+  // A server offer that's gone (taken while the signal was out) stops ringing.
+  const offer = onServer && !offerRun ? null : offerSet;
+
+  // "Your bags are sealed and waiting", from the kitchen's Ready tap.
+  function sealedAlert(sealed: ServerOrder[]) {
+    const kitchens = pickupOrder(toRun(sealed));
+    raise(
+      { kicker: 'Pick up now', title: 'Your bags are sealed and waiting', kitchens, loud: true, primary: { label: 'Open scanner', url: '/pickup' }, secondary: { label: 'Later' } },
+      {
+        kind: 'pickup',
+        channel: 'runs',
+        title: 'Your bags are sealed and waiting',
+        body: kitchens.map((k, i) => `${i + 1}. ${k.name} ${k.spot}: ${k.bags.map((b) => b.bag).join(', ')}`).join('\n'),
+        url: '/pickup',
+      },
+    );
+  }
+
+  // A server offer rings a moment after it arrives, when the rider is free for it.
+  const nextOffer = offerable[0];
+  useEffect(() => {
+    if (!onServer || !online || !nextOffer || stage !== 'waiting' || offer) return;
+    const t = setTimeout(() => {
+      const bag = toStop(nextOffer);
+      setOffer({ runId: nextOffer.id, at: Date.now() });
+      sendAlert({ kind: 'run', channel: 'runs', title: 'New run', body: `${kitchenOf(bag)} to ${bag.place}. ${bag.cash ? `Cash UGX ${bag.cash.toLocaleString('en-US')}` : 'Paid'}.`, url: '/' });
+    }, SERVER_OFFER_MS);
+    return () => clearTimeout(t);
+  }, [online, nextOffer, stage, offer]);
+
+
   useEffect(() => {
     setupAlerts();
   }, []);
 
   // A new run rings a moment after the rider is free for it.
   useEffect(() => {
-    if (!online || !run || stage !== 'waiting' || accepted.includes(run.id) || offer) return;
+    if (onServer || !online || !run || stage !== 'waiting' || accepted.includes(run.id) || offer) return;
     const t = setTimeout(() => {
       setOffer({ runId: run.id, at: Date.now() });
       sendAlert({ kind: 'run', channel: 'runs', title: 'New run', body: `${kitchenOf(run.stops[run.stops.length - 1])} ${spotOf(run.stops[run.stops.length - 1])} ${run.pickupAt}. ${run.stops.length} drops, UGX ${run.pays.toLocaleString('en-US')}.`, url: '/' });
@@ -320,16 +399,52 @@ export function RiderProvider({ children }: { children: ReactNode }) {
     return () => clearTimeout(t);
   }, [online, run, stage, accepted, offer]);
 
+  const taking = useRef(false);
   const acceptRun = useCallback(() => {
     if (!offer) return;
+    if (onServer) {
+      // First tap wins on the server. Another rider may have been quicker.
+      if (taking.current) return;
+      taking.current = true;
+      const id = offer.runId;
+      api<ServerOrder>('POST', `/rider/orders/${id}/take`)
+        .then((o) => {
+          put(o);
+          setOffer(null);
+          if (o.status === 'ready') sealedAlert([o]);
+          else
+            raise(
+              { kicker: 'Leave now', title: `Leave now for ${o.kitchen.name}`, body: 'The kitchen is cooking. We ring you when the bag is sealed.', primary: { label: 'Got it' } },
+              { kind: 'pickup', channel: 'pickup', title: `Leave now for ${o.kitchen.name}`, body: 'The kitchen is cooking. We ring you when the bag is sealed.', url: '/' },
+            );
+        })
+        .catch((e) => {
+          if (e?.status === 409) {
+            setOffer(null);
+            remove(id);
+            raise({ kicker: 'Run gone', title: errorText(e), body: "That's fine. Stay online and we'll ring you for the next run.", primary: { label: 'Got it' } });
+          } else setToast(errorText(e));
+        })
+        .finally(() => {
+          taking.current = false;
+        });
+      return;
+    }
     setAccepted((a) => [...a, offer.runId]);
     setOffer(null);
-  }, [offer]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [offer, put, remove, raise]);
 
   const passRun = useCallback(
     (why: 'declined' | 'timeout') => {
       if (!offer) return;
       setOffer(null);
+      if (onServer) {
+        // The run stays open to other riders; it just won't ring here again.
+        setPassed((p) => [...p, offer.runId]);
+        setToast(why === 'declined' ? 'Run passed on · stay online for the next one' : 'No answer, so the run went to other riders');
+        return;
+      }
       setRunIndex((i) => i + 1);
       if (why === 'declined') {
         setToast('Run passed on · stay online for the next one');
@@ -345,7 +460,7 @@ export function RiderProvider({ children }: { children: ReactNode }) {
 
   // After taking a run: "Leave now", timed to arrive as the bags are sealed, then "sealed and waiting".
   useEffect(() => {
-    if (!run || stage !== 'waiting' || !accepted.includes(run.id) || sealedFor === run.id) return;
+    if (onServer || !run || stage !== 'waiting' || !accepted.includes(run.id) || sealedFor === run.id) return;
     const kitchens = pickupOrder(run);
     const first = kitchens[0];
     const leave = setTimeout(
@@ -404,10 +519,41 @@ export function RiderProvider({ children }: { children: ReactNode }) {
     return next;
   }, [run, scanned]);
 
+  // On the server, scanning a seal picks the bag up. A bag still cooking can't be scanned yet.
+  const pickUp = useCallback(async () => {
+    const next = run ? [...run.stops].reverse().find((x) => x.status !== 'picked_up' && x.status !== 'at_gate' && x.status !== 'delivered') : undefined;
+    if (!next?.id) return null;
+    try {
+      put(await api<ServerOrder>('POST', `/rider/orders/${next.id}/pick-up`));
+      return next.bag;
+    } catch (e) {
+      setToast(errorText(e));
+      return null;
+    }
+  }, [run, put]);
+
   const arrive = useCallback(() => {
     setStage('handover');
     setArrivedAt(Date.now());
-  }, []);
+    // Tells the student their food is at the gate.
+    if (onServer && stop?.id && stop.status === 'picked_up') {
+      api<ServerOrder>('POST', `/rider/orders/${stop.id}/at-gate`).then(put, (e) => setToast(errorText(e)));
+    }
+  }, [stop, put]);
+
+  // The student reads their code out; the server checks it.
+  const handOver = useCallback(
+    async (code: string) => {
+      if (!stop?.id) return 'This bag isn’t on the server.';
+      try {
+        put(await api<ServerOrder>('POST', `/rider/orders/${stop.id}/deliver`, { code }));
+        return null;
+      } catch (e) {
+        return errorText(e);
+      }
+    },
+    [stop, put],
+  );
 
   const backToRoute = useCallback(() => setStage('riding'), []);
 
@@ -431,7 +577,8 @@ export function RiderProvider({ children }: { children: ReactNode }) {
         setScanned([]);
         setStopIndex(0);
         setStage('waiting');
-        setRunIndex((i) => i + 1);
+        if (onServer) setDone((d) => [...d, ...run.stops.map((x) => x.id ?? x.bag)]);
+        else setRunIndex((i) => i + 1);
         setToast(`Run done · ${run.pays.toLocaleString('en-US')} added to tonight's pay`);
       }
     },
@@ -442,6 +589,14 @@ export function RiderProvider({ children }: { children: ReactNode }) {
     setOnline(false);
     setChecks([false, false, false]);
   }, []);
+
+  const signIn = useCallback((u: ServerUser) => setUser(u), []);
+  const riderName = onServer ? (user?.name?.split(' ')[0] ?? 'rider') : RIDER;
+  // On the server a bag counts as scanned once it is picked up.
+  const scannedNow = useMemo(
+    () => (onServer ? (run?.stops ?? []).filter((x) => x.status === 'picked_up' || x.status === 'at_gate' || x.status === 'delivered').map((x) => x.bag) : scanned),
+    [run, scanned],
+  );
 
   const tipTotal = tips.reduce((sum, t) => sum + t.amount, 0);
   const cash = cashOrders.reduce((sum, c) => sum + c.amount, 0);
@@ -539,9 +694,9 @@ export function RiderProvider({ children }: { children: ReactNode }) {
       checks,
       runIndex,
       run,
-      nextRun: runs[runIndex + 1] ?? null,
+      nextRun: onServer ? null : (runs[runIndex + 1] ?? null),
       stage,
-      scanned,
+      scanned: scannedNow,
       stopIndex,
       stop,
       arrivedAt,
@@ -556,6 +711,7 @@ export function RiderProvider({ children }: { children: ReactNode }) {
       handIns,
       toast,
       offer,
+      offerRun,
       banner,
       tipAlerts,
       shiftReminder,
@@ -580,12 +736,18 @@ export function RiderProvider({ children }: { children: ReactNode }) {
       setShiftReminder,
       fixBatterySaver,
       previewReminder,
+      user,
+      riderName,
+      signIn,
+      pickUp,
+      handOver,
     }),
     [
-      online, onlineSince, checks, runIndex, run, stage, scanned, stopIndex, stop, arrivedAt, results, voice, drops, tips, tipTotal, pay, cash, cashOrders, handIns, toast,
-      offer, banner, tipAlerts, shiftReminder, batterySaver, reminders,
+      online, onlineSince, checks, runIndex, run, stage, scannedNow, stopIndex, stop, arrivedAt, results, voice, drops, tips, tipTotal, pay, cash, cashOrders, handIns, toast,
+      offer, offerRun, banner, tipAlerts, shiftReminder, batterySaver, reminders,
       goOnline, goOffline, toggleCheck, startPickup, scanNext, arrive, backToRoute, completeStop, notify,
       acceptRun, passRun, raise, dismissBanner, changeNote, fixBatterySaver, previewReminder,
+      user, riderName, signIn, pickUp, handOver,
     ],
   );
 
@@ -650,6 +812,47 @@ export function pickupOrder(run: Run): KitchenPickup[] {
     k.bags.push({ bag: stop.bag, sealedAt: stop.sealedAt });
   }
   return out;
+}
+
+// One server order is one bag and one stop.
+export function toStop(o: ServerOrder): Stop {
+  const name = o.student.name ?? 'Student';
+  const time = (at: string | null) => (at ? clockTime(new Date(at)) : '');
+  return {
+    bag: String(o.number),
+    student: name,
+    first: name.split(' ')[0]!,
+    place: o.dropPoint.name,
+    drop: o.dropPoint.id,
+    kitchen: o.kitchen.name,
+    kitchenId: o.kitchen.id,
+    // cashToCollect drops to 0 once delivered; the cash record needs what was collected.
+    cash: o.payMethod === 'cash' ? o.total : o.cashToCollect,
+    note: o.note ?? undefined,
+    // The server doesn't know these yet: the code is checked by the server, there's no ETA.
+    code: '',
+    eta: time(o.times.atGate ?? o.times.placed),
+    sealedAt: time(o.times.ready) || 'soon',
+    id: o.id,
+    status: o.status,
+  };
+}
+
+// The rider's taken orders as one run, or a single offer.
+export function toRun(orders: ServerOrder[]): Run {
+  const stops = orders.map(toStop);
+  const ready = orders.map((o) => o.times.ready).filter((t): t is string => !!t);
+  const kitchens = [...new Set(stops.map((x) => x.kitchen!))];
+  return {
+    id: orders.map((o) => o.id).join(','),
+    title: stops.map((x) => x.place).join(', then '),
+    name: `${kitchens.join(' and ')} run`,
+    pickupAt: ready.length === orders.length ? clockTime(new Date(ready[0]!)) : 'when sealed',
+    plannedAt: clockTime(new Date(orders[0]!.times.placed ?? Date.now())),
+    away: 'on campus',
+    stops,
+    pays: stops.length * PER_DROP,
+  };
 }
 
 // "18:30" -> "6:30", the way the app writes times.

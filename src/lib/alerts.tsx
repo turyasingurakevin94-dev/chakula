@@ -7,7 +7,8 @@ import { formatClock, useAccount, useNow, type Order } from './account';
 import { findRestaurant, specials } from './data';
 import { notify, type Alert, type PermissionState } from './notify';
 import { findPlanKind, mealName, mealTimes } from './plans';
-import { arriveBy, blockName, isLoudStage, rider, stageOf, stageStartsAt, type Stage } from './stages';
+import { onServer, registerPush } from './server';
+import { arriveBy, blockName, isLoudStage, rider, riderFor, stageOf, stageStartsAt, type Stage } from './stages';
 
 // Alerts while the app is open become a quiet banner at the top. While it is closed they go to the
 // phone through `notify`, if the phone can show them. With no backend, order alerts are worked out
@@ -134,11 +135,13 @@ function alertId(order: Order, stage: Stage) {
 function orderAlert(order: Order, stage: Stage, place: { block: string; firstName: string }): Alert & { icon: IconName } {
   const kitchen = findRestaurant(order.restaurantId)?.name ?? 'The kitchen';
   const id = alertId(order, stage);
+  // The sample rider until the server names the real one.
+  const rider = order.serverId ? { name: 'Your rider' } : riderFor(order);
   switch (stage) {
     case 2:
-      return { id, channel: 'orders', href: '/tracking', icon: 'check', title: `${rider.name} has your food`, body: `Sealed at ${kitchen}. Show code ${order.code} at the gate.` };
+      return { id, channel: 'orders', href: '/tracking', icon: 'check', title: `${order.riderName ?? rider.name} has your food`, body: `Sealed at ${kitchen}. Show code ${order.code} at the gate.` };
     case 3:
-      return { id, channel: 'orders', href: '/tracking', icon: 'map-pin', title: `${rider.name} is at ${place.block}`, body: `Code ${order.code}. Red helmet, UBF 412K.` };
+      return { id, channel: 'orders', href: '/tracking', icon: 'map-pin', title: `${order.riderName ?? rider.name} is at ${place.block}`, body: order.serverId ? `Code ${order.code}.` : `Code ${order.code}. Red helmet, UBF 412K.` };
     case 4:
       return { id, channel: 'updates', href: '/tracking', icon: 'smile', title: `Enjoy your food${place.firstName ? `, ${place.firstName}` : ''}`, body: `Rate ${kitchen} when you’re ready.` };
     default:
@@ -168,6 +171,12 @@ function OrderAlerts() {
     latest.current = { order, place, phone: permission === 'granted' };
   });
 
+  // On the server: once alerts are allowed, give it this phone's push token.
+  const signedIn = account.verified;
+  useEffect(() => {
+    if (onServer && signedIn && permission === 'granted') void registerPush('student');
+  }, [signedIn, permission]);
+
   // The order is done when the rider is at the room, wherever the student is in the app.
   const { markDelivered } = account;
   useEffect(() => {
@@ -188,7 +197,8 @@ function OrderAlerts() {
       if (isLoudStage(stage) && !phoneHasIt) show({ title: alert.title, body: alert.body, icon: alert.icon, href: alert.href });
       return;
     }
-    if (phoneHasIt || !latest.current.phone) return;
+    // Server orders: the server's push already rang the phone.
+    if (phoneHasIt || !latest.current.phone || order.serverId) return;
     void notify.present(alert);
     if (stage === 4) void notify.dismiss(alertId(order, 2));
   }, [order, stage, show]);
@@ -198,7 +208,7 @@ function OrderAlerts() {
     const sub = AppState.addEventListener('change', (state) => {
       const { order: o, place: p, phone } = latest.current;
       if (state === 'background') {
-        if (!o || o.delivered || !phone) return;
+        if (!o || o.delivered || !phone || o.serverId) return;
         for (const st of [2, 3] as const) {
           const at = stageStartsAt(o, st);
           if (at <= Date.now() || scheduled.current.some((s) => s.orderId === o.id && s.stage === st)) continue;

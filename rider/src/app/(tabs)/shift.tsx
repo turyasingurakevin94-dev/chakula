@@ -31,7 +31,7 @@ export default function Shift() {
               <Pressable accessibilityRole="button" onPress={() => router.navigate('/')} style={s.now}>
                 <Bold>{run.title}</Bold>
                 <Body style={s.sub}>
-                  {run.stops.length} bags · slot {run.slot} · pays {money(run.pays)}
+                  {run.stops.length} bags{run.slot !== undefined ? ` · slot ${run.slot}` : ''} · pays {money(run.pays)}
                 </Body>
               </Pressable>
             </Row>

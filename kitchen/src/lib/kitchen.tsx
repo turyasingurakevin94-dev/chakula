@@ -1,8 +1,13 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { defaultHears, type Device, type Hears, type RowKey } from './alerts';
+import { photoFor } from './photos';
+import { api, connectLive, onServer, ServerError, setToken, type ServerOrder, type ServerStatus, type ServerUser } from './server';
 
 // Everything here is sample data held in memory, like the student app. Times are set relative to
 // when the app opens, so the board always looks like a lunch rush in progress.
+// Built with EXPO_PUBLIC_API_URL (see server.ts), the board, menu and Open switch come from the
+// Chakula server instead, on the real clock. Printing, POS, swaps, extra time and declining
+// stay on this phone until the server has them.
 
 const MIN = 60_000;
 
@@ -10,7 +15,7 @@ const MIN = 60_000;
 const opened = new Date();
 const CLOCK_OFFSET = new Date(opened.getFullYear(), opened.getMonth(), opened.getDate(), 12, 38).getTime() - opened.getTime();
 export function demoNow() {
-  return Date.now() + CLOCK_OFFSET;
+  return onServer ? Date.now() : Date.now() + CLOCK_OFFSET;
 }
 
 export type Item = { qty: number; name: string; extras?: string[]; price: number };
@@ -18,7 +23,10 @@ export type Payment = 'MTN MoMo' | 'Airtel Money' | 'Wallet' | 'Cash on delivery
 export type Status = 'incoming' | 'cooking' | 'ready' | 'picked' | 'delivered' | 'declined';
 
 export type Order = {
+  // The order number the team calls out, e.g. "4821".
   id: string;
+  // The server's id for it, for calls to the server. Only when running on the server.
+  serverId?: string;
   student: string;
   place: string;
   items: Item[];
@@ -65,7 +73,8 @@ export type Dish = {
   backTomorrow?: boolean;
 };
 
-export type Extra = { id: string; name: string; price: number; soldOut: boolean };
+// On the server each dish has its own extras; one switch here covers every dish that offers it.
+export type Extra = { id: string; name: string; price: number; soldOut: boolean; dishIds?: string[] };
 
 export const RIDERS = ['Moses', 'Sam', 'Joan', 'Eddie'];
 
@@ -169,10 +178,92 @@ const EXTRAS: Extra[] = [
   { id: 'sausage', name: 'Sausage', price: 1500, soldOut: true },
 ];
 
-// Orders served earlier today, before the ones on the board.
-export const SERVED_EARLIER = 48;
+// Orders served earlier today, before the ones on the board. The server's board already has all of today.
+export const SERVED_EARLIER = onServer ? 0 : 48;
+
+// ---- The server's board and menu, in this app's shapes ----
+
+type ServerKitchen = {
+  id: string;
+  open: boolean;
+  menu: { id: string; name: string; category: string; price: number; prepMinutes: number; soldOut: boolean; extras: { id: string; name: string; price: number; soldOut: boolean }[] }[];
+};
+
+const PAID: Record<ServerOrder['payMethod'], Payment> = { mtn: 'MTN MoMo', airtel: 'Airtel Money', cash: 'Cash on delivery' };
+// Waiting for MoMo and cancelled orders aren't on the board.
+const STATUS: Partial<Record<ServerStatus, Status>> = { cooking: 'cooking', ready: 'ready', picked_up: 'picked', at_gate: 'picked', delivered: 'delivered' };
+const SECTIONS: Dish['section'][] = ['Popular', 'Mains', 'Drinks'];
+
+const ms = (t: string | null) => (t ? new Date(t).getTime() : undefined);
+
+// One server order as a board order. What only this phone knows (seen, swap, extra time) carries over.
+function fromServer(so: ServerOrder, was?: Order): Order | null {
+  const status = STATUS[so.status];
+  if (!status) return null;
+  const inAt = ms(so.times.paid) ?? ms(so.times.placed) ?? Date.now();
+  const dueAt = was?.dueAt ?? inAt + 15 * MIN;
+  const pickedAt = ms(so.times.pickedUp);
+  const notes = [so.note, ...so.lines.filter((l) => l.note).map((l) => `${l.name}: ${l.note}`)].filter(Boolean);
+  return {
+    ...was,
+    id: String(so.number),
+    serverId: so.id,
+    student: so.student.name ?? 'Student',
+    place: so.dropPoint.name,
+    items: so.lines.map((l) => {
+      const extras = [...l.extras.map((e) => e.name), ...(l.pepper ? [l.pepper === 'None' ? 'No pepper' : `${l.pepper} pepper`] : [])];
+      return { qty: l.quantity, name: l.name, price: l.unitPrice, ...(extras.length ? { extras } : {}) };
+    }),
+    note: notes.length ? notes.join(' ') : undefined,
+    paid: PAID[so.payMethod],
+    inAt,
+    dueAt,
+    status,
+    readyAt: ms(so.times.ready),
+    pickedAt,
+    deliveredAt: ms(so.times.delivered),
+    // The server doesn't know when the rider reaches the hatch yet, so expect them when the food is due.
+    rider: so.rider ? { name: so.rider.name ?? 'Rider', arrivesAt: pickedAt ?? dueAt } : undefined,
+  };
+}
+
+// Adds or updates one order. `arriving` marks a new one as just in, so the bell rings for it.
+function upsert(board: Order[], so: ServerOrder, arriving: boolean) {
+  const was = board.find((o) => o.serverId === so.id);
+  const next = fromServer(so, was);
+  if (!next) return board.filter((o) => o !== was);
+  if (!was) return [...board, arriving ? { ...next, live: true } : { ...next, seenAt: next.inAt }];
+  return board.map((o) => (o === was ? next : o));
+}
+
+function menuFromServer(k: ServerKitchen) {
+  const dishes: Dish[] = k.menu.map((d) => ({
+    id: d.id,
+    name: d.name,
+    section: SECTIONS.includes(d.category as Dish['section']) ? (d.category as Dish['section']) : 'Mains',
+    price: d.price,
+    minutes: d.prepMinutes,
+    extras: d.extras.length,
+    hasPhoto: !!photoFor(d.name),
+    soldOut: d.soldOut,
+  }));
+  const extras = new Map<string, Extra>();
+  for (const d of k.menu) {
+    for (const e of d.extras) {
+      const x = extras.get(e.id) ?? { id: e.id, name: e.name, price: e.price, soldOut: true, dishIds: [] };
+      x.dishIds!.push(d.id);
+      // On sale if any dish still offers it.
+      x.soldOut = x.soldOut && e.soldOut;
+      extras.set(e.id, x);
+    }
+  }
+  return { dishes, extras: [...extras.values()] };
+}
 
 type Kitchen = {
+  // The signed-in counter account. Always null without the server.
+  user: ServerUser | null;
+  signIn: (user: ServerUser) => void;
   now: number;
   orders: Order[];
   settings: Settings;
@@ -198,12 +289,13 @@ const KitchenContext = createContext<Kitchen | null>(null);
 export function KitchenProvider({ children }: { children: ReactNode }) {
   const [start] = useState(demoNow);
   const [now, setNow] = useState(start);
-  const [orders, setOrders] = useState<Order[]>(() => seed(start));
+  const [orders, setOrders] = useState<Order[]>(() => (onServer ? [] : seed(start)));
   const [settings, setSettings] = useState<Settings>({ open: true, autoAccept: true, printTicket: true, printSeal: true, addToPOS: true });
-  const [dishes, setDishes] = useState(DISHES);
-  const [extras, setExtras] = useState(EXTRAS);
+  const [dishes, setDishes] = useState(onServer ? [] : DISHES);
+  const [extras, setExtras] = useState(onServer ? [] : EXTRAS);
   const [toast, setToast] = useState<string | null>(null);
   const [hears, setHearsState] = useState<Hears>(defaultHears);
+  const [user, setUser] = useState<ServerUser | null>(null);
   const arrived = useRef(0);
   const nextSale = useRef(1095);
   const settingsRef = useRef(settings);
@@ -213,17 +305,76 @@ export function KitchenProvider({ children }: { children: ReactNode }) {
 
   const notify = useCallback((message: string) => setToast(message), []);
 
+  // A refused call: show the server's words, or back to sign in when the session has gone.
+  const fail = useCallback((e: unknown) => {
+    if (e instanceof ServerError && e.status === 401) {
+      setToken(null);
+      setUser(null);
+    }
+    setToast(e instanceof ServerError ? e.message : 'Something went wrong. Try again.');
+  }, []);
+
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(null), 3500);
     return () => clearTimeout(t);
   }, [toast]);
 
-  // The clock, plus what riders and new orders do on their own.
+  // On the server: today's board, then each change as it happens. A reconnect reloads the whole
+  // board in case something changed while the signal was gone.
+  useEffect(() => {
+    if (!onServer || !user) return;
+    let loaded = false;
+    let gone = false;
+    const reload = async () => {
+      try {
+        const list = await api<ServerOrder[]>('GET', '/kitchen/orders');
+        if (gone) return;
+        const arriving = loaded;
+        loaded = true;
+        setOrders((board) => {
+          const kept = board.filter((o) => list.some((so) => so.id === o.serverId));
+          return list.reduce((b, so) => upsert(b, so, arriving), kept);
+        });
+      } catch (e) {
+        if (!gone) fail(e);
+      }
+    };
+    void reload();
+    api<ServerKitchen[]>('GET', '/kitchens')
+      .then((all) => {
+        const mine = all.find((k) => k.id === user.kitchenId);
+        if (!mine || gone) return;
+        const menu = menuFromServer(mine);
+        setDishes(menu.dishes);
+        setExtras(menu.extras);
+        setSettings((s) => ({ ...s, open: mine.open }));
+      })
+      .catch((e) => !gone && fail(e));
+    const stop = connectLive((m) => {
+      if (m.type === 'hello') void reload();
+      if (m.type !== 'order' || m.order.kitchen.id !== user.kitchenId) return;
+      const so = m.order;
+      setOrders((board) => {
+        const was = board.find((o) => o.serverId === so.id);
+        if (so.status === 'cancelled' && was && (was.status === 'cooking' || was.status === 'ready')) setToast(`Order ${was.id} was cancelled. Don’t send it.`);
+        return upsert(board, so, true);
+      });
+    });
+    return () => {
+      gone = true;
+      stop();
+      setOrders([]);
+    };
+  }, [user, fail]);
+
+  // The clock, plus what riders and new orders do on their own. On the server only the clock:
+  // riders and students move orders on for real.
   useEffect(() => {
     const tick = setInterval(() => {
       const t = demoNow();
       setNow(t);
+      if (onServer) return;
       setOrders((list) =>
         list.map((o) => {
           if (o.status === 'incoming' && o.acceptBy && t > o.acceptBy) return { ...o, status: 'declined' };
@@ -238,7 +389,9 @@ export function KitchenProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(tick);
   }, []);
 
+  // Sample orders arriving, only without the server.
   useEffect(() => {
+    if (onServer) return;
     const arrive = () => {
       if (!settingsRef.current.open || arrived.current >= ARRIVALS.length) return;
       const next = ARRIVALS[arrived.current++];
@@ -270,8 +423,20 @@ export function KitchenProvider({ children }: { children: ReactNode }) {
 
   const update = useCallback((id: string, change: (o: Order) => Order) => setOrders((list) => list.map((o) => (o.id === id ? change(o) : o))), []);
 
+  // Server calls change the screen first and put it back if the server says no.
+  const send = useCallback(
+    (path: string, body: unknown, undo: () => void) =>
+      api('PATCH', path, body).catch((e) => {
+        undo();
+        fail(e);
+      }),
+    [fail],
+  );
+
   const value = useMemo<Kitchen>(
     () => ({
+      user,
+      signIn: setUser,
       now,
       orders,
       settings,
@@ -286,9 +451,25 @@ export function KitchenProvider({ children }: { children: ReactNode }) {
         update(id, (o) => (o.seenAt ? o : { ...o, seenAt: t }));
       },
       askSwap: (id, item) => update(id, (o) => ({ ...o, swap: { item, askedAt: demoNow() } })),
-      setSetting: (key, v) => setSettings((s) => ({ ...s, [key]: v })),
+      setSetting: (key, v) => {
+        setSettings((s) => ({ ...s, [key]: v }));
+        // Only Open reaches the server; printing and POS are this phone's for now.
+        if (onServer && key === 'open') void send('/kitchen', { open: v }, () => setSettings((s) => ({ ...s, open: !v })));
+      },
       markReady: (id) => {
         const t = demoNow();
+        if (onServer) {
+          const was = orders.find((o) => o.id === id);
+          if (!was?.serverId || was.status !== 'cooking') return;
+          update(id, (o) => ({ ...o, status: 'ready', readyAt: t }));
+          api<ServerOrder>('POST', `/kitchen/orders/${was.serverId}/ready`)
+            .then((so) => setOrders((board) => upsert(board, so, false)))
+            .catch((e) => {
+              update(id, (o) => ({ ...o, status: was.status, readyAt: was.readyAt }));
+              fail(e);
+            });
+          return;
+        }
         update(id, (o) => ({ ...o, status: 'ready', readyAt: t, rider: o.rider ?? { name: RIDERS[Number(o.id) % RIDERS.length], arrivesAt: t + 3 * MIN } }));
       },
       addTime: (id) => update(id, (o) => ({ ...o, dueAt: o.dueAt + 5 * MIN })),
@@ -297,10 +478,28 @@ export function KitchenProvider({ children }: { children: ReactNode }) {
         update(id, (o) => ({ ...o, status: 'cooking', inAt: t, dueAt: t + minutes * MIN, acceptBy: undefined, seenAt: t, printed: settingsRef.current.printTicket, posSale: settingsRef.current.addToPOS ? nextSale.current++ : undefined }));
       },
       decline: (id) => update(id, (o) => ({ ...o, status: 'declined' })),
-      toggleDish: (id) => setDishes((list) => list.map((d) => (d.id === id ? { ...d, soldOut: !d.soldOut, backTomorrow: false } : d))),
-      toggleExtra: (id) => setExtras((list) => list.map((e) => (e.id === id ? { ...e, soldOut: !e.soldOut } : e))),
+      toggleDish: (id) => {
+        const flip = () => setDishes((list) => list.map((d) => (d.id === id ? { ...d, soldOut: !d.soldOut, backTomorrow: false } : d)));
+        flip();
+        const d = dishes.find((x) => x.id === id);
+        if (onServer && d) void send(`/kitchen/dishes/${encodeURIComponent(id)}`, { soldOut: !d.soldOut }, flip);
+      },
+      toggleExtra: (id) => {
+        const flip = () => setExtras((list) => list.map((e) => (e.id === id ? { ...e, soldOut: !e.soldOut } : e)));
+        flip();
+        const e = extras.find((x) => x.id === id);
+        if (!onServer || !e) return;
+        // Every dish that offers it, all or nothing as far as the screen goes.
+        let undone = false;
+        const undo = () => {
+          if (undone) return;
+          undone = true;
+          flip();
+        };
+        for (const dishId of e.dishIds ?? []) void send(`/kitchen/dishes/${encodeURIComponent(dishId)}/extras/${encodeURIComponent(id)}`, { soldOut: !e.soldOut }, undo);
+      },
     }),
-    [now, orders, settings, dishes, extras, toast, notify, update, hears],
+    [user, now, orders, settings, dishes, extras, toast, notify, update, hears, send, fail],
   );
 
   return <KitchenContext.Provider value={value}>{children}</KitchenContext.Provider>;

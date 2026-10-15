@@ -108,7 +108,8 @@ export default function Orders() {
               {done.map((o) => (
                 <DoneRow key={o.id} order={o} />
               ))}
-              <Body style={{ color: colors.muted, textAlign: 'center', paddingTop: 6 }}>{SERVED_EARLIER} more served earlier today</Body>
+              {SERVED_EARLIER ? <Body style={{ color: colors.muted, textAlign: 'center', paddingTop: 6 }}>{SERVED_EARLIER} more served earlier today</Body> : null}
+              {!SERVED_EARLIER && !done.length ? <Empty icon="check-circle" text="Orders riders have picked up today show here." /> : null}
             </>
           )}
         </View>
@@ -204,7 +205,7 @@ function DoneRow({ order: o }: { order: Order }) {
   );
 }
 
-function Empty({ icon, text }: { icon: 'coffee' | 'package'; text: string }) {
+function Empty({ icon, text }: { icon: 'coffee' | 'package' | 'check-circle'; text: string }) {
   return (
     <Card style={{ alignItems: 'center', gap: 10, paddingVertical: 28 }}>
       <Icon name={icon} size={26} color={colors.sub} />

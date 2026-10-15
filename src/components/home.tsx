@@ -4,7 +4,7 @@ import { formatClock, type Order, type OrderLine } from '../lib/account';
 import type { MenuItem, Restaurant } from '../lib/data';
 import type { PhotoKey } from '../lib/photos';
 import { colors, fonts, formatUGX, smallCaps } from '../lib/theme';
-import { arriveBy, rider, type Stage } from '../lib/stages';
+import { arriveBy, riderFor, type Stage } from '../lib/stages';
 import type { QuickDish } from '../lib/usual';
 import { FoodImage, Icon, Scrim, Stepper } from './ui';
 
@@ -224,16 +224,19 @@ export function UndoBar({ summary, seconds, onUndo }: { summary: string; seconds
 export function LiveOrderCard({ order, restaurant, stage, block, onPress }: { order: Order; restaurant?: Restaurant; stage: Stage; block: string; onPress: () => void }) {
   const first = order.lines[0]?.item;
   const by = formatClock(arriveBy(order));
+  const rider = riderFor(order);
+  const Rider = rider.name[0]!.toUpperCase() + rider.name.slice(1);
+  const looks = rider.detail.split(' · ')[0];
   const line =
     stage === 0
-      ? { title: `${rider.name} will bring your food`, detail: `Arriving by ${formatClock(arriveBy(order), true)}` }
+      ? { title: `${Rider} will bring your food`, detail: `Arriving by ${formatClock(arriveBy(order), true)}` }
       : stage === 1
         ? { title: `${restaurant?.name ?? 'The kitchen'} is cooking`, detail: `Arriving by ${by} · ${rider.name} collects it next` }
         : stage === 2
-          ? { title: `${rider.name} is riding to ${block}`, detail: `Arriving by ${by} · ${rider.detail.split(' · ')[0]}` }
+          ? { title: `${Rider} is riding to ${block}`, detail: looks ? `Arriving by ${by} · ${looks}` : `Arriving by ${by}` }
           : stage === 3
-            ? { title: `${rider.name} is at ${block}`, detail: `Code ${order.code} · ${rider.detail.split(' · ')[0]}` }
-            : { title: `${rider.name} brought your food`, detail: 'Enjoy it' };
+            ? { title: `${Rider} is at ${block}`, detail: looks ? `Code ${order.code} · ${looks}` : `Code ${order.code}` }
+            : { title: `${Rider} brought your food`, detail: 'Enjoy it' };
   return (
     <Pressable
       accessibilityRole="button"
@@ -264,7 +267,7 @@ export function LiveOrderCard({ order, restaurant, stage, block, onPress }: { or
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <View style={s.liveAvatar}>
-            <Text style={{ fontFamily: fonts.bold, fontSize: 14, color: colors.cream }}>{rider.initials}</Text>
+            <Text style={{ fontFamily: fonts.bold, fontSize: 14, color: colors.cream }}>{riderFor(order).initials}</Text>
           </View>
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={{ fontFamily: fonts.bold, fontSize: 15, color: colors.forest }} numberOfLines={1}>

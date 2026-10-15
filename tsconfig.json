@@ -6,6 +6,7 @@
   "exclude": [
     "kitchen",
     "rider",
+    "server",
     "node_modules"
   ]
 }

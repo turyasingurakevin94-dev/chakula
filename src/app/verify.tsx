@@ -11,7 +11,10 @@ const LENGTH = 6;
 export default function Verify() {
   const account = useAccount();
   const input = useRef<TextInput>(null);
-  const [code, setCode] = useState('');
+  // In dev the server hands the code back, so it fills itself in.
+  const [code, setCode] = useState(account.devCode ?? '');
+  const [failed, setFailed] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
   const [wait, setWait] = useState(30);
 
   useEffect(() => {
@@ -21,15 +24,17 @@ export default function Verify() {
   }, [wait]);
 
   const complete = code.length === LENGTH;
-  // Prototype: any 6 digits are accepted. The real check happens on the server once SMS is wired up.
-  const submit = () => {
-    if (complete) account.verify();
+  // The server checks the code; the prototype accepts any 6 digits.
+  const submit = async (entered = code) => {
+    if (entered.length !== LENGTH || checking) return;
+    setChecking(true);
+    const error = await account.verify(entered);
+    setChecking(false);
+    if (error) {
+      setFailed(error);
+      setCode('');
+    }
   };
-
-  // Move on as soon as the last digit is in, like most SMS sign-ins.
-  useEffect(() => {
-    if (complete) account.verify();
-  }, [complete]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.cream }}>
@@ -59,8 +64,14 @@ export default function Verify() {
         <TextInput
           ref={input}
           value={code}
-          onChangeText={(t) => setCode(t.replace(/\D/g, '').slice(0, LENGTH))}
-          onSubmitEditing={submit}
+          onChangeText={(t) => {
+            const next = t.replace(/\D/g, '').slice(0, LENGTH);
+            setFailed(null);
+            setCode(next);
+            // Move on as soon as the last digit is in, like most SMS sign-ins.
+            if (next.length === LENGTH && code.length < LENGTH) void submit(next);
+          }}
+          onSubmitEditing={() => void submit()}
           keyboardType="number-pad"
           textContentType="oneTimeCode"
           autoComplete="sms-otp"
@@ -71,6 +82,8 @@ export default function Verify() {
         />
       </Pressable>
 
+      {failed ? <Text style={[s.body14, { color: colors.orangeText, paddingHorizontal: 20, paddingTop: 14 }]}>{failed}</Text> : null}
+
       <View style={s.resend}>
         <Icon name="clock" size={16} color={colors.muted} />
         {wait > 0 ? (
@@ -78,7 +91,14 @@ export default function Verify() {
             Resend code in <Text style={{ fontFamily: fonts.bold, color: colors.forest }}>0:{String(wait).padStart(2, '0')}</Text>
           </Text>
         ) : (
-          <Text accessibilityRole="button" onPress={() => setWait(30)} style={[s.body14, s.link]}>
+          <Text
+            accessibilityRole="button"
+            onPress={() => {
+              setWait(30);
+              if (account.phone) account.startSignIn(account.phone).catch((e) => setFailed(e instanceof Error ? e.message : null));
+            }}
+            style={[s.body14, s.link]}
+          >
             Resend code
           </Text>
         )}
@@ -95,7 +115,7 @@ export default function Verify() {
 
       <View style={s.footer}>
         <View style={{ opacity: complete ? 1 : 0.45 }}>
-          <PrimaryButton floating={complete} label="Verify and continue" onPress={submit}>
+          <PrimaryButton floating={complete} label="Verify and continue" onPress={() => void submit()}>
             <Text style={[ui.primaryText, { flex: 1, textAlign: 'center' }]}>Verify and continue</Text>
           </PrimaryButton>
         </View>

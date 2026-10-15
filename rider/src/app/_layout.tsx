@@ -39,6 +39,7 @@ export default function RootLayout() {
         <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.cream } }}>
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="start" options={{ animation: 'fade' }} />
+          <Stack.Screen name="sign-in" options={{ animation: 'fade', gestureEnabled: false }} />
           <Stack.Screen name="pickup" />
           <Stack.Screen name="route" options={{ gestureEnabled: false }} />
           <Stack.Screen name="drop" />

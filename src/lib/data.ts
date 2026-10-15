@@ -1,4 +1,4 @@
-import type { PhotoKey } from './photos';
+import { photos, type PhotoKey } from './photos';
 import { colors } from './theme';
 
 // Sample content for the prototype. Real restaurants, prices and photos come from the vendor app later.
@@ -17,6 +17,8 @@ export type MenuItem = {
   pepper?: boolean;
   // Minutes the kitchen needs to cook it, before the rider leaves.
   prepMinutes?: number;
+  // Set by the kitchen in the Kitchen app (server only).
+  soldOut?: boolean;
 };
 
 const rolexExtras: Extra[] = [
@@ -195,6 +197,67 @@ export const student = {
   momoNumber: '0772 ••• 456',
   freeDeliveriesLeft: 3,
 };
+
+// A kitchen as the server sends it (GET /kitchens).
+export type ServerKitchen = {
+  id: string;
+  name: string;
+  cuisine: string;
+  tags: string;
+  photo: string | null;
+  deliveryFee: number;
+  minutes: number;
+  open: boolean;
+  opensAt: string | null;
+  rating: number;
+  ratingCount: number;
+  menu: { id: string; name: string; description: string; category: string; price: number; prepMinutes: number; pepper: boolean; photo: string | null; soldOut: boolean; extras: { id: string; name: string; price: number; soldOut: boolean }[] }[];
+};
+
+// A photo the app carries, or none (kitchen uploads come later).
+const photoKey = (key: string | null) => (key && key in photos ? (key as PhotoKey) : undefined);
+
+// Puts the kitchens' real menus in place of the samples. The lists are updated where they are,
+// so every screen reading them sees the new prices; tints and photos stay where the server has none.
+export function applyServerMenus(kitchens: ServerKitchen[]) {
+  const next = kitchens.map((k): Restaurant => {
+    const old = findRestaurant(k.id);
+    const menu = k.menu.map((d): MenuItem => {
+      const was = old?.menu.find((m) => m.id === d.id);
+      return {
+        id: d.id,
+        name: d.name,
+        description: d.description,
+        price: d.price,
+        category: d.category,
+        tint: was?.tint ?? colors.sand,
+        photo: photoKey(d.photo) ?? was?.photo,
+        prepMinutes: d.prepMinutes,
+        pepper: d.pepper,
+        soldOut: d.soldOut,
+        extras: d.extras.filter((e) => !e.soldOut).map((e) => ({ id: e.id, name: e.name, price: e.price })),
+      };
+    });
+    return {
+      id: k.id,
+      name: k.name,
+      cuisine: k.cuisine,
+      tags: k.tags,
+      rating: k.rating,
+      ratingCount: k.ratingCount,
+      minutes: k.minutes,
+      distance: old?.distance ?? '',
+      deliveryFee: k.deliveryFee,
+      tint: old?.tint ?? colors.sand,
+      photo: photoKey(k.photo) ?? old?.photo,
+      ...(k.open ? {} : { opensAt: k.opensAt ?? 'later' }),
+      categories: [...new Set(menu.map((m) => m.category))],
+      // Sold out dishes leave the menu until the kitchen brings them back.
+      menu: menu.filter((m) => !m.soldOut),
+    };
+  });
+  restaurants.splice(0, restaurants.length, ...next);
+}
 
 export function findRestaurant(id: string) {
   return restaurants.find((r) => r.id === id);

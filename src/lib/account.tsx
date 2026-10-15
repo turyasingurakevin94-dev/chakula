@@ -1,10 +1,13 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { dropPoints, type DropKind } from './campus';
-import { findSpecial, type Extra, type MenuItem } from './data';
+import { Alert, Linking } from 'react-native';
+import { dropPoints, type DropKind, type Pt } from './campus';
+import { applyServerMenus, findSpecial, type Extra, type MenuItem, type ServerKitchen } from './data';
 import type { PhotoKey } from './photos';
 import { findPlanKind, planMeals, planPrice, type PlanKindId, type PlanPeriod } from './plans';
+import { api, connectLive, getToken, onServer, sendCode, setToken, toCampusMetres, verifyCode, type ServerOrder, type ServerStatus } from './server';
 
-// Prototype account state, kept in memory. Sign-in, wallet and orders move to the backend later.
+// Account state. On the Chakula server (EXPO_PUBLIC_API_URL set), sign-in, profile and orders are
+// real; the wallet, meal plans and specials are still kept in memory until the server has them.
 
 export type Place = { id: string; name: string; detail: string; kind: DropKind };
 
@@ -46,6 +49,14 @@ export type Order = {
   code: string;
   // When the student tapped "I'm coming down" at the gate.
   comingDownAt?: number;
+  // Server orders only: its id there, where it is, the real rider and their last GPS point.
+  serverId?: string;
+  dropPointId?: string;
+  status?: ServerStatus;
+  riderName?: string;
+  riderAt?: Pt;
+  // The id the app gave it before the server answered, so Undo still finds it.
+  localId?: string;
 };
 
 // A 4 digit handover code, never starting with 0 so it reads as a number.
@@ -177,8 +188,12 @@ type AccountState = {
   // The "turn on alerts" screen has been shown, or wasn't needed.
   alertsPrimed: boolean;
   portionsLeft: (specialId: string) => number;
-  startSignIn: (phone: string) => void;
-  verify: () => void;
+  // In dev the server sends the code back instead of texting it.
+  devCode: string | null;
+  // Resolves once the code is on its way; throws the server's message if not.
+  startSignIn: (phone: string) => Promise<void>;
+  // Resolves to an error message, or null when signed in.
+  verify: (code: string) => Promise<string | null>;
   saveProfile: (name: string, place: Place, room: string, note: string) => void;
   signOut: () => void;
   // Credits the amount plus any bonus, and returns the bonus.
@@ -216,10 +231,47 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   const [wallet, setWallet] = useState<WalletEntry[]>([{ id: 'w1', title: 'Welcome credit', when: 'When you joined', amount: 4500 }]);
   const [bonusEarned, setBonusEarned] = useState(0);
   const [plan, setPlan] = useState<MealPlan | null>(null);
-  const [orders, setOrders] = useState<Order[]>(sampleOrders);
+  // On the server a new student starts with no orders; the samples are for the prototype.
+  const [orders, setOrders] = useState<Order[]>(onServer ? [] : sampleOrders);
+  const [devCode, setDevCode] = useState<string | null>(null);
+  // Bumped when menus arrive from the server, so screens reading them redraw.
+  const [menuVersion, setMenuVersion] = useState(0);
   const [preorders, setPreorders] = useState<Preorder[]>([]);
   const [alertPrefs, setAlertPrefsState] = useState<AlertPrefs>(defaultAlertPrefs);
   const [alertsPrimed, setAlertsPrimed] = useState(false);
+
+  // Real menus, prices and sold out dishes from the kitchens.
+  useEffect(() => {
+    if (!onServer) return;
+    api<ServerKitchen[]>('GET', '/kitchens')
+      .then((kitchens) => {
+        applyServerMenus(kitchens);
+        setMenuVersion((v) => v + 1);
+      })
+      .catch(() => {
+        // Keep the menus the app shipped with.
+      });
+  }, []);
+
+  // Once signed in: the student's orders, then live changes from the kitchen and rider.
+  useEffect(() => {
+    if (!onServer || !verified || !getToken()) return;
+    let stop = () => {};
+    api<ServerOrder[]>('GET', '/orders')
+      .then((list) => setOrders(list.filter((o) => o.status !== 'cancelled').map((o) => fromServer(o))))
+      .catch(() => {});
+    stop = connectLive((m) => {
+      if (m.type === 'order') {
+        const o = m.order;
+        if (o.status === 'cancelled' && o.cancelReason?.startsWith('Payment')) Alert.alert('Payment didn’t go through', 'Nothing was charged. Try again when you’re ready.');
+        setOrders((prev) => (o.status === 'cancelled' ? prev.filter((p) => p.serverId !== o.id) : prev.map((p) => (p.serverId === o.id ? fromServer(o, p) : p))));
+      } else if (m.type === 'rider-location') {
+        const at = toCampusMetres(m.lat, m.lng);
+        setOrders((prev) => prev.map((p) => (p.serverId === m.orderId ? { ...p, riderAt: at } : p)));
+      }
+    });
+    return () => stop();
+  }, [verified]);
 
   const value = useMemo<AccountState>(() => {
     const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -246,18 +298,46 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       alertPrefs,
       alertsPrimed,
       portionsLeft: (sid) => Math.max(0, (findSpecial(sid)?.portions ?? 0) - preorders.filter((p) => p.specialId === sid).length),
-      startSignIn: (p) => {
+      devCode,
+      startSignIn: async (p) => {
+        setDevCode(null);
+        if (onServer) {
+          const res = await sendCode(`+256${p}`, 'student');
+          setDevCode(res.devCode ?? null);
+        }
         setPhone(p);
         setVerified(false);
       },
-      verify: () => setVerified(true),
+      verify: async (code) => {
+        if (!onServer) {
+          // Prototype: any 6 digits are accepted.
+          setVerified(true);
+          return null;
+        }
+        try {
+          const { user } = await verifyCode(`+256${phone}`, code, 'student');
+          if (user.name) setName(user.name);
+          const saved = places.find((pl) => pl.id === user.dropPointId);
+          if (saved) setPlace(saved);
+          setVerified(true);
+          return null;
+        } catch (e) {
+          return e instanceof Error ? e.message : 'That didn’t work. Try again.';
+        }
+      },
       saveProfile: (n, pl, r, nt) => {
         setName(n.trim());
         setPlace(pl);
         setRoom(r.trim());
         setNote(nt.trim());
+        if (onServer) api('PATCH', '/me', { name: n.trim(), dropPointId: pl.id }).catch(() => {});
       },
       signOut: () => {
+        if (onServer) {
+          api('POST', '/auth/sign-out').catch(() => {});
+          setToken(null);
+          setOrders([]);
+        }
         setPhone(null);
         setVerified(false);
       },
@@ -289,7 +369,15 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       skipMeal: (day) => setPlan((p) => (p && !p.skipped.includes(day) ? { ...p, skipped: [...p.skipped, day], carried: p.carried + 1 } : p)),
       unskipMeal: (day) => setPlan((p) => (p && p.skipped.includes(day) ? { ...p, skipped: p.skipped.filter((d) => d !== day), carried: p.carried - 1 } : p)),
       placeOrder: (o) => {
-        const id = String(Math.max(2047, ...orders.map((p) => Number(p.id))) + 1);
+        const id = String(Math.max(2047, ...orders.map((p) => Number(p.id) || 0)) + 1);
+        if (onServer) {
+          // Shown straight away; the server's number, code and price replace it when it answers.
+          // The server cooks as soon as it's paid; ordering for later comes with its own server step.
+          const { scheduledFor: _later, ...now } = o;
+          setOrders((prev) => [{ ...now, id, localId: id, dropPointId: place?.id, code: '····', placedAt: Date.now(), delivered: false, status: o.method === 'cash' ? 'cooking' : 'awaiting_payment' }, ...prev]);
+          sendOrder(id, o);
+          return id;
+        }
         setOrders((prev) => [{ ...o, id, code: newHandoverCode(), placedAt: Date.now(), delivered: false }, ...prev.map((p) => ({ ...p, delivered: true }))]);
         if (o.method === 'wallet') {
           setBalance((b) => b - o.total);
@@ -298,9 +386,12 @@ export function AccountProvider({ children }: { children: ReactNode }) {
         return id;
       },
       cancelOrder: (id) => {
-        const order = orders.find((p) => p.id === id);
+        const order = orders.find((p) => p.id === id || p.localId === id);
         if (!order) return;
-        setOrders((prev) => prev.filter((p) => p.id !== id));
+        if (order.serverId) {
+          api('POST', `/orders/${order.serverId}/cancel`).catch((e) => Alert.alert('Couldn’t cancel', e instanceof Error ? e.message : ''));
+        }
+        setOrders((prev) => prev.filter((p) => p !== order));
         if (order.method === 'wallet') {
           setBalance((b) => b + order.total);
           setWallet((w) => w.filter((e) => e.id !== `o${id}`));
@@ -321,7 +412,28 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       preorder: (sid, slot) => setPreorders((prev) => [{ id: `p${Date.now()}`, specialId: sid, slot }, ...prev]),
       cancelPreorder: (id) => setPreorders((prev) => prev.filter((p) => p.id !== id)),
     };
-  }, [phone, verified, name, place, room, note, balance, wallet, bonusEarned, plan, orders, preorders, alertPrefs, alertsPrimed]);
+  }, [phone, verified, name, place, room, note, balance, wallet, bonusEarned, plan, orders, preorders, alertPrefs, alertsPrimed, devCode, menuVersion]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Places an order on the server and swaps the stand-in for the real one.
+  function sendOrder(localId: string, o: Omit<Order, 'id' | 'placedAt' | 'delivered' | 'code'>) {
+    const body = {
+      kitchenId: o.restaurantId,
+      dropPointId: place?.id,
+      payMethod: o.method ?? 'mtn',
+      note: [room, note].filter(Boolean).join(' · ') || undefined,
+      lines: o.lines.map((l) => ({ dishId: l.item.id, quantity: l.quantity, extraIds: (l.extras ?? []).map((e) => e.id), pepper: l.pepper, note: l.note || undefined })),
+    };
+    api<{ order: ServerOrder; payment: { redirectUrl?: string } | null }>('POST', '/orders', body)
+      .then(({ order, payment }) => {
+        setOrders((prev) => prev.map((p) => (p.localId === localId ? fromServer(order, p) : p)));
+        // Flutterwave's page that waits with the student while they approve on their phone.
+        if (payment?.redirectUrl) Linking.openURL(payment.redirectUrl).catch(() => {});
+      })
+      .catch((e) => {
+        setOrders((prev) => prev.filter((p) => p.localId !== localId));
+        Alert.alert('Order not placed', e instanceof Error ? e.message : 'Try again.');
+      });
+  }
 
   return <AccountContext.Provider value={value}>{children}</AccountContext.Provider>;
 }
@@ -330,6 +442,36 @@ export function useAccount() {
   const ctx = useContext(AccountContext);
   if (!ctx) throw new Error('useAccount must be used inside AccountProvider');
   return ctx;
+}
+
+// A server order in the app's shape. Keeps what only the app knows (dish photos, the rating).
+function fromServer(o: ServerOrder, prev?: Order): Order {
+  const lines =
+    prev?.lines ??
+    o.lines.map((l) => ({
+      item: { id: l.dishId, name: l.name, price: l.unitPrice - l.extras.reduce((n, e) => n + e.price, 0), description: '', category: '', tint: '#F4E7C5' } as MenuItem,
+      quantity: l.quantity,
+      extras: l.extras,
+      ...(l.pepper ? { pepper: l.pepper as Pepper } : {}),
+      ...(l.note ? { note: l.note } : {}),
+    }));
+  return {
+    ...prev,
+    id: String(o.number),
+    localId: prev?.localId,
+    serverId: o.id,
+    status: o.status,
+    restaurantId: o.kitchen.id,
+    dropPointId: o.dropPoint.id,
+    lines,
+    total: o.total,
+    placedAt: prev?.placedAt ?? (o.times.placed ? Date.parse(o.times.placed) : Date.now()),
+    delivered: o.status === 'delivered' || o.status === 'cancelled',
+    method: o.payMethod,
+    code: o.handoverCode ?? prev?.code ?? '····',
+    riderName: o.rider?.name ?? undefined,
+    riderAt: o.status === 'picked_up' || o.status === 'at_gate' ? prev?.riderAt : undefined,
+  };
 }
 
 // Re-renders the caller every second, for countdowns.
