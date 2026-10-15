@@ -7,10 +7,10 @@ import { Chip, DishPhoto } from './ui';
 // "1× Chicken pilau  + Avocado", one row per dish, as on the Orders board.
 export function Lines({ order }: { order: Order }) {
   return (
-    <View style={{ gap: 4 }}>
+    <View style={{ gap: 6 }}>
       {order.items.map((i) => (
         <View key={i.name} style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
-          <DishPhoto name={i.name} size={28} radius={8} style={{ marginRight: 2 }} />
+          <DishPhoto name={i.name} size={36} radius={10} style={{ marginRight: 4 }} />
           <Text style={{ fontFamily: fonts.bold, fontSize: 15, lineHeight: 22, color: colors.ink }}>
             {i.qty}× {i.name}
           </Text>

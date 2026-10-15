@@ -69,7 +69,7 @@ export function Incoming() {
               <View key={i.name} style={{ gap: 14 }}>
                 {n > 0 ? <View style={{ height: 1, backgroundColor: colors.line }} /> : null}
                 <View style={{ flexDirection: 'row', gap: 12 }}>
-                  <DishPhoto name={i.name} size={56} radius={12} />
+                  <DishPhoto name={i.name} size={52} radius={14} />
                   <View style={{ flex: 1, gap: 8 }}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
                       <Text style={[s.item, { flexShrink: 1 }]}>
