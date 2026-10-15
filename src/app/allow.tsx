@@ -18,8 +18,11 @@ export default function Allow() {
   const turnOn = async () => {
     if (busy) return;
     setBusy(true);
-    await alerts.requestPermission();
-    account.primeAlerts();
+    try {
+      await alerts.requestPermission();
+    } finally {
+      account.primeAlerts();
+    }
   };
 
   return (

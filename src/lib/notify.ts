@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import { whileDialogOpen } from './updates';
 
 // The one place that talks to expo-notifications. Everything else goes through `notify`.
 //
@@ -163,7 +164,8 @@ export const notify = {
   // Asks the phone. Resolves true when alerts are allowed.
   requestPermission(): Promise<boolean> {
     return safely(false, async (N) => {
-      const p = await N.requestPermissionsAsync({ ios: { allowAlert: true, allowBadge: false, allowSound: true } });
+      // The phone's prompt sends the app to the background; don't let that restart it for an update.
+      const p = await whileDialogOpen(() => N.requestPermissionsAsync({ ios: { allowAlert: true, allowBadge: false, allowSound: true } }));
       return p.granted || p.ios?.status === N.IosAuthorizationStatus.PROVISIONAL;
     });
   },
