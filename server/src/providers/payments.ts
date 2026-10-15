@@ -4,7 +4,9 @@ import type { Config } from '../config.ts';
 // A mobile money provider asks the payer's phone to approve a charge, then tells us the outcome
 // later. "flutterwave" is the real one (MTN and Airtel through one account); "dev" pretends.
 
-export type PayRequest = { paymentId: string; amount: number; phone: string; method: 'mtn' | 'airtel'; reference: string; name?: string };
+export type PayRequest = { paymentId: string; amount: number; phone: string; method: 'mtn' | 'airtel'; reference: string; name?: string;
+  // Where the provider's page sends the student when they're done (our /payments/done).
+  returnUrl?: string };
 export type PayOutcome = { paymentId: string; status: 'succeeded' | 'failed'; providerRef?: string; failure?: string };
 // What the student's app should open to approve, when the provider has a page for it.
 export type PayStart = { providerRef: string; redirectUrl?: string };
@@ -65,6 +67,7 @@ function flutterwave(config: Config): PaymentProvider {
           phone_number: `0${req.phone.slice(4)}`,
           email,
           ...(req.name ? { fullname: req.name } : {}),
+          ...(req.returnUrl ? { redirect_url: req.returnUrl } : {}),
           meta: { reference: req.reference },
         }),
       });

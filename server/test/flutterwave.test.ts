@@ -7,7 +7,7 @@ import type { Config } from '../src/config.ts';
 
 // Flutterwave payments against a pretend Flutterwave that answers like the real API.
 
-type Charge = { tx_ref: string; amount: number; currency: string; network: string; phone_number: string; email: string };
+type Charge = { tx_ref: string; amount: number; currency: string; network: string; phone_number: string; email: string; redirect_url?: string };
 const charges: Charge[] = [];
 // What the verify call reports per Flutterwave transaction id.
 const txs = new Map<number, { id: number; status: string; amount: number; currency: string; tx_ref: string }>();
@@ -73,6 +73,11 @@ test('an Airtel payment starts on Flutterwave and cooks once the verified webhoo
   assert.equal(placed.json.payment.redirectUrl, 'https://checkout.example/approve');
   const charge = charges.at(-1)!;
   assert.deepEqual([charge.network, charge.phone_number, charge.amount, charge.currency], ['AIRTEL', '0752111222', 9000, 'UGX']);
+  // Flutterwave's page sends the student back to us, and we send them back into the app.
+  assert.equal(charge.redirect_url, 'http://localhost/payments/done');
+  const done = await server.app.request('/payments/done');
+  assert.equal(done.status, 200);
+  assert.match(await done.text(), /chakula:\/\/payment-done/);
 
   // A forged webhook changes nothing.
   txs.set(1, { id: 1, status: 'successful', amount: 9000, currency: 'UGX', tx_ref: charge.tx_ref });

@@ -154,7 +154,7 @@ export function createOrders(db: Db, deps: { payments: () => PaymentProvider; on
     loadOne,
     mine,
 
-    async place(student: User, input: PlaceOrderInput) {
+    async place(student: User, input: PlaceOrderInput, opts: { returnUrl?: string } = {}) {
       if (input.payMethod === 'wallet' || input.payMethod === 'card') throw new HttpError(400, 'Wallet and card payments aren’t switched on yet. Pay with MoMo or cash.');
       const [kitchen] = await db.query<{ id: string; open: boolean; opens_at: string | null; delivery_fee: number; name: string }>('select * from kitchens where id = $1', [input.kitchenId]);
       if (!kitchen) throw new HttpError(400, 'That kitchen isn’t on Chakula.');
@@ -205,7 +205,7 @@ export function createOrders(db: Db, deps: { payments: () => PaymentProvider; on
         await db.query("insert into payments (id, order_id, provider, method, phone, amount, status) values ($1,$2,$3,$4,$5,$6,'pending')", [paymentId, id, provider.name, input.payMethod, payPhone, total]);
         const [{ number }] = (await db.query<{ number: number }>('select number from orders where id = $1', [id])) as [{ number: number }];
         try {
-          const started = await provider.start({ paymentId, amount: total, phone: payPhone, method: input.payMethod as 'mtn' | 'airtel', reference: `Chakula ${number}`, name: student.name ?? undefined });
+          const started = await provider.start({ paymentId, amount: total, phone: payPhone, method: input.payMethod as 'mtn' | 'airtel', reference: `Chakula ${number}`, name: student.name ?? undefined, returnUrl: opts.returnUrl });
           await db.query('update payments set provider_ref = $2 where id = $1', [paymentId, started.providerRef]);
           redirectUrl = started.redirectUrl;
         } catch (e) {
