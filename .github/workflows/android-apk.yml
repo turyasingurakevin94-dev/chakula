@@ -65,8 +65,17 @@ jobs:
           distribution: temurin
           java-version: 17
 
+      # The app's own Gradle settings give the build too little memory for this runner, and the
+      # build stalls on "OutOfMemoryError: Metaspace". The user-level file wins over the project's.
+      - name: Give Gradle more memory
+        if: inputs.where != 'expo'
+        run: |
+          mkdir -p ~/.gradle
+          echo "org.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=2g -Dfile.encoding=UTF-8" >> ~/.gradle/gradle.properties
+
       - name: Build APK on GitHub
         if: inputs.where != 'expo'
+        timeout-minutes: 90
         # Only the 64-bit ARM code every current Android phone runs: about a quarter of the native
         # compiling, so the free runner finishes much sooner.
         env:
