@@ -6,7 +6,7 @@ import Svg, { Path } from 'react-native-svg';
 import { clock, demoNow, orderTotal, useKitchen } from '../lib/kitchen';
 import { colors, fonts } from '../lib/theme';
 import { Note } from './order';
-import { Chip } from './ui';
+import { Chip, DishPhoto } from './ui';
 
 const OPTIONS = [10, 15, 20];
 const ACCEPT_WINDOW = 2 * 60_000;
@@ -68,22 +68,25 @@ export function Incoming() {
             {o.items.map((i, n) => (
               <View key={i.name} style={{ gap: 14 }}>
                 {n > 0 ? <View style={{ height: 1, backgroundColor: colors.line }} /> : null}
-                <View style={{ gap: 8 }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                    <Text style={s.item}>
-                      {i.qty}× {i.name}
-                    </Text>
-                    <Text style={{ fontFamily: fonts.regular, fontSize: 14, color: colors.muted }}>{(i.qty * i.price).toLocaleString('en-US')}</Text>
-                  </View>
-                  {i.extras?.length ? (
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                      {i.extras.map((e) => (
-                        <Chip key={e} size={14} roomy>
-                          {e}
-                        </Chip>
-                      ))}
+                <View style={{ flexDirection: 'row', gap: 12 }}>
+                  <DishPhoto name={i.name} size={56} radius={12} />
+                  <View style={{ flex: 1, gap: 8 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+                      <Text style={[s.item, { flexShrink: 1 }]}>
+                        {i.qty}× {i.name}
+                      </Text>
+                      <Text style={{ fontFamily: fonts.regular, fontSize: 14, color: colors.muted }}>{(i.qty * i.price).toLocaleString('en-US')}</Text>
                     </View>
-                  ) : null}
+                    {i.extras?.length ? (
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                        {i.extras.map((e) => (
+                          <Chip key={e} size={14} roomy>
+                            {e}
+                          </Chip>
+                        ))}
+                      </View>
+                    ) : null}
+                  </View>
                 </View>
               </View>
             ))}

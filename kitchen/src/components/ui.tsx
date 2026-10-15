@@ -1,7 +1,8 @@
 import Feather from '@expo/vector-icons/Feather';
 import { router } from 'expo-router';
 import type { ComponentProps, ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
+import { photoFor } from '../lib/photos';
 import { colors, fonts, smallCaps } from '../lib/theme';
 
 export type IconName = ComponentProps<typeof Feather>['name'];
@@ -142,6 +143,20 @@ export function Chip({ children, size = 13, roomy }: { children: string; size?: 
   return (
     <View style={[s.chip, roomy && { paddingHorizontal: 10, paddingVertical: size > 13 ? 5 : 4, borderRadius: 10 }]}>
       <Text style={{ fontFamily: fonts.semibold, fontSize: size, color: colors.chipText }}>{no ? children : `+ ${children}`}</Text>
+    </View>
+  );
+}
+
+// A dish's photo, cropped square; a plain food-coloured tile when the kitchen has none yet.
+export function DishPhoto({ name, size = 40, radius = 10, style }: { name: string; size?: number; radius?: number; style?: StyleProp<ViewStyle> }) {
+  const src = photoFor(name);
+  return (
+    <View style={[{ width: size, height: size, borderRadius: radius, overflow: 'hidden', backgroundColor: colors.food, alignItems: 'center', justifyContent: 'center' }, style]}>
+      {src ? (
+        <Image source={src} style={{ width: '100%', height: '100%' }} resizeMode="cover" accessibilityIgnoresInvertColors />
+      ) : (
+        <Icon name="camera" size={Math.round(size * 0.4)} color="#B5A58E" />
+      )}
     </View>
   );
 }

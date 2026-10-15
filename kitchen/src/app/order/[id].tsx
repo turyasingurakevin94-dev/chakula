@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Bike, Note } from '../../components/order';
-import { BackHeader, Body, Chip, Icon } from '../../components/ui';
+import { BackHeader, Body, Chip, DishPhoto, Icon } from '../../components/ui';
 import { clock, minutesUntil, useKitchen, type Status } from '../../lib/kitchen';
 import { colors, fonts, smallCaps } from '../../lib/theme';
 
@@ -83,19 +83,22 @@ export default function OrderScreen() {
 
         <View style={[s.card, { padding: 16, gap: 12 }]}>
           {o.items.map((i) => (
-            <View key={i.name} style={{ gap: 6 }}>
-              <Text style={s.item}>
-                {i.qty}× {i.name}
-              </Text>
-              {i.extras?.length ? (
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                  {i.extras.map((e) => (
-                    <Chip key={e} roomy>
-                      {e}
-                    </Chip>
-                  ))}
-                </View>
-              ) : null}
+            <View key={i.name} style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <DishPhoto name={i.name} size={48} radius={12} />
+              <View style={{ flex: 1, gap: 6 }}>
+                <Text style={s.item}>
+                  {i.qty}× {i.name}
+                </Text>
+                {i.extras?.length ? (
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                    {i.extras.map((e) => (
+                      <Chip key={e} roomy>
+                        {e}
+                      </Chip>
+                    ))}
+                  </View>
+                ) : null}
+              </View>
             </View>
           ))}
           {o.note ? <Note text={o.note} /> : null}
