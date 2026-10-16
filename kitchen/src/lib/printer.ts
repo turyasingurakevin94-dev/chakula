@@ -101,7 +101,7 @@ function seal(r: Receipt, o: Order, kitchen: string) {
 function receipt(r: Receipt, o: Order, kitchen: string) {
   const d = new Date(o.inAt);
   r.align('center').size(2).bold(true).line('Chakula').size(1).bold(false).line('Campus dining, done properly.').align('left').rule();
-  r.lines(columns('Kitchen', kitchen)).lines(columns('Order', o.id)).lines(columns('Date', `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()} ${clock(o.inAt)}`)).lines(columns('Paid', o.paid)).rule();
+  r.lines(columns('Kitchen', kitchen)).lines(columns('Order', o.id)).lines(columns('Date', `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()} ${clock(o.inAt)}`)).lines(columns('Payment', o.paid)).rule();
   for (const i of o.items) {
     r.lines(columns(`${i.qty} ${i.name}`, n(i.price * i.qty)));
     for (const e of i.extras ?? []) r.line(`  ${e}`);
@@ -109,7 +109,10 @@ function receipt(r: Receipt, o: Order, kitchen: string) {
   r.rule();
   const delivery = o.sale ? o.sale.total - o.sale.subtotal : 0;
   if (delivery > 0) r.lines(columns('Delivery', n(delivery)));
-  r.bold(true).lines(columns('TOTAL UGX', n(o.sale?.total ?? o.items.reduce((s, i) => s + i.price * i.qty, 0)))).bold(false).rule();
+  const total = o.sale?.total ?? o.items.reduce((s, i) => s + i.price * i.qty, 0);
+  r.bold(true).lines(columns('TOTAL UGX', n(total))).bold(false);
+  // Cash orders are printed while cooking: the money is still to collect at the gate.
+  r.lines(columns(o.sale && !o.sale.paid ? 'To pay the rider' : 'Paid', o.sale && !o.sale.paid ? n(total) : 'Yes')).rule();
   return r.align('center').line(`Thank you, ${o.student.split(' ')[0]}.`).line('Rate your meal in the Chakula app').cut();
 }
 

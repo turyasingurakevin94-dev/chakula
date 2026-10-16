@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { defaultHears, type Device, type Hears, type RowKey } from './alerts';
 import { photoFor } from './photos';
 import { available as canPrint, choosePrinter, printOrder, printTest, savedPrinter, type PairedDevice } from './printer';
-import { api, connectLive, getToken, loadSession, onServer, saveSession, ServerError, setToken, type ServerOrder, type ServerStatus, type ServerUser } from './server';
+import { api, connectLive, getToken, loadSession, onServer, readSetting, saveSession, saveSetting, ServerError, setToken, type ServerOrder, type ServerStatus, type ServerUser } from './server';
 
 // Everything here is sample data held in memory, like the student app. Times are set relative to
 // when the app opens, so the board always looks like a lunch rush in progress.
@@ -12,6 +12,7 @@ import { api, connectLive, getToken, loadSession, onServer, saveSession, ServerE
 // phone until the server has them.
 
 const MIN = 60_000;
+const PRINT_KEY = 'chakula.kitchen.print';
 
 // The demo opens at 12:38 today, the moment the design canvas shows, and runs in real time from there.
 const opened = new Date();
@@ -319,6 +320,18 @@ export function KitchenProvider({ children }: { children: ReactNode }) {
   const [offline, setOffline] = useState(false);
   const arrived = useRef(0);
   const nextSale = useRef(1095);
+  // What prints is kept on the phone, so a restart doesn't switch a piece back on.
+  useEffect(() => {
+    if (!onServer) return;
+    void readSetting(PRINT_KEY).then((raw) => {
+      try {
+        const saved = raw ? (JSON.parse(raw) as Partial<Settings>) : null;
+        if (saved) setSettings((s) => ({ ...s, printTicket: saved.printTicket !== false, printSeal: saved.printSeal !== false }));
+      } catch {
+        // Keep the defaults.
+      }
+    });
+  }, []);
   const settingsRef = useRef(settings);
   useEffect(() => {
     settingsRef.current = settings;
@@ -612,6 +625,10 @@ export function KitchenProvider({ children }: { children: ReactNode }) {
         setSettings((s) => ({ ...s, [key]: v }));
         // Only Open reaches the server; printing and POS are this phone's for now.
         if (onServer && key === 'open') void send('/kitchen', { open: v }, () => setSettings((s) => ({ ...s, open: !v })));
+        if (onServer && (key === 'printTicket' || key === 'printSeal')) {
+          const next = { printTicket: settings.printTicket, printSeal: settings.printSeal, [key]: v };
+          void saveSetting(PRINT_KEY, JSON.stringify(next));
+        }
       },
       markReady: (id) => {
         const t = demoNow();

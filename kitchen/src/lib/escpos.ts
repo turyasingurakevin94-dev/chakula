@@ -22,6 +22,7 @@ function ascii(text: string) {
 
 // Word-wrapped to `width` characters.
 export function wrap(text: string, width = WIDTH): string[] {
+  width = Math.max(1, Math.floor(width));
   const out: string[] = [];
   for (const para of ascii(text).split('\n')) {
     let line = '';
@@ -45,6 +46,8 @@ export function wrap(text: string, width = WIDTH): string[] {
 // "2 Chicken pilau ........ 20,000": left text, right text, on one line (the left wraps first).
 export function columns(left: string, right: string, width = WIDTH): string[] {
   const r = ascii(right);
+  // A long right side (a kitchen's full name) goes on its own lines, right-aligned.
+  if (r.length > width - 8) return [...wrap(left, width), ...wrap(r, width).map((l) => l.padStart(width))];
   const lines = wrap(left, width - r.length - 1);
   const last = lines.pop() ?? '';
   return [...lines, last + ' '.repeat(Math.max(1, width - last.length - r.length)) + r];
@@ -107,7 +110,8 @@ export class Receipt {
   // A QR code as a raster picture, centred, `scale` dots per module.
   qr(value: string, scale = 7) {
     const { modules } = create(value, { errorCorrectionLevel: 'M' });
-    const quiet = 2;
+    // Scanners need four blank modules around the code.
+    const quiet = 4;
     const n = modules.size + quiet * 2;
     const s = Math.max(1, Math.min(scale, Math.floor(DOTS / n)));
     const widthBytes = Math.ceil((n * s) / 8);
