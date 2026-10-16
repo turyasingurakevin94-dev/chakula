@@ -243,3 +243,34 @@ const LON0 = 32.6165;
 export function toCampusMetres(lat: number, lng: number): [number, number] {
   return [(lng - LON0) * 111320 * Math.cos((LAT0 * Math.PI) / 180), -(lat - LAT0) * 110574];
 }
+
+// A small value kept on this phone (the chosen printer), in the same store as the sign-in.
+export async function readSetting(key: string): Promise<string | null> {
+  const web = webStorage();
+  if (web) {
+    try {
+      return web.getItem(key);
+    } catch {
+      return null;
+    }
+  }
+  const store = secureStore();
+  return store ? within(store.getItemAsync(key).catch(() => null), 3000, null) : null;
+}
+
+export async function saveSetting(key: string, value: string | null) {
+  const web = webStorage();
+  try {
+    if (web) {
+      if (value === null) web.removeItem(key);
+      else web.setItem(key, value);
+      return;
+    }
+    const store = secureStore();
+    if (!store) return;
+    if (value === null) await store.deleteItemAsync(key);
+    else await store.setItemAsync(key, value);
+  } catch {
+    // Memory only: the printer is picked again after a restart.
+  }
+}

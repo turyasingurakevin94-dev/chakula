@@ -1,13 +1,15 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { defaultHears, type Device, type Hears, type RowKey } from './alerts';
 import { photoFor } from './photos';
+import { available as canPrint, choosePrinter, printOrder, printTest, savedPrinter, type PairedDevice } from './printer';
 import { api, connectLive, getToken, loadSession, onServer, saveSession, ServerError, setToken, type ServerOrder, type ServerStatus, type ServerUser } from './server';
 
 // Everything here is sample data held in memory, like the student app. Times are set relative to
 // when the app opens, so the board always looks like a lunch rush in progress.
 // Built with EXPO_PUBLIC_API_URL (see server.ts), the board, menu and Open switch come from the
-// Chakula server instead, on the real clock. Printing, POS, swaps, extra time and declining
-// stay on this phone until the server has them.
+// Chakula server instead, on the real clock. On the server each new order prints by itself on
+// the counter's Bluetooth printer (printer.ts). POS, swaps, extra time and declining stay on this
+// phone until the server has them.
 
 const MIN = 60_000;
 
@@ -284,6 +286,11 @@ type Kitchen = {
   hears: Hears;
   setHears: (key: RowKey, device: Device, value: boolean) => void;
   markSeen: (id: string) => void;
+  // On the server: the counter's Bluetooth printer, if one has been picked, and printing to it.
+  printer: PairedDevice | null;
+  setPrinter: (p: PairedDevice | null) => void;
+  print: (id: string) => void;
+  testPrint: () => void;
   askSwap: (id: string, item: string) => void;
   setSetting: (key: keyof Settings, value: boolean) => void;
   markReady: (id: string) => void;
@@ -521,6 +528,39 @@ export function KitchenProvider({ children }: { children: ReactNode }) {
 
   const update = useCallback((id: string, change: (o: Order) => Order) => setOrders((list) => list.map((o) => (o.id === id ? change(o) : o))), []);
 
+  // ---- Printing (server only) ----
+  const [printer, setPrinterState] = useState<PairedDevice | null>(null);
+  useEffect(() => {
+    if (onServer && canPrint) void savedPrinter().then(setPrinterState);
+  }, []);
+  // The printed ticket is the confirmation, like the sample: it stops the new-order bell.
+  const runPrint = useCallback(
+    async (o: Order, pieces: { ticket: boolean; seal: boolean }) => {
+      try {
+        await printOrder(o, kitchenName, pieces);
+        update(o.id, (x) => ({ ...x, printed: true, seenAt: x.seenAt ?? demoNow() }));
+        return true;
+      } catch (e) {
+        update(o.id, (x) => ({ ...x, printed: false }));
+        setToast(`Order ${o.id} didn’t print. ${e instanceof Error ? e.message : ''}`.trim());
+        return false;
+      }
+    },
+    [kitchenName, update],
+  );
+  // Each order that arrives while the app is open prints once, as it comes in.
+  const queued = useRef(new Set<string>());
+  useEffect(() => {
+    if (!onServer || !printer) return;
+    const pieces = { ticket: settings.printTicket, seal: settings.printSeal };
+    if (!pieces.ticket && !pieces.seal) return;
+    for (const o of orders) {
+      if (!o.live || o.printed !== undefined || o.status !== 'cooking' || queued.current.has(o.id)) continue;
+      queued.current.add(o.id);
+      void runPrint(o, pieces);
+    }
+  }, [orders, printer, settings.printTicket, settings.printSeal, runPrint]);
+
   // Server calls change the screen first and put it back if the server says no.
   const send = useCallback(
     (path: string, body: unknown, undo: () => void) =>
@@ -551,6 +591,21 @@ export function KitchenProvider({ children }: { children: ReactNode }) {
       markSeen: (id) => {
         const t = demoNow();
         update(id, (o) => (o.seenAt ? o : { ...o, seenAt: t }));
+      },
+      printer,
+      setPrinter: (p) => {
+        setPrinterState(p);
+        void choosePrinter(p);
+      },
+      print: (id) => {
+        const o = orders.find((x) => x.id === id);
+        if (o) void runPrint(o, { ticket: true, seal: true }).then((ok) => ok && setToast(`Order ${o.id} printed again`));
+      },
+      testPrint: () => {
+        printTest(kitchenName).then(
+          () => setToast('Test page sent to the printer'),
+          (e: unknown) => setToast(e instanceof Error ? e.message : 'The printer didn’t answer.'),
+        );
       },
       askSwap: (id, item) => update(id, (o) => ({ ...o, swap: { item, askedAt: demoNow() } })),
       setSetting: (key, v) => {
@@ -601,7 +656,7 @@ export function KitchenProvider({ children }: { children: ReactNode }) {
         for (const dishId of e.dishIds ?? []) void send(`/kitchen/dishes/${encodeURIComponent(dishId)}/extras/${encodeURIComponent(id)}`, { soldOut: !e.soldOut }, undo);
       },
     }),
-    [user, restoring, signIn, signOut, kitchenName, offline, now, orders, settings, dishes, extras, toast, notify, update, hears, send, fail],
+    [user, restoring, signIn, signOut, kitchenName, offline, now, orders, settings, dishes, extras, toast, notify, update, hears, send, fail, printer, runPrint],
   );
 
   return <KitchenContext.Provider value={value}>{children}</KitchenContext.Provider>;
