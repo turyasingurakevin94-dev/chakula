@@ -33,11 +33,14 @@ export type ServerOrder = {
   times: Record<'placed' | 'paid' | 'ready' | 'riderAssigned' | 'pickedUp' | 'atGate' | 'delivered' | 'cancelled', string | null>;
   cancelReason: string | null;
 };
+// A chat message between the student and the rider on an order.
+export type ChatMessage = { id: string; orderId: string; from: 'student' | 'rider'; body: string; at: string };
 export type LiveMessage =
   | { type: 'hello'; userId: string; role: string }
   | { type: 'order'; order: ServerOrder }
   | { type: 'run-taken'; orderId: string }
-  | { type: 'rider-location'; orderId: string; lat: number; lng: number; at: string };
+  | { type: 'rider-location'; orderId: string; lat: number; lng: number; at: string }
+  | { type: 'message'; message: ChatMessage };
 
 // The server's own words ("Chicken pilau just ran out."), ready to show.
 export class ServerError extends Error {

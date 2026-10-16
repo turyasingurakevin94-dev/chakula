@@ -6,6 +6,7 @@ import Svg, { Path } from 'react-native-svg';
 import { CampusMap, mapInk, type MapLine, type MapPin } from '../components/map';
 import { Body, Bold, Icon, Label } from '../components/ui';
 import { along, findDropPoint, fitView, followView, headingAhead, kitchenAt, minutesFor, nextTurn, route, type Route } from '../lib/campus';
+import { useChat } from '../lib/chat';
 import { contactStudent, KITCHEN, kitchenOf, useRider, type Stop } from '../lib/rider';
 import { onServer } from '../lib/server';
 import { colors, fonts, money } from '../lib/theme';
@@ -24,6 +25,7 @@ const turnPaths = {
 // Riding mode: big text, voice turns, the stop and minutes left. The handover opens on arrival.
 export default function RouteScreen() {
   const { run, stop, stopIndex, stage, arrive, backToRoute, voice, setVoice, notify, changeNote } = useRider();
+  const { unread } = useChat(stop?.id);
   const insets = useSafeAreaInsets();
   // Only things that change the drop interrupt riding mode: a new note from the student.
   const [heard, setHeard] = useState<{ bag: string; first: string; note: string } | null>(null);
@@ -167,6 +169,12 @@ export default function RouteScreen() {
           >
             <Icon name="phone" size={22} />
           </Pressable>
+          {onServer && stop.id ? (
+            <Pressable accessibilityRole="button" accessibilityLabel={unread ? `Message ${stop.first}, ${unread} new` : `Message ${stop.first}`} onPress={() => router.push(`/chat?id=${stop.id}`)} style={s.call}>
+              <Icon name="message-square" size={22} />
+              {unread ? <View style={s.unread} /> : null}
+            </Pressable>
+          ) : null}
           <View style={s.next}>
             <View style={s.nextNum}>
               {next ? <Text style={{ fontFamily: fonts.bold, fontSize: 12, color: colors.forest }}>{stopIndex + 2}</Text> : <Icon name="home" size={12} />}
@@ -289,6 +297,7 @@ const s = StyleSheet.create({
   noteButton: { height: 44, borderRadius: 14, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center' },
   progress: { height: 6, borderRadius: 3, backgroundColor: colors.line, overflow: 'hidden' },
   progressFill: { position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: 3, backgroundColor: colors.forest },
+  unread: { position: 'absolute', top: 8, right: 8, width: 12, height: 12, borderRadius: 6, backgroundColor: colors.orange },
   call: { width: 56, height: 56, borderRadius: 18, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center' },
   next: { flex: 1, height: 56, borderRadius: 18, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.card, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14 },
   nextNum: { width: 24, height: 24, borderRadius: 12, borderWidth: 1.5, borderColor: colors.forest, alignItems: 'center', justifyContent: 'center' },

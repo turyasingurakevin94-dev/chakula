@@ -2,6 +2,7 @@ import { Hono, type Context } from 'hono';
 import { cors } from 'hono/cors';
 import { z } from 'zod';
 import { createAuth, type AppName, type Role, type User } from './auth.ts';
+import { createChat, sendMessageInput } from './chat.ts';
 import type { Config } from './config.ts';
 import { openDb } from './db.ts';
 import { HttpError } from './errors.ts';
@@ -41,6 +42,7 @@ export async function createServer(config: Config) {
     onWallet: (userId) => walletChanged({ userId }),
   });
   const wallet = createWallet(db, { payments: () => payments, onChange: walletChanged });
+  const chat = createChat(db, { orders, push, onMessage: (to, message) => live.message(to, message) });
   // A payment is either a wallet top-up or an order's.
   const settle = async (o: PayOutcome) => {
     if (!(await wallet.settle(o))) await orders.settle(o);
@@ -158,6 +160,13 @@ export async function createServer(config: Config) {
     const user = c.get('user');
     const { order, lines } = await orders.cancel(user, c.req.param('id')!);
     return c.json(viewOrder(order, lines, user));
+  });
+
+  // ---- Chat between the student and their rider ----
+  app.get('/orders/:id/messages', signedIn('student', 'rider'), async (c) => c.json(await chat.list(c.get('user'), c.req.param('id')!)));
+  app.post('/orders/:id/messages', signedIn('student', 'rider'), async (c) => {
+    const { body: text } = await body(c, sendMessageInput);
+    return c.json(await chat.send(c.get('user'), c.req.param('id')!, text), 201);
   });
 
   // ---- Wallet ----

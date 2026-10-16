@@ -191,3 +191,15 @@ create index if not exists wallet_entries_user on wallet_entries (user_id, creat
 
 -- Early production orders stored extras as a JSON string ("[]") instead of an array; unwrap them.
 update order_lines set extras = (extras #>> '{}')::jsonb where jsonb_typeof(extras) = 'string';
+
+-- Chat between a student and the rider carrying their order. Open from the rider taking the run
+-- to the handover; both can still read it afterwards.
+create table if not exists messages (
+  id text primary key,
+  order_id text not null references orders(id),
+  sender_id text not null references users(id),
+  sender_role text not null check (sender_role in ('student', 'rider')),
+  body text not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists messages_order on messages (order_id, created_at);

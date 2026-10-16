@@ -5,6 +5,7 @@ import { CountdownRing } from '../components/alerts';
 import { BackButton, Body, Button, Headline, Icon, Label, type IconName } from '../components/ui';
 import { clockTime, contactStudent, KITCHEN, kitchenOf, PER_DROP, RIDER, useNow, useRider, WAIT_MS, type Stop } from '../lib/rider';
 import { onServer } from '../lib/server';
+import { callChakula, CHAKULA_LINE } from '../lib/support';
 import { colors, fonts, money } from '../lib/theme';
 
 // Sample timings for what Chakula does while the rider waits: from arrival, when each step starts
@@ -33,7 +34,7 @@ export default function Help() {
     else router.dismissTo('/route');
   };
 
-  // On the server nothing is reported from here yet, so each problem says what the rider can do now.
+  // On the server each problem is a call: to the student for directions, or to the Chakula line.
   const kitchen = stop ? kitchenOf(stop) : 'the kitchen';
   const problems: { icon: IconName; title: string; sub: string; done: string; act?: () => void }[] = onServer
     ? [
@@ -44,9 +45,10 @@ export default function Help() {
           done: 'Call the student from the handover screen',
           act: stop?.phone ? () => contactStudent(stop, 'call', notify) : undefined,
         },
-        { icon: 'package', title: 'Seal broken or bag damaged', sub: 'Show the kitchen before you ride off', done: `Show ${kitchen} the bag. Reporting it in the app comes later.` },
-        { icon: 'dollar-sign', title: "Student won't pay cash", sub: 'Keep the bag; don’t hand it over', done: `Keep the bag and take it back to ${kitchen}.` },
-        { icon: 'tool', title: 'Bike trouble', sub: 'Tell the kitchen so another rider can help', done: `Call ${kitchen} so another rider can take your bags.` },
+        { icon: 'package', title: 'Seal broken or bag damaged', sub: `Show ${kitchen}, then call Chakula`, done: '', act: () => callChakula(notify) },
+        { icon: 'dollar-sign', title: "Student won't pay cash", sub: 'Keep the bag and call Chakula', done: '', act: () => callChakula(notify) },
+        { icon: 'tool', title: 'Bike trouble', sub: 'Call Chakula so another rider takes your bags', done: '', act: () => callChakula(notify) },
+        { icon: 'phone', title: 'Call Chakula', sub: `Anything else: call ${CHAKULA_LINE}`, done: '', act: () => callChakula(notify) },
       ]
     : [
         { icon: 'map-pin', title: "Can't find the place", sub: "The student's pin, plus a photo of the entrance", done: 'Pin and entrance photo sent to you' },

@@ -17,7 +17,7 @@ const CANCEL_MS = 60_000;
 export const RETURNED = 'Returned to the kitchen';
 const ACTIVE: Status[] = ['awaiting_payment', 'cooking', 'ready', 'picked_up', 'at_gate'];
 // While the student may call their rider: from taking the run to the handover.
-const RIDER_REACHABLE: Status[] = ['cooking', 'ready', 'picked_up', 'at_gate'];
+export const RIDER_REACHABLE: Status[] = ['cooking', 'ready', 'picked_up', 'at_gate'];
 
 export const placeOrderInput = z.object({
   kitchenId: z.string(),

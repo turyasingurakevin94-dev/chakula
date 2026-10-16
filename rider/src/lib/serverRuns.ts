@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { receiveChat, syncChat } from './chat';
 import { api, connectLive, ServerError, type ServerOrder, type ServerUser } from './server';
+
+const CHAT_OPEN = ['cooking', 'ready', 'picked_up', 'at_gate'];
 
 // The rider's side of the Chakula server: run offers and the rider's own orders, kept current over
 // the live socket, and the phone's position while carrying food. Only used when onServer is true.
@@ -51,10 +54,13 @@ export function useServerOrders(user: ServerUser | null, events: OrderEvents) {
     [save],
   );
 
+  const userId = user?.id;
   // Offers and our unfinished orders. Delivered ones stay so the run in progress keeps its stops.
   const load = useCallback(async () => {
     try {
       const list = await api<ServerOrder[]>('GET', '/rider/runs');
+      // Chat messages sent while the connection was down.
+      for (const o of list) if (o.rider && o.rider.id === userId && CHAT_OPEN.includes(o.status)) syncChat(o.id).catch(() => {});
       const next: Record<string, ServerOrder> = {};
       for (const o of Object.values(store.current)) if (o.status === 'delivered') next[o.id] = o;
       for (const o of list) next[o.id] = o;
@@ -62,7 +68,7 @@ export function useServerOrders(user: ServerUser | null, events: OrderEvents) {
     } catch {
       // The socket reopens and loads again.
     }
-  }, [save]);
+  }, [save, userId]);
 
   useEffect(() => {
     if (!user) return;
@@ -74,6 +80,7 @@ export function useServerOrders(user: ServerUser | null, events: OrderEvents) {
         if (m.order.status !== 'cancelled') handlers.current.onChange?.(m.order, before);
         else if (before) handlers.current.onGone?.(m.order.id, 'cancelled');
       }
+      if (m.type === 'message') receiveChat(m.message);
       if (m.type === 'run-taken') {
         remove(m.orderId);
         handlers.current.onGone?.(m.orderId, 'taken');

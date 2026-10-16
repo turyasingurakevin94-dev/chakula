@@ -5,6 +5,7 @@ import { AlertBanner, type BannerAlert } from '../components/alert-banner';
 import type { IconName } from '../components/ui';
 import { formatClock, useAccount, useNow, type Order } from './account';
 import { findRestaurant, specials } from './data';
+import { onRiderMessage } from './chat';
 import { notify, type Alert, type PermissionState } from './notify';
 import { findPlanKind, mealName, mealTimes } from './plans';
 import { onServer, registerPush } from './server';
@@ -97,6 +98,16 @@ export function AlertsProvider({ children }: { children: ReactNode }) {
         onOpen: openHref,
       }),
     [show],
+  );
+
+  // A rider's chat message while its chat isn't on screen.
+  useEffect(
+    () =>
+      onRiderMessage((m) => {
+        const order = orders.find((o) => (o.serverId ?? o.id) === m.orderId);
+        show({ title: order ? riderFor(order).name : 'Your rider', body: m.body, icon: 'message-circle', href: '/chat', orderKey: order?.serverId });
+      }),
+    [orders, show],
   );
 
   // The "Turn on alerts" screen is only worth showing if the phone can still ask.

@@ -273,3 +273,36 @@ test('live updates reach the student over the WebSocket', async () => {
     http.close();
   }
 });
+
+test('the student and their rider chat on the order; nobody else can read it', async () => {
+  const student = await signIn('0772 444 222', 'student');
+  await call('POST', '/push-tokens', { token: rider2, body: { token: 'ExponentPushToken[chat-rider]', app: 'rider' } });
+  const placed = await call('POST', '/orders', { token: student, body: order('cash') });
+  const id = placed.json.order.id;
+  // No rider yet: nobody to chat with.
+  assert.equal((await call('POST', `/orders/${id}/messages`, { token: student, body: { body: 'Hello?' } })).status, 409);
+  await call('POST', `/rider/orders/${id}/take`, { token: rider2 });
+
+  const hi = await call('POST', `/orders/${id}/messages`, { token: student, body: { body: '  I am at the library  ' } });
+  assert.equal(hi.status, 201);
+  assert.equal(hi.json.from, 'student');
+  assert.equal(hi.json.body, 'I am at the library');
+  await waitFor(async () => server.push.sent.some((m) => m.to === 'ExponentPushToken[chat-rider]' && m.body === 'I am at the library' && m.data?.chat === true && m.data?.url === `/chat?id=${id}`));
+  assert.equal((await call('POST', `/orders/${id}/messages`, { token: rider2, body: { body: 'Coming' } })).json.from, 'rider');
+  assert.equal((await call('POST', `/orders/${id}/messages`, { token: rider2, body: { body: '' } })).status, 400);
+
+  const both = await call('GET', `/orders/${id}/messages`, { token: rider2 });
+  assert.deepEqual(both.json.map((m: any) => m.body), ['I am at the library', 'Coming']);
+  assert.equal((await call('GET', `/orders/${id}/messages`, { token: rider })).status, 404);
+  assert.equal((await call('GET', `/orders/${id}/messages`, { token: kitchen })).status, 403);
+  const other = await signIn('0772 444 333', 'student');
+  assert.equal((await call('GET', `/orders/${id}/messages`, { token: other })).status, 404);
+
+  // After the handover it's read-only.
+  await call('POST', `/kitchen/orders/${id}/ready`, { token: kitchen });
+  await call('POST', `/rider/orders/${id}/pick-up`, { token: rider2 });
+  const code = (await call('GET', `/orders/${id}`, { token: student })).json.handoverCode;
+  await call('POST', `/rider/orders/${id}/deliver`, { token: rider2, body: { code } });
+  assert.equal((await call('POST', `/orders/${id}/messages`, { token: student, body: { body: 'Thanks' } })).status, 409);
+  assert.equal((await call('GET', `/orders/${id}/messages`, { token: student })).json.length, 2);
+});
