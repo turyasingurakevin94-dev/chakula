@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Alert } from 'react-native';
 import { dropPoints, type DropKind, type Pt } from './campus';
+import { receiveChat, sendChat } from './chat';
 import { applyServerMenus, findSpecial, type Extra, type MenuItem, type ServerKitchen } from './data';
 import type { PhotoKey } from './photos';
 import { findPlanKind, planMeals, planPrice, type PlanKindId, type PlanPeriod } from './plans';
@@ -387,6 +388,8 @@ export function AccountProvider({ children }: { children: ReactNode }) {
           Alert.alert('Your order went back to the kitchen', `${o.rider?.name ?? 'Your rider'} couldn’t reach you at ${o.dropPoint.name}.${o.payMethod === 'wallet' ? ' Your money is back in your wallet.' : o.payMethod === 'cash' ? '' : ' Chakula will refund your MoMo.'}`);
         }
         setOrders((prev) => (o.status === 'cancelled' ? prev.filter((p) => p.serverId !== o.id) : prev.map((p) => (p.serverId === o.id ? fromServer(o, p) : p))));
+      } else if (m.type === 'message') {
+        receiveChat(m.message);
       } else if (m.type === 'rider-location') {
         const at = toCampusMetres(m.lat, m.lng);
         setOrders((prev) => prev.map((p) => (p.serverId === m.orderId ? { ...p, riderAt: at } : p)));
@@ -548,7 +551,12 @@ export function AccountProvider({ children }: { children: ReactNode }) {
         }
       },
       markDelivered: (id) => setOrders((prev) => (prev.some((p) => p.id === id && !p.delivered) ? prev.map((p) => (p.id === id ? { ...p, delivered: true } : p)) : prev)),
-      comingDown: (id) => setOrders((prev) => prev.map((p) => (p.id === id && !p.comingDownAt ? { ...p, comingDownAt: Date.now() } : p))),
+      comingDown: (id) => {
+        // On the server the rider hears it as a chat message.
+        const o = orders.find((p) => p.id === id);
+        if (o?.serverId && !o.comingDownAt) sendChat(o.serverId, 'I’m coming down').catch(() => {});
+        setOrders((prev) => prev.map((p) => (p.id === id && !p.comingDownAt ? { ...p, comingDownAt: Date.now() } : p)));
+      },
       setAlertPrefs: (change) => setAlertPrefsState((p) => ({ ...p, ...change })),
       primeAlerts: () => setAlertsPrimed(true),
       rateOrder: (id, rating) => {

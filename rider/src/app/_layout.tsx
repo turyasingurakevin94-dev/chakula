@@ -45,6 +45,7 @@ export default function RootLayout() {
           <Stack.Screen name="drop" />
           <Stack.Screen name="help" />
           <Stack.Screen name="cash" />
+          <Stack.Screen name="chat" />
         </Stack>
         <RunOffer />
         <AlertBanner />

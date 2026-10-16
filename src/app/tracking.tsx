@@ -6,6 +6,7 @@ import { CampusMap, mapInk } from '../components/map';
 import { Display, Icon, IconButton, PrimaryButton } from '../components/ui';
 import { DELIVERY_MINUTES, formatClock, minutesLeft, useAccount, useNow, type Order } from '../lib/account';
 import { useAlerts } from '../lib/alerts';
+import { useChat } from '../lib/chat';
 import { along, dist, findDropPoint, fitView, headingAhead, kitchenAt, route } from '../lib/campus';
 import { findRestaurant } from '../lib/data';
 import { blockName, riderFor, stageOf, stepTimes } from '../lib/stages';
@@ -38,12 +39,13 @@ function TrackOrder() {
   // Server orders move when the kitchen and rider act; sample ones on the demo timer.
   const stage = stageOf(order, active, now);
   const live = !!order.serverId;
-  // Calls and texts go straight to the rider's phone. The server only sends the number while
-  // the rider has this order; the sample order has none to dial.
-  const contact = (how: 'tel' | 'sms') => {
+  // Calls go straight to the rider's phone. The server only sends the number while the rider has
+  // this order; the sample order has none to dial. Messages go through the in-app chat.
+  const call = () => {
     if (!order.riderPhone) return alerts.show({ title: 'Sample order', body: 'On a real order this calls your rider.', icon: 'phone' });
-    Linking.openURL(`${how}:${order.riderPhone}`).catch(() => alerts.show({ title: 'Couldn’t open your phone app', body: `Your rider’s number is ${order.riderPhone}.`, icon: 'phone' }));
+    Linking.openURL(`tel:${order.riderPhone}`).catch(() => alerts.show({ title: 'Couldn’t open your phone app', body: `Your rider’s number is ${order.riderPhone}.`, icon: 'phone' }));
   };
+  const { unread } = useChat(order.serverId ?? order.id);
   const rider = riderFor(order);
   // Clock times for each step, counted in real minutes from when the kitchen starts. On the server,
   // steps that happened show when they really did; only the ones ahead are estimates.
@@ -135,8 +137,11 @@ function TrackOrder() {
             </View>
             {!live || order.riderPhone ? (
               <>
-                <IconButton icon="message-circle" label={`Text ${rider.name}`} variant="outline" size={42} style={{ borderColor: colors.forest }} onPress={() => contact('sms')} />
-                <IconButton icon="phone" label={`Call ${rider.name}`} variant="outline" size={42} style={{ borderColor: colors.forest }} onPress={() => contact('tel')} />
+                <View>
+                  <IconButton icon="message-circle" label={unread ? `Chat with ${rider.name}, ${unread} new` : `Chat with ${rider.name}`} variant="outline" size={42} style={{ borderColor: colors.forest }} onPress={() => router.push('/chat')} />
+                  {unread ? <View style={s.unread} pointerEvents="none" /> : null}
+                </View>
+                <IconButton icon="phone" label={`Call ${rider.name}`} variant="outline" size={42} style={{ borderColor: colors.forest }} onPress={call} />
               </>
             ) : null}
           </View>
@@ -259,6 +264,7 @@ function LiveMap({ restaurantId, placeId, progress, width, height, top }: { rest
 }
 
 const s = StyleSheet.create({
+  unread: { position: 'absolute', top: 0, right: 0, width: 12, height: 12, borderRadius: 6, backgroundColor: colors.orange, borderWidth: 2, borderColor: colors.card },
   sheet: { marginTop: -28, backgroundColor: colors.cream, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 20, paddingTop: 20, gap: 16 },
   unpaid: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 4 },
   rider: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, borderRadius: 18, paddingHorizontal: 14, paddingVertical: 12 },

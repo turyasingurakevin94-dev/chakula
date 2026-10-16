@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { receiveChat } from './chat';
 import { api, connectLive, ServerError, type ServerOrder, type ServerUser } from './server';
 
 // The rider's side of the Chakula server: run offers and the rider's own orders, kept current over
@@ -74,6 +75,7 @@ export function useServerOrders(user: ServerUser | null, events: OrderEvents) {
         if (m.order.status !== 'cancelled') handlers.current.onChange?.(m.order, before);
         else if (before) handlers.current.onGone?.(m.order.id, 'cancelled');
       }
+      if (m.type === 'message') receiveChat(m.message);
       if (m.type === 'run-taken') {
         remove(m.orderId);
         handlers.current.onGone?.(m.orderId, 'taken');

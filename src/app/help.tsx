@@ -3,7 +3,7 @@ import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-na
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BackHeader, FoodImage, Icon, Label, styles as ui } from '../components/ui';
 import { formatClock, formatWhen, useAccount } from '../lib/account';
-import { findRestaurant, supportWhatsApp } from '../lib/data';
+import { findRestaurant, supportPhones, supportWhatsApp } from '../lib/data';
 import { colors, fonts, formatUGX } from '../lib/theme';
 
 const problems = ['Something missing', 'Arrived cold', 'Wrong order', 'Payment'];
@@ -32,13 +32,27 @@ export default function Help() {
             <View style={s.blob} />
             <View style={{ gap: 4 }}>
               <Text style={{ fontFamily: fonts.displayLight, fontSize: 23, lineHeight: 26, color: colors.cream }}>Chat with a real person</Text>
-              <Text style={{ fontFamily: fonts.regular, fontSize: 14, color: colors.mint }}>We usually reply in 2 minutes, 8 am to midnight.</Text>
+              <Text style={{ fontFamily: fonts.regular, fontSize: 14, color: colors.mint }}>WhatsApp us, or call if it’s urgent.</Text>
             </View>
             <Pressable accessibilityRole="button" accessibilityLabel="Open WhatsApp" onPress={() => openChat('Hi Chakula, I need help.')} style={({ pressed }) => [s.whatsapp, pressed && { opacity: 0.9 }]}>
               <Icon name="message-circle" size={20} />
               <Text style={{ fontFamily: fonts.bold, fontSize: 16, color: colors.forest }}>Open WhatsApp</Text>
             </Pressable>
-            {notLive ? <Text style={{ fontFamily: fonts.regular, fontSize: 13, color: colors.mint }}>WhatsApp support isn’t switched on yet. It’s coming soon.</Text> : null}
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              {supportPhones.map((phone) => (
+                <Pressable
+                  key={phone}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Call ${phone}`}
+                  onPress={() => Linking.openURL(`tel:${phone}`).catch(() => undefined)}
+                  style={({ pressed }) => [s.call, pressed && { opacity: 0.8 }]}
+                >
+                  <Icon name="phone" size={16} color={colors.cream} />
+                  <Text style={{ fontFamily: fonts.bold, fontSize: 14, color: colors.cream }}>{phone}</Text>
+                </Pressable>
+              ))}
+            </View>
+            {notLive ? <Text style={{ fontFamily: fonts.regular, fontSize: 13, color: colors.mint }}>Couldn’t open WhatsApp on this phone. Call one of the numbers above.</Text> : null}
           </View>
         </View>
 
@@ -86,5 +100,6 @@ const s = StyleSheet.create({
   chat: { backgroundColor: colors.forest, borderRadius: 22, padding: 20, gap: 14, overflow: 'hidden' },
   blob: { position: 'absolute', width: 150, height: 150, borderRadius: 75, backgroundColor: colors.forestMid, right: -40, top: -50 },
   whatsapp: { height: 52, borderRadius: 16, backgroundColor: colors.cream, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  call: { flex: 1, height: 44, borderRadius: 14, borderWidth: 1, borderColor: colors.mint, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
   chip: { height: 38, paddingHorizontal: 14, borderRadius: 19, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.card, justifyContent: 'center' },
 });

@@ -74,6 +74,7 @@ function Screens() {
         <Stack.Screen name="profile" />
         <Stack.Screen name="place" />
         <Stack.Screen name="payment" />
+        <Stack.Screen name="chat" />
         <Stack.Screen name="notifications" />
         <Stack.Screen name="wallet" />
         <Stack.Screen name="help" />

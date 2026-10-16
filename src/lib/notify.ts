@@ -118,9 +118,10 @@ export const notify = {
       N.setNotificationHandler({
         handleNotification: async (n) => {
           const c = n.request.content;
-          const data = (c.data ?? {}) as { href?: unknown; icon?: unknown; quiet?: unknown; orderId?: unknown };
+          // Chat messages arrive over the live connection too, which shows its own banner.
+          const data = (c.data ?? {}) as { href?: unknown; icon?: unknown; quiet?: unknown; orderId?: unknown; chat?: unknown };
           const text = (v: unknown) => (typeof v === 'string' && v ? v : undefined);
-          handlers.onForeground({ title: c.title ?? '', body: c.body ?? '', href: text(data.href), icon: text(data.icon), quiet: data.quiet === true, orderId: text(data.orderId) });
+          handlers.onForeground({ title: c.title ?? '', body: c.body ?? '', href: text(data.href), icon: text(data.icon), quiet: data.quiet === true || data.chat === true, orderId: text(data.orderId) });
           // The banner inside the app takes its place, with no second sound.
           return { shouldShowBanner: false, shouldShowList: false, shouldPlaySound: false, shouldSetBadge: false };
         },

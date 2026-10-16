@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Linking } from 'react-native';
+import { onStudentMessage } from './chat';
 import { cancelAlert, scheduleAlert, sendAlert, setupAlerts, type Alert } from './notify';
 import { api, onServer, restoreSession, signOut as endSession, whenSignedOut, type ServerOrder, type ServerStatus, type ServerUser } from './server';
 import { errorText, useServerOrders } from './serverRuns';
@@ -420,6 +421,16 @@ export function RiderProvider({ children }: { children: ReactNode }) {
   const baseStop = run?.stops[stopIndex] ?? null;
   // The student's latest note wins over the one they ordered with.
   const stop = useMemo(() => (baseStop && notes[baseStop.bag] ? { ...baseStop, note: notes[baseStop.bag] } : baseStop), [baseStop, notes]);
+
+  // A student's chat message while its chat isn't on screen.
+  useEffect(
+    () =>
+      onStudentMessage((m) => {
+        const from = run?.stops.find((x) => x.id === m.orderId);
+        raise({ kicker: 'Message', title: from?.first ?? 'Your student', body: m.body, primary: { label: 'Reply', url: `/chat?id=${m.orderId}` }, secondary: { label: 'Later' } });
+      }),
+    [run, raise],
+  );
 
   const offerOrder = offerSet ? serverOrders[offerSet.runId] : undefined;
   const offerRun = onServer ? (offerOrder && !offerOrder.rider ? toRun([offerOrder]) : null) : run && offerSet && run.id === offerSet.runId ? run : null;

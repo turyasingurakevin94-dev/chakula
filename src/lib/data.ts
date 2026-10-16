@@ -185,8 +185,10 @@ export function popularDishes(category?: string) {
 // Tonight's featured dish on Home.
 export const chefsPick = { restaurantId: 'nakawa-kitchen', itemId: 'pilau' };
 
-// WhatsApp number for support, in international format without "+". Not set up yet.
-export const supportWhatsApp: string | null = null;
+// Chakula support (Kevin, 2026-10-16). WhatsApp in international format without "+"; the second
+// number is the backup line to call.
+export const supportWhatsApp: string | null = '256776974950';
+export const supportPhones = ['0776974950', '0750016750'];
 
 // Where a friend gets the app, shared by Profile › Invite a friend. Not set up yet.
 export const inviteLink: string | null = null;
