@@ -188,6 +188,9 @@ export const chefsPick = { restaurantId: 'nakawa-kitchen', itemId: 'pilau' };
 // WhatsApp number for support, in international format without "+". Not set up yet.
 export const supportWhatsApp: string | null = null;
 
+// Where a friend gets the app, shared by Profile › Invite a friend. Not set up yet.
+export const inviteLink: string | null = null;
+
 export const student = {
   firstName: 'Kevin',
   initials: 'KK',

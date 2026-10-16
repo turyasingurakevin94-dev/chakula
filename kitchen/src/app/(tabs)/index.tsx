@@ -199,7 +199,7 @@ function ReadyCard({ order: o, now }: { order: Order; now: number }) {
           ) : (
             <Text style={{ fontFamily: fonts.bold, fontSize: 14, color: here ? colors.orangeText : colors.forest }}>{r ? (here ? `${r.name} is here` : `${r.name} in ${Math.max(mins, 1)} min`) : 'Finding a rider'}</Text>
           )}
-          <Text style={s.meta}>{here && !onServer ? 'Scanning the seal' : 'Nothing to do'}</Text>
+          <Text style={s.meta}>{onServer ? 'Tap for the rider’s QR' : here ? 'Scanning the seal' : 'Nothing to do'}</Text>
         </View>
       </Card>
     </Pressable>

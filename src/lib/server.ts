@@ -28,7 +28,8 @@ export type ServerOrder = {
   // Only on the student's own orders.
   handoverCode?: string;
   note: string | null;
-  rider: { id: string; name: string | null } | null;
+  // phone: only on the student's own order, while the rider has it.
+  rider: { id: string; name: string | null; phone?: string } | null;
   times: Record<'placed' | 'paid' | 'ready' | 'riderAssigned' | 'pickedUp' | 'atGate' | 'delivered' | 'cancelled', string | null>;
   cancelReason: string | null;
 };

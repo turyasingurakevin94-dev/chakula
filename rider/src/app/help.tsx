@@ -18,12 +18,15 @@ type Step = { title: string; detail: string; time: string; state: StepState };
 // it opens on the wait ring and what Chakula is doing; from pickup it only lists the problems.
 export default function Help() {
   const { from } = useLocalSearchParams<{ from?: string }>();
-  const { stop, arrivedAt, completeStop, run, stopIndex, notify } = useRider();
+  const { stop, arrivedAt, completeStop, run, stopIndex, notify, returnBag } = useRider();
   const now = useNow(1000);
   const waiting = from !== 'pickup' && stop && run && arrivedAt !== null;
 
-  const giveBack = () => {
+  const giveBack = async () => {
     if (!run) return;
+    // On the server the order ends there (the student and kitchen are told); stay put if it fails.
+    const error = await returnBag();
+    if (error) return notify(error);
     const last = stopIndex + 1 >= run.stops.length;
     completeStop('returned');
     if (last) router.dismissAll();
@@ -186,7 +189,7 @@ export default function Help() {
             {`${stop.first} is here, enter code`}
           </Button>
         ) : (
-          <Button height={60} size={17} icon="corner-up-left" style={{ borderRadius: 20 }} onPress={giveBack}>
+          <Button height={60} size={17} icon="corner-up-left" style={{ borderRadius: 20 }} onPress={() => void giveBack()}>
             Return the bag to the kitchen
           </Button>
         )}

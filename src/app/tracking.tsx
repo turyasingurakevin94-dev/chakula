@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useEffect, useMemo } from 'react';
-import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CampusMap, mapInk } from '../components/map';
 import { Display, Icon, IconButton, PrimaryButton } from '../components/ui';
@@ -38,6 +38,12 @@ function TrackOrder() {
   // Server orders move when the kitchen and rider act; sample ones on the demo timer.
   const stage = stageOf(order, active, now);
   const live = !!order.serverId;
+  // Calls and texts go straight to the rider's phone. The server only sends the number while
+  // the rider has this order; the sample order has none to dial.
+  const contact = (how: 'tel' | 'sms') => {
+    if (!order.riderPhone) return alerts.show({ title: 'Sample order', body: 'On a real order this calls your rider.', icon: 'phone' });
+    Linking.openURL(`${how}:${order.riderPhone}`).catch(() => alerts.show({ title: 'Couldn’t open your phone app', body: `Your rider’s number is ${order.riderPhone}.`, icon: 'phone' }));
+  };
   const rider = riderFor(order);
   // Clock times for each step, counted in real minutes from when the kitchen starts. On the server,
   // steps that happened show when they really did; only the ones ahead are estimates.
@@ -99,10 +105,12 @@ function TrackOrder() {
                 </>
               )}
             </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingBottom: 4 }}>
-              <Icon name="check" size={13} color={colors.green} />
-              <Text style={{ fontFamily: fonts.regular, fontSize: 12, color: colors.green }}>On time</Text>
-            </View>
+            {live ? null : (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingBottom: 4 }}>
+                <Icon name="check" size={13} color={colors.green} />
+                <Text style={{ fontFamily: fonts.regular, fontSize: 12, color: colors.green }}>On time</Text>
+              </View>
+            )}
           </View>
 
           <View style={s.rider}>
@@ -125,7 +133,12 @@ function TrackOrder() {
                 {live ? (order.riderName ? 'Your Chakula rider' : 'A rider takes it as it cooks') : '★ 4.9 · red helmet · UBF 412K'}
               </Text>
             </View>
-            <IconButton icon="phone" label={`Call ${rider.name}`} variant="outline" size={42} style={{ borderColor: colors.forest }} />
+            {!live || order.riderPhone ? (
+              <>
+                <IconButton icon="message-circle" label={`Text ${rider.name}`} variant="outline" size={42} style={{ borderColor: colors.forest }} onPress={() => contact('sms')} />
+                <IconButton icon="phone" label={`Call ${rider.name}`} variant="outline" size={42} style={{ borderColor: colors.forest }} onPress={() => contact('tel')} />
+              </>
+            ) : null}
           </View>
 
           {active && !arrived ? (
@@ -146,7 +159,16 @@ function TrackOrder() {
             </View>
           ) : null}
 
-          {active && !arrived && account.alertPrefs.sms && alerts.permission !== 'granted' && stage >= 2 ? (
+          {order.status === 'awaiting_payment' ? (
+            <View style={s.unpaid}>
+              <Text style={{ flex: 1, fontFamily: fonts.regular, fontSize: 13, lineHeight: 18, color: colors.muted }}>Waiting for your MoMo approval. Nothing reaches the kitchen until it’s paid.</Text>
+              <Pressable accessibilityRole="button" accessibilityLabel="Cancel this order" hitSlop={8} onPress={() => account.cancelOrder(order.id)}>
+                <Text style={{ fontFamily: fonts.semibold, fontSize: 14, color: colors.orangeText, textDecorationLine: 'underline' }}>Cancel</Text>
+              </Pressable>
+            </View>
+          ) : null}
+
+          {!live && active && !arrived && account.alertPrefs.sms && alerts.permission !== 'granted' && stage >= 2 ? (
             <Text style={{ fontFamily: fonts.regular, fontSize: 12, lineHeight: 17, color: colors.muted, marginTop: -6 }}>Phone alerts are off, so we’ll also text this code to {account.maskedPhone || 'your phone'}.</Text>
           ) : null}
 
@@ -186,7 +208,7 @@ function TrackOrder() {
           </View>
 
           <Text style={{ fontFamily: fonts.regular, fontSize: 12, lineHeight: 17, color: colors.muted }}>
-            We’ll alert you when {live ? 'your rider reaches' : 'Brian reaches'} your gate. If your rider is more than 10 minutes late, your next delivery is free.
+            {live ? 'We’ll alert you when your rider reaches your gate.' : 'We’ll alert you when Brian reaches your gate. If your rider is more than 10 minutes late, your next delivery is free.'}
           </Text>
 
           {arrived && !order.rating ? <PrimaryButton floating label="Rate your order" onPress={() => router.push({ pathname: '/rate', params: { id: order.id } })}>Got it? Rate your order</PrimaryButton> : null}
@@ -238,6 +260,7 @@ function LiveMap({ restaurantId, placeId, progress, width, height, top }: { rest
 
 const s = StyleSheet.create({
   sheet: { marginTop: -28, backgroundColor: colors.cream, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 20, paddingTop: 20, gap: 16 },
+  unpaid: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 4 },
   rider: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, borderRadius: 18, paddingHorizontal: 14, paddingVertical: 12 },
   riderAvatar: { width: 46, height: 46, borderRadius: 23, backgroundColor: colors.forest, alignItems: 'center', justifyContent: 'center' },
   rail: { position: 'absolute', left: 5.5, top: 16, bottom: -14, width: 1 },

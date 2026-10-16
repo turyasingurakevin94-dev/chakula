@@ -7,6 +7,7 @@ import { BasketBar, Display, FoodImage, Icon, Italic, styles as ui } from '../..
 import { useAccount, useNow, type PayMethod } from '../../lib/account';
 import { priceBasket, todaysLines, useCart } from '../../lib/cart';
 import { chefsPick, findRestaurant, foodCategories, popularDishes, specials, student, type MenuItem, type Restaurant } from '../../lib/data';
+import { onServer } from '../../lib/server';
 import { colors, fonts, formatUGX, smallCaps } from '../../lib/theme';
 import { blockName, stageOf } from '../../lib/stages';
 import { mealAt, pickUsual, quickDishes } from '../../lib/usual';
@@ -94,7 +95,7 @@ export default function Home() {
             Chakula
           </Display>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 1 }}>
-            <Pressable accessibilityRole="button" accessibilityLabel={`Deliver to ${account.address}`} onPress={() => router.push('/profile')} style={s.place}>
+            <Pressable accessibilityRole="button" accessibilityLabel={`Deliver to ${account.address}. Change`} onPress={() => router.push('/place')} style={s.place}>
               <Icon name="map-pin" size={14} />
               <Text style={{ fontFamily: fonts.semibold, fontSize: 13, color: colors.forest, flexShrink: 1 }} numberOfLines={1}>
                 {account.address.replace(' Hostel', '').replace('Room', 'Rm')}
@@ -172,7 +173,7 @@ export default function Home() {
             <ChefsPick
               restaurant={pickKitchen}
               item={pickItem}
-              freeDeliveries={student.freeDeliveriesLeft}
+              freeDeliveries={onServer ? 0 : student.freeDeliveriesLeft}
               onOpen={() => router.push(`/restaurant/${pickKitchen.id}`)}
               onAdd={() => addDish(pickKitchen, pickItem)}
             />

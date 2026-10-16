@@ -4,6 +4,7 @@ import { dropPoints, type DropKind, type Pt } from './campus';
 import { applyServerMenus, findSpecial, type Extra, type MenuItem, type ServerKitchen } from './data';
 import type { PhotoKey } from './photos';
 import { findPlanKind, planMeals, planPrice, type PlanKindId, type PlanPeriod } from './plans';
+import { getPayDefault } from './payDefault';
 import { openPaymentPage } from './payPage';
 import { api, connectLive, getToken, onServer, readItem, restoreToken, saveItem, sendCode, setOnSignedOut, setToken, toCampusMetres, verifyCode, type ServerOrder, type ServerStatus, type ServerUser, type ServerWallet, type ServerWalletEntry } from './server';
 
@@ -57,6 +58,8 @@ export type Order = {
   dropPointId?: string;
   status?: ServerStatus;
   riderName?: string;
+  // Server orders: the rider's number while they have the food, for Call and Text.
+  riderPhone?: string;
   riderAt?: Pt;
   // When each step really happened, from the server (ISO strings, null until it happens).
   times?: ServerOrder['times'];
@@ -380,6 +383,9 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       } else if (m.type === 'order') {
         const o = m.order;
         if (o.status === 'cancelled' && o.cancelReason?.startsWith('Payment')) Alert.alert('Payment didn’t go through', 'Nothing was charged. Try again when you’re ready.');
+        if (o.status === 'cancelled' && o.cancelReason === 'Returned to the kitchen') {
+          Alert.alert('Your order went back to the kitchen', `${o.rider?.name ?? 'Your rider'} couldn’t reach you at ${o.dropPoint.name}.${o.payMethod === 'wallet' ? ' Your money is back in your wallet.' : o.payMethod === 'cash' ? '' : ' Chakula will refund your MoMo.'}`);
+        }
         setOrders((prev) => (o.status === 'cancelled' ? prev.filter((p) => p.serverId !== o.id) : prev.map((p) => (p.serverId === o.id ? fromServer(o, p) : p))));
       } else if (m.type === 'rider-location') {
         const at = toCampusMetres(m.lat, m.lng);
@@ -568,6 +574,8 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       kitchenId: o.restaurantId,
       dropPointId: place?.id,
       payMethod: o.method ?? 'mtn',
+      // Another MoMo number from Profile › Payment; the server charges the student's own without it.
+      payPhone: (o.method ?? 'mtn') === 'mtn' || o.method === 'airtel' ? getPayDefault().momoPhone || undefined : undefined,
       note: [room, note].filter(Boolean).join(' · ') || undefined,
       lines: o.lines.map((l) => ({ dishId: l.item.id, quantity: l.quantity, extraIds: (l.extras ?? []).map((e) => e.id), pepper: l.pepper, note: l.note || undefined })),
     };
@@ -619,6 +627,7 @@ function fromServer(o: ServerOrder, prev?: Order): Order {
     method: o.payMethod,
     code: o.handoverCode ?? prev?.code ?? '····',
     riderName: o.rider?.name ?? undefined,
+    riderPhone: o.rider?.phone,
     riderAt: o.status === 'picked_up' || o.status === 'at_gate' ? prev?.riderAt : undefined,
     times: o.times,
   };

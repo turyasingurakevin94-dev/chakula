@@ -112,12 +112,47 @@ test('a student order goes from MoMo to the kitchen to the rider to the gate', a
   await call('POST', '/rider/location', { token: rider, body: { lat: 0.3301, lng: 32.6143 } });
   const tracked = await call('GET', `/orders/${id}`, { token: student });
   assert.equal(tracked.json.riderLocation.lat, 0.3301);
+  // The student can call the rider carrying their food; the kitchen can't see the number.
+  assert.equal(tracked.json.rider.phone, devLogins.rider.phone);
+  assert.equal((await call('GET', '/kitchen/orders', { token: kitchen })).json[0].rider.phone, undefined);
 
   await call('POST', `/rider/orders/${id}/at-gate`, { token: rider });
   const wrong = await call('POST', `/rider/orders/${id}/deliver`, { token: rider, body: { code: code === '1234' ? '4321' : '1234' } });
   assert.equal(wrong.status, 400);
   const done = await call('POST', `/rider/orders/${id}/deliver`, { token: rider, body: { code } });
   assert.equal(done.json.status, 'delivered');
+  assert.equal((await call('GET', `/orders/${id}`, { token: student })).json.rider.phone, undefined, 'the number goes once delivered');
+});
+
+test('a rider returns a bag the student never came for; a wallet order is refunded', async () => {
+  const student = await signIn('0772 555 111', 'student');
+  const topup = await call('POST', '/wallet/topups', { token: student, body: { amount: 50_000, method: 'mtn' } });
+  await waitFor(async () => (await call('GET', `/wallet/topups/${topup.json.id}`, { token: student })).json.status === 'succeeded');
+  const placed = await call('POST', '/orders', { token: student, body: order('wallet') });
+  assert.equal((await call('GET', '/wallet', { token: student })).json.balance, 27_000);
+  const id = placed.json.order.id;
+  await call('POST', `/rider/orders/${id}/take`, { token: rider2 });
+  await call('POST', `/kitchen/orders/${id}/ready`, { token: kitchen });
+  // Not before pickup, and only by the rider carrying it.
+  assert.equal((await call('POST', `/rider/orders/${id}/return`, { token: rider2 })).status, 409);
+  await call('POST', `/rider/orders/${id}/pick-up`, { token: rider2 });
+  assert.equal((await call('POST', `/rider/orders/${id}/return`, { token: rider })).status, 404);
+  const back = await call('POST', `/rider/orders/${id}/return`, { token: rider2 });
+  assert.equal(back.json.status, 'cancelled');
+  assert.equal(back.json.cancelReason, 'Returned to the kitchen');
+  // The rider is free again: it no longer counts as an unfinished run.
+  assert.ok(!(await call('GET', '/rider/runs', { token: rider2 })).json.some((r: any) => r.id === id));
+  assert.equal((await call('GET', '/wallet', { token: student })).json.balance, 50_000);
+});
+
+test('the student gets silent "accepted" and "packed" lines', async () => {
+  const student = await signIn('0772 123 999', 'student');
+  await call('POST', '/push-tokens', { token: student, body: { token: 'ExponentPushToken[accepted-test]', app: 'student' } });
+  const placed = await call('POST', '/orders', { token: student, body: order('cash') });
+  const quietTo = (title: string) => async () => server.push.sent.some((m) => m.to === 'ExponentPushToken[accepted-test]' && m.title === title && m.channel === 'updates' && m.quiet === true);
+  await waitFor(quietTo('Nakawa Kitchen accepted your order'));
+  await call('POST', `/kitchen/orders/${placed.json.order.id}/ready`, { token: kitchen });
+  await waitFor(quietTo('Your food is packed'));
 });
 
 test('a declined MoMo payment cancels the order', async () => {
@@ -139,7 +174,7 @@ test('cash orders go straight to the kitchen, and riders see the cash to collect
   const board = await call('GET', '/kitchen/orders', { token: kitchen });
   assert.equal(board.json.find((o: any) => o.id === placed.json.order.id).status, 'cancelled');
   // Unpaid MoMo orders that were cancelled never reach the board.
-  assert.ok(!board.json.some((o: any) => o.status === 'cancelled' && o.payMethod !== 'cash'));
+  assert.ok(!board.json.some((o: any) => o.status === 'cancelled' && !o.paid && o.payMethod !== 'cash'));
 });
 
 test("a rider's day: drops, cash collected and the delivered list", async () => {

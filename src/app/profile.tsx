@@ -1,28 +1,42 @@
 import { router } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BackHeader, Display, Icon, styles as ui, type IconName } from '../components/ui';
 import { useAccount } from '../lib/account';
-import { student } from '../lib/data';
+import { inviteLink, student } from '../lib/data';
+import { usePayDefault } from '../lib/payDefault';
+import { onServer } from '../lib/server';
 import { colors, fonts, formatPhone, formatUGX } from '../lib/theme';
 import { versionLabel } from '../lib/updates';
 
 type Row = { icon: IconName; title: string; detail?: string; value?: string; accent?: boolean; onPress?: () => void };
 
+const methodNames = { mtn: 'MTN Mobile Money', airtel: 'Airtel Money', wallet: 'Chakula Wallet', cash: 'Cash on delivery' };
+
+function invite() {
+  const message = `I order food on campus with Chakula: hot meals brought to your hostel or gate.${inviteLink ? ` Get it here: ${inviteLink}` : ''}`;
+  Share.share({ message }).catch(() => {});
+}
+
 export default function Profile() {
   const account = useAccount();
+  const pay = usePayDefault();
 
   const accountRows: Row[] = [
     { icon: 'credit-card', title: 'Wallet', detail: 'Top up and see activity', value: formatUGX(account.balance), onPress: () => router.push('/wallet') },
-    { icon: 'map-pin', title: 'Saved places', detail: account.note ? `${account.address} · ${account.note}` : account.address },
-    { icon: 'smartphone', title: 'Payment methods', detail: 'MTN Mobile Money' },
+    { icon: 'map-pin', title: 'My place', detail: account.note ? `${account.address} · ${account.note}` : account.address, onPress: () => router.push('/place') },
+    { icon: 'smartphone', title: 'Payment', detail: methodNames[pay.method], onPress: () => router.push('/payment') },
     { icon: 'bell', title: 'Notifications', detail: 'Two sounds per order, nothing more', onPress: () => router.push('/notifications') },
   ];
   const moreRows: Row[] = [
-    { icon: 'gift', title: 'Invite a friend, get UGX 3,000', detail: 'They get free delivery too', accent: true },
+    // The reward isn't on the server yet, so the server version only shares the app.
+    onServer
+      ? { icon: 'gift', title: 'Invite a friend', detail: 'Share Chakula with them', accent: true, onPress: invite }
+      : { icon: 'gift', title: 'Invite a friend, get UGX 3,000', detail: 'They get free delivery too', accent: true, onPress: invite },
     { icon: 'help-circle', title: 'Help', detail: 'Chat with us on WhatsApp', onPress: () => router.push('/help') },
   ];
-  const left = student.freeDeliveriesLeft;
+  // Free deliveries are a sample-mode perk; the server doesn't give them.
+  const left = onServer ? 0 : student.freeDeliveriesLeft;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.cream }}>

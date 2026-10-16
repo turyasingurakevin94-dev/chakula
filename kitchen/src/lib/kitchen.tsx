@@ -443,6 +443,9 @@ export function KitchenProvider({ children }: { children: ReactNode }) {
     };
     let retry: ReturnType<typeof setTimeout> | null = null;
     void reload();
+    // A safety net under the live connection: phone networks can drop a quiet socket without
+    // either side noticing, and a missed order is the worst thing that can happen at a counter.
+    const poll = setInterval(() => void reload(), 30_000);
     const stop = connectLive((m) => {
       if (m.type === 'hello') void reload();
       if (m.type !== 'order' || m.order.kitchen.id !== user.kitchenId) return;
@@ -456,6 +459,7 @@ export function KitchenProvider({ children }: { children: ReactNode }) {
     return () => {
       gone = true;
       if (retry) clearTimeout(retry);
+      clearInterval(poll);
       stop();
       setOrders([]);
       setOffline(false);

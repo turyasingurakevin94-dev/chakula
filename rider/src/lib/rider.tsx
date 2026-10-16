@@ -280,9 +280,11 @@ type RiderState = {
   user: ServerUser | null;
   riderName: string;
   signIn: (user: ServerUser) => void;
-  pickUp: () => Promise<string | null>;
+  pickUp: (orderId?: string) => Promise<string | null>;
   // Null when the code matched, otherwise the server's words.
   handOver: (code: string) => Promise<string | null>;
+  // Server: tells it this stop's bag is going back to the kitchen. Resolves to an error, or null.
+  returnBag: () => Promise<string | null>;
 };
 
 const Ctx = createContext<RiderState | null>(null);
@@ -327,8 +329,9 @@ export function RiderProvider({ children }: { children: ReactNode }) {
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [tipAlerts, setTipAlerts] = useState(true);
   const [shiftReminder, setShiftReminder] = useState(true);
-  // Sample: battery saver is on until the rider fixes it in the alerts check. We can't read it yet.
-  const [batterySaver, setBatterySaver] = useState(true);
+  // The phone can't tell the app whether battery saver is on. The sample shows it on until the rider
+  // fixes it in the alerts check; the server version doesn't block going online on it every morning.
+  const [batterySaver, setBatterySaver] = useState(!onServer);
 
   const notify = useCallback((message: string) => setToast(message), []);
 
@@ -586,8 +589,13 @@ export function RiderProvider({ children }: { children: ReactNode }) {
   }, [run, scanned]);
 
   // On the server, scanning a seal picks the bag up. A bag still cooking can't be scanned yet.
-  const pickUp = useCallback(async () => {
-    const next = run ? [...run.stops].reverse().find((x) => x.status !== 'picked_up' && x.status !== 'at_gate' && x.status !== 'delivered') : undefined;
+  // With an order id (a scanned bag code), that bag; without, the next one in loading order.
+  const pickUp = useCallback(async (orderId?: string) => {
+    const next = run
+      ? orderId
+        ? run.stops.find((x) => x.id === orderId)
+        : [...run.stops].reverse().find((x) => x.status !== 'picked_up' && x.status !== 'at_gate' && x.status !== 'delivered')
+      : undefined;
     if (!next?.id) return null;
     try {
       put(await api<ServerOrder>('POST', `/rider/orders/${next.id}/pick-up`));
@@ -620,6 +628,17 @@ export function RiderProvider({ children }: { children: ReactNode }) {
     },
     [stop, put],
   );
+
+  const returnBag = useCallback(async () => {
+    if (!onServer) return null;
+    if (!stop?.id) return 'This bag isn’t on the server.';
+    try {
+      await api<ServerOrder>('POST', `/rider/orders/${stop.id}/return`);
+      return null;
+    } catch (e) {
+      return errorText(e);
+    }
+  }, [stop]);
 
   const backToRoute = useCallback(() => setStage('riding'), []);
 
@@ -850,13 +869,14 @@ export function RiderProvider({ children }: { children: ReactNode }) {
       signIn,
       pickUp,
       handOver,
+      returnBag,
     }),
     [
       online, onlineSince, checks, runIndex, run, stage, scannedNow, stopIndex, stop, arrivedAt, results, voice, drops, tips, tipTotal, pay, cash, cashOrders, handIns, toast,
       offer, offerRun, today, restoring, signOut, banner, tipAlerts, shiftReminder, batterySaver, reminders,
       goOnline, goOffline, toggleCheck, startPickup, scanNext, arrive, backToRoute, completeStop, notify,
       acceptRun, passRun, raise, dismissBanner, changeNote, fixBatterySaver, previewReminder,
-      user, riderName, signIn, pickUp, handOver,
+      user, riderName, signIn, pickUp, handOver, returnBag,
     ],
   );
 
