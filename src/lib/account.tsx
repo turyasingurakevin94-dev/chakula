@@ -1,7 +1,7 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Alert } from 'react-native';
 import { dropPoints, type DropKind, type Pt } from './campus';
-import { receiveChat, sendChat } from './chat';
+import { receiveChat, sendChat, syncChat } from './chat';
 import { applyServerMenus, findSpecial, type Extra, type MenuItem, type ServerKitchen } from './data';
 import type { PhotoKey } from './photos';
 import { findPlanKind, planMeals, planPrice, type PlanKindId, type PlanPeriod } from './plans';
@@ -262,6 +262,11 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   const [plan, setPlan] = useState<MealPlan | null>(null);
   // On the server a new student starts with no orders; the samples are for the prototype.
   const [orders, setOrders] = useState<Order[]>(onServer ? [] : sampleOrders);
+  // The latest orders, for the live connection's reconnect.
+  const ordersRef = useRef(orders);
+  useEffect(() => {
+    ordersRef.current = orders;
+  }, [orders]);
   const [devCode, setDevCode] = useState<string | null>(null);
   // Bumped when menus arrive from the server, so screens reading them redraw.
   const [menuVersion, setMenuVersion] = useState(0);
@@ -390,6 +395,9 @@ export function AccountProvider({ children }: { children: ReactNode }) {
         setOrders((prev) => (o.status === 'cancelled' ? prev.filter((p) => p.serverId !== o.id) : prev.map((p) => (p.serverId === o.id ? fromServer(o, p) : p))));
       } else if (m.type === 'message') {
         receiveChat(m.message);
+      } else if (m.type === 'hello') {
+        // Back after a drop: catch up on chat messages sent meanwhile.
+        for (const o of ordersRef.current) if (o.serverId && o.riderName && !o.delivered) syncChat(o.serverId).catch(() => {});
       } else if (m.type === 'rider-location') {
         const at = toCampusMetres(m.lat, m.lng);
         setOrders((prev) => prev.map((p) => (p.serverId === m.orderId ? { ...p, riderAt: at } : p)));
@@ -553,9 +561,14 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       markDelivered: (id) => setOrders((prev) => (prev.some((p) => p.id === id && !p.delivered) ? prev.map((p) => (p.id === id ? { ...p, delivered: true } : p)) : prev)),
       comingDown: (id) => {
         // On the server the rider hears it as a chat message.
+        const mark = () => setOrders((prev) => prev.map((p) => (p.id === id && !p.comingDownAt ? { ...p, comingDownAt: Date.now() } : p)));
         const o = orders.find((p) => p.id === id);
-        if (o?.serverId && !o.comingDownAt) sendChat(o.serverId, 'I’m coming down').catch(() => {});
-        setOrders((prev) => prev.map((p) => (p.id === id && !p.comingDownAt ? { ...p, comingDownAt: Date.now() } : p)));
+        if (!o?.serverId) return mark();
+        if (o.comingDownAt) return;
+        // Only says the rider knows once the message really went.
+        sendChat(o.serverId, 'I’m coming down').then(mark, (e: unknown) =>
+          Alert.alert('Your rider didn’t get that', e instanceof Error ? e.message : 'Check your data and try again.'),
+        );
       },
       setAlertPrefs: (change) => setAlertPrefsState((p) => ({ ...p, ...change })),
       primeAlerts: () => setAlertsPrimed(true),

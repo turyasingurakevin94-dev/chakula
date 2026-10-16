@@ -135,14 +135,14 @@ function TrackOrder() {
                 {live ? (order.riderName ? 'Your Chakula rider' : 'A rider takes it as it cooks') : '★ 4.9 · red helmet · UBF 412K'}
               </Text>
             </View>
+            {!live || order.riderName ? (
+              <View>
+                <IconButton icon="message-circle" label={unread ? `Chat with ${rider.name}, ${unread} new` : `Chat with ${rider.name}`} variant="outline" size={42} style={{ borderColor: colors.forest }} onPress={() => router.push('/chat')} />
+                {unread ? <View style={s.unread} pointerEvents="none" /> : null}
+              </View>
+            ) : null}
             {!live || order.riderPhone ? (
-              <>
-                <View>
-                  <IconButton icon="message-circle" label={unread ? `Chat with ${rider.name}, ${unread} new` : `Chat with ${rider.name}`} variant="outline" size={42} style={{ borderColor: colors.forest }} onPress={() => router.push('/chat')} />
-                  {unread ? <View style={s.unread} pointerEvents="none" /> : null}
-                </View>
-                <IconButton icon="phone" label={`Call ${rider.name}`} variant="outline" size={42} style={{ borderColor: colors.forest }} onPress={call} />
-              </>
+              <IconButton icon="phone" label={`Call ${rider.name}`} variant="outline" size={42} style={{ borderColor: colors.forest }} onPress={call} />
             ) : null}
           </View>
 

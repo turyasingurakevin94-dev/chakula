@@ -287,7 +287,7 @@ test('the student and their rider chat on the order; nobody else can read it', a
   assert.equal(hi.status, 201);
   assert.equal(hi.json.from, 'student');
   assert.equal(hi.json.body, 'I am at the library');
-  await waitFor(async () => server.push.sent.some((m) => m.to === 'ExponentPushToken[chat-rider]' && m.body === 'I am at the library' && m.data?.chat === true));
+  await waitFor(async () => server.push.sent.some((m) => m.to === 'ExponentPushToken[chat-rider]' && m.body === 'I am at the library' && m.data?.chat === true && m.data?.url === `/chat?id=${id}`));
   assert.equal((await call('POST', `/orders/${id}/messages`, { token: rider2, body: { body: 'Coming' } })).json.from, 'rider');
   assert.equal((await call('POST', `/orders/${id}/messages`, { token: rider2, body: { body: '' } })).status, 400);
 

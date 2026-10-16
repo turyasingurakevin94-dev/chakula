@@ -23,9 +23,29 @@ function add(m: ChatMessage) {
 }
 
 export function receiveChat(m: ChatMessage) {
-  if (!add(m) || m.from !== 'student') return;
-  if (state.open !== m.orderId) set({ ...state, unread: { ...state.unread, [m.orderId]: (state.unread[m.orderId] ?? 0) + 1 } });
+  if (!add(m) || m.from !== 'student' || state.open === m.orderId) return;
+  set({ ...state, unread: { ...state.unread, [m.orderId]: (state.unread[m.orderId] ?? 0) + 1 } });
   for (const fn of incoming) fn(m);
+}
+
+// After the live connection drops and comes back: fetches the chat and counts anything new that
+// arrived meanwhile. Messages seen in an earlier load don't count again.
+export async function syncChat(orderId: string) {
+  const known = new Set((state.byOrder[orderId] ?? []).map((m) => m.id));
+  const first = !state.byOrder[orderId];
+  const list = await api<ChatMessage[]>('GET', `/orders/${orderId}/messages`);
+  const fresh = list.filter((m) => !known.has(m.id) && m.from === 'student');
+  set({ ...state, byOrder: { ...state.byOrder, [orderId]: mergeById(list, state.byOrder[orderId] ?? []) } });
+  // On the first load (the app just opened) it can't tell old from new, so nothing counts as new;
+  // anything sent while the app was closed came as a phone notification.
+  if (first || !fresh.length || state.open === orderId) return;
+  set({ ...state, unread: { ...state.unread, [orderId]: (state.unread[orderId] ?? 0) + fresh.length } });
+  for (const m of fresh) for (const fn of incoming) fn(m);
+}
+
+function mergeById(list: ChatMessage[], extra: ChatMessage[]) {
+  const ids = new Set(list.map((m) => m.id));
+  return [...list, ...extra.filter((m) => !ids.has(m.id))];
 }
 
 // For the in-app toast: a student message that arrived while its chat wasn't open.
@@ -42,10 +62,8 @@ export const isChatOpen = (orderId: string) => state.open === orderId;
 
 export async function loadChat(orderId: string) {
   const list = await api<ChatMessage[]>('GET', `/orders/${orderId}/messages`);
-  const known = new Set(list.map((m) => m.id));
   // Keep anything that arrived live while the list was loading.
-  const extra = (state.byOrder[orderId] ?? []).filter((m) => !known.has(m.id));
-  set({ ...state, byOrder: { ...state.byOrder, [orderId]: [...list, ...extra] } });
+  set({ ...state, byOrder: { ...state.byOrder, [orderId]: mergeById(list, state.byOrder[orderId] ?? []) } });
 }
 
 export async function sendChat(orderId: string, body: string) {

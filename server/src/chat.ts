@@ -31,8 +31,9 @@ export function createChat(
   return {
     async list(user: User, orderId: string) {
       await party(user, orderId);
-      const rows = await db.query<Row>('select * from messages where order_id = $1 order by created_at, id limit 300', [orderId]);
-      return rows.map(view);
+      // The latest 300, oldest first.
+      const rows = await db.query<Row>('select * from messages where order_id = $1 order by created_at desc, id desc limit 300', [orderId]);
+      return rows.reverse().map(view);
     },
 
     async send(user: User, orderId: string, body: string) {
@@ -48,10 +49,12 @@ export function createChat(
       // The other side hears it on their phone too.
       const to = side === 'student' ? order.rider_id : order.student_id;
       const app = side === 'student' ? 'rider' : 'student';
+      // Tapping it opens the chat: the student app reads href, the rider app url (with the order).
+      const open = app === 'rider' ? { url: `/chat?id=${orderId}` } : { href: '/chat' };
       const tokens = await db.query<{ token: string }>('select token from push_tokens where user_id = $1 and app = $2', [to, app]);
       const from = side === 'student' ? (order.student_name?.split(' ')[0] ?? 'Your student') : (order.rider_name ?? 'Your rider');
       await deps.push
-        .send(tokens.map((t) => ({ to: t.token, title: from, body, data: { orderId, number: order.number, chat: true, href: '/chat' }, channel: app === 'rider' ? 'pickup' : 'orders' })))
+        .send(tokens.map((t) => ({ to: t.token, title: from, body, data: { orderId, number: order.number, chat: true, ...open }, channel: app === 'rider' ? 'pickup' : 'orders' })))
         .catch((err) => console.error('[chat push]', err));
       return message;
     },
