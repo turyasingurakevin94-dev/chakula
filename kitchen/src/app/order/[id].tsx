@@ -10,7 +10,6 @@ import { onServer } from '../../lib/server';
 import { colors, fonts, smallCaps } from '../../lib/theme';
 
 const STEPS: { key: Status; label: string }[] = [
-  // Nothing prints on the server version yet.
   { key: 'incoming', label: onServer ? 'In' : 'Printed' },
   { key: 'cooking', label: 'Cooking' },
   { key: 'ready', label: 'Ready' },
@@ -149,7 +148,7 @@ export default function OrderScreen() {
           <View style={[s.card, s.qr]}>
             <QrCode value={bagCode(o.serverId)} size={200} />
             <Text style={[s.rowTitle, { fontSize: 16 }]}>The rider scans this for bag {o.id}</Text>
-            <Text style={[s.meta, { textAlign: 'center' }]}>Show this screen at the counter when they come. Their app marks the bag picked up.</Text>
+            <Text style={[s.meta, { textAlign: 'center' }]}>{k.printer ? 'It’s on the printed bag seal too. Their app marks the bag picked up.' : 'Show this screen at the counter when they come. Their app marks the bag picked up.'}</Text>
           </View>
         ) : null}
 
@@ -160,12 +159,20 @@ export default function OrderScreen() {
                 <Icon name="clock" size={18} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={s.rowTitle}>In at {clock(o.inAt)}</Text>
+                <Text style={s.rowTitle}>
+                  In at {clock(o.inAt)}
+                  {o.printed === true ? ' · printed' : o.printed === false ? ' · didn’t print' : ''}
+                </Text>
                 <Text style={s.meta}>
                   {o.paid === 'Cash on delivery' ? 'Cash on delivery' : `Paid by ${o.paid}`}
                   {o.sale ? ` · UGX ${o.sale.subtotal.toLocaleString('en-US')} food` : ''}
                 </Text>
               </View>
+              {k.printer ? (
+                <Pressable accessibilityRole="button" accessibilityLabel={`Print order ${o.id}`} onPress={() => k.print(o.id)} style={{ height: 44, justifyContent: 'center' }}>
+                  <Text style={s.link}>{o.printed ? 'Reprint' : 'Print'}</Text>
+                </Pressable>
+              ) : null}
             </View>
           ) : (
             <View style={[s.row, o.rider && { borderBottomWidth: 1, borderBottomColor: colors.lineSoft }]}>

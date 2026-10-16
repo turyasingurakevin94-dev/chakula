@@ -26,7 +26,6 @@ export default function Orders() {
         <View style={s.header}>
           <View style={{ gap: 2 }}>
             {onServer ? (
-              // Nothing prints on the server version yet: orders just arrive on the board.
               <View accessibilityLabel={k.offline ? 'Offline: trying to reach Chakula' : 'Live: new orders arrive by themselves'} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 <View style={[s.dot, { backgroundColor: k.offline ? colors.orange : '#2E9E5B' }]} />
                 <Label>{k.offline ? 'Offline · retrying' : 'Live'}</Label>
@@ -40,6 +39,11 @@ export default function Orders() {
             <Display>Orders</Display>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          {onServer ? (
+            <Pressable accessibilityRole="link" accessibilityLabel={k.printer ? `Printer: ${k.printer.name}` : 'Set up the printer'} onPress={() => router.push('/setup')} style={s.round}>
+              <Icon name="printer" size={18} color={k.printer ? colors.forest : colors.orangeText} />
+            </Pressable>
+          ) : null}
           <Pressable accessibilityRole="link" accessibilityLabel="Who hears what: alert settings" onPress={() => router.push('/alerts')} style={s.round}>
             <Icon name="bell" size={18} />
           </Pressable>
@@ -99,7 +103,7 @@ export default function Orders() {
                 {queue[2] ? <NextRow order={queue[2]} after={queue.slice(3)} now={k.now} /> : null}
               </>
             ) : (
-              <Empty icon={k.offline ? 'wifi-off' : 'coffee'} text={k.offline ? 'Can’t reach Chakula right now. Orders show here as soon as the connection is back.' : onServer ? 'Nothing to cook right now. New orders appear here by themselves.' : 'Nothing to cook right now. New orders print and appear here by themselves.'} />
+              <Empty icon={k.offline ? 'wifi-off' : 'coffee'} text={k.offline ? 'Can’t reach Chakula right now. Orders show here as soon as the connection is back.' : onServer ? k.printer ? 'Nothing to cook right now. New orders print and appear here by themselves.' : 'Nothing to cook right now. New orders appear here by themselves.' : 'Nothing to cook right now. New orders print and appear here by themselves.'} />
             )
           ) : tab === 'ready' ? (
             ready.length ? (

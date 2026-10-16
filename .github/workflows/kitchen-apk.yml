@@ -15,6 +15,7 @@ on:
     paths:
       - kitchen/eas.json
       - kitchen/app.json
+      - kitchen/modules/**
       - .github/workflows/kitchen-apk.yml
 
 jobs:

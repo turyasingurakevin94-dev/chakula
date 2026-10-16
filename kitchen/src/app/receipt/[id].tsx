@@ -4,8 +4,10 @@ import type { ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path, Polygon, Rect } from 'react-native-svg';
+import { QrCode, bagCode } from '../../components/qr';
 import { Icon } from '../../components/ui';
 import { clock, cookingQueue, ordinal, orderTotal, useKitchen } from '../../lib/kitchen';
+import { onServer } from '../../lib/server';
 import { colors, fonts } from '../../lib/theme';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -109,10 +111,14 @@ export default function Receipt() {
               <Text style={{ fontFamily: fonts.bold, fontSize: 15, color: ink }}>{o.place}</Text>
               <View style={{ alignSelf: 'stretch', borderTopWidth: 1, borderTopColor: ink }} />
               <View style={{ alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-                <Svg width={84} height={84} viewBox="0 0 21 21" accessibilityLabel="Pickup code">
-                  <Rect width={21} height={21} fill="#FFFFFF" />
-                  <Path fill={ink} d={QR} />
-                </Svg>
+                {o.serverId ? (
+                  <QrCode value={bagCode(o.serverId)} size={84} />
+                ) : (
+                  <Svg width={84} height={84} viewBox="0 0 21 21" accessibilityLabel="Pickup code">
+                    <Rect width={21} height={21} fill="#FFFFFF" />
+                    <Path fill={ink} d={QR} />
+                  </Svg>
+                )}
                 <View style={{ gap: 2 }}>
                   <Text style={{ fontFamily: fonts.bold, fontSize: 32, lineHeight: 34, color: ink }}>{o.id}</Text>
                   <Text style={{ fontFamily: fonts.regular, fontSize: 12, color: ink }}>Rider scans to pick up</Text>
@@ -120,7 +126,7 @@ export default function Receipt() {
               </View>
               <View style={{ alignSelf: 'stretch', borderTopWidth: 1, borderTopColor: ink }} />
               <Text style={{ fontFamily: fonts.regular, fontSize: 12, lineHeight: 17, color: ink, textAlign: 'center' }}>
-                Sealed at Nakawa Kitchen, {clock(sealedAt)}.{'\n'}If this seal is broken, tell us in the app.
+                Sealed at {k.kitchenName}, {clock(sealedAt)}.{'\n'}If this seal is broken, tell us in the app.
               </Text>
             </View>
           </Piece>
@@ -136,7 +142,7 @@ export default function Receipt() {
                 <Text style={{ fontFamily: fonts.displayItalic, fontSize: 13, color: ink }}>Campus dining, done properly.</Text>
               </View>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 6, paddingTop: 4 }}>
-                <Field k="KITCHEN" v="Nakawa Kitchen" />
+                <Field k="KITCHEN" v={k.kitchenName} />
                 <Field k="ORDER" v={o.id} />
                 <Field k="DATE" v={`${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}, ${clock(o.inAt)}`} />
                 <Field k="PAID" v={o.paid} />
@@ -184,7 +190,7 @@ export default function Receipt() {
           </Piece>
         </View>
 
-        <Pressable accessibilityRole="button" onPress={() => k.notify(`Order ${o.id} sent to the printer again`)} style={s.reprint}>
+        <Pressable accessibilityRole="button" onPress={() => (onServer ? k.print(o.id) : k.notify(`Order ${o.id} sent to the printer again`))} style={s.reprint}>
           <Icon name="printer" size={18} />
           <Text style={{ fontFamily: fonts.bold, fontSize: 16, color: colors.forest }}>Reprint all three</Text>
         </Pressable>
